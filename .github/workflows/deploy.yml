@@ -65,6 +65,7 @@ jobs:
         with:
           name: standalone
           path: portal/.next/standalone
+          include-hidden-files: true
           retention-days: 1
 
   # ──────────────────────────────────────────────
@@ -85,6 +86,15 @@ jobs:
         with:
           name: standalone
           path: standalone
+
+      - name: Debug - list deployed files
+        run: |
+          echo "=== Top level ==="
+          ls -la standalone/
+          echo "=== .next dir ==="
+          ls -la standalone/.next/ || echo ".next NOT FOUND"
+          echo "=== BUILD_ID ==="
+          cat standalone/.next/BUILD_ID || echo "BUILD_ID NOT FOUND"
 
       - name: Deploy to Azure App Service
         id: deploy
