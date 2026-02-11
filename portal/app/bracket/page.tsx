@@ -3,30 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { Category } from '../lib/types';
-
-interface MatchData {
-  id: string;
-  category: Category;
-  round: number;
-  position: number;
-  player1Id?: string;
-  player1Name?: string;
-  player2Id?: string;
-  player2Name?: string;
-  score?: string;
-  winnerId?: string;
-  winnerName?: string;
-  nextMatchId?: string;
-}
-
-const CATEGORIES: { id: Category; name: string }[] = [
-  { id: 'MS', name: "Men's Singles" },
-  { id: 'WS', name: "Women's Singles" },
-  { id: 'MD', name: "Men's Doubles" },
-  { id: 'WD', name: "Women's Doubles" },
-  { id: 'XD', name: "Mixed Doubles" },
-];
+import { Category, MatchDocument, MatchStatus, formatSetScores, CATEGORIES } from '../lib/models';
 
 function getRoundName(round: number, totalRounds: number): string {
   const remaining = totalRounds - round;
@@ -36,9 +13,30 @@ function getRoundName(round: number, totalRounds: number): string {
   return `Round ${round}`;
 }
 
+/** Small status badge shown on each match card. */
+function StatusBadge({ status }: { status: MatchStatus }) {
+  const styles: Record<MatchStatus, string> = {
+    scheduled: 'bg-slate-700 text-slate-400',
+    in_progress: 'bg-amber-900/60 text-amber-400',
+    completed: 'bg-green-900/60 text-green-400',
+    bye: 'bg-slate-700/50 text-slate-500',
+  };
+  const labels: Record<MatchStatus, string> = {
+    scheduled: 'Upcoming',
+    in_progress: 'Live',
+    completed: 'Final',
+    bye: 'BYE',
+  };
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${styles[status]}`}>
+      {labels[status]}
+    </span>
+  );
+}
+
 export default function BracketPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
-  const [matches, setMatches] = useState<MatchData[]>([]);
+  const [matches, setMatches] = useState<MatchDocument[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchMatches = useCallback(async () => {
@@ -46,7 +44,7 @@ export default function BracketPage() {
       setLoading(true);
       const res = await fetch(`/api/matches?category=${selectedCategory}`);
       if (res.ok) {
-        const data: MatchData[] = await res.json();
+        const data: MatchDocument[] = await res.json();
         setMatches(data);
       } else {
         setMatches([]);
@@ -64,7 +62,7 @@ export default function BracketPage() {
   }, [fetchMatches]);
 
   // Group matches by round
-  const rounds = new Map<number, MatchData[]>();
+  const rounds = new Map<number, MatchDocument[]>();
   matches.forEach(m => {
     const list = rounds.get(m.round) || [];
     list.push(m);
@@ -138,21 +136,30 @@ export default function BracketPage() {
                     }}
                   >
                     {roundMatches.map(match => {
-                      const isComplete = !!match.winnerId;
-                      const isBye = match.score === 'BYE';
+                      const isBye = match.status === 'bye';
+                      const isLive = match.status === 'in_progress';
+                      const isComplete = match.status === 'completed';
+                      const scoreStr = formatSetScores(match.sets ?? []);
 
                       return (
                         <div
                           key={match.id}
                           className={`w-56 rounded border transition-all ${
-                            isComplete
-                              ? 'bg-slate-800 border-slate-600'
-                              : 'bg-slate-800 border-slate-700'
+                            isLive
+                              ? 'bg-slate-800 border-amber-600/50 ring-1 ring-amber-500/20'
+                              : isComplete
+                                ? 'bg-slate-800 border-slate-600'
+                                : 'bg-slate-800 border-slate-700'
                           } ${isBye ? 'opacity-60' : ''}`}
                         >
+                          {/* Status badge */}
+                          <div className="flex justify-end px-2 pt-1.5 pb-0">
+                            <StatusBadge status={match.status} />
+                          </div>
+
                           {/* Player 1 */}
                           <div
-                            className={`flex justify-between items-center text-sm px-3 py-2 border-b border-slate-700 ${
+                            className={`flex justify-between items-center text-sm px-3 py-1.5 border-b border-slate-700 ${
                               match.winnerId && match.winnerId === match.player1Id
                                 ? 'text-green-400 font-semibold'
                                 : 'text-slate-300'
@@ -163,19 +170,14 @@ export default function BracketPage() {
                                 <span className="text-slate-600 italic">TBD</span>
                               )}
                             </span>
-                            {match.score && match.score !== 'BYE' && (
-                              <span className="font-mono text-xs text-slate-500 ml-2">
-                                {match.winnerId === match.player1Id ? 'W' : 'L'}
-                              </span>
-                            )}
-                            {isBye && match.winnerId === match.player1Id && (
-                              <span className="text-xs text-slate-500">BYE</span>
+                            {isComplete && match.winnerId === match.player1Id && (
+                              <span className="font-mono text-xs text-green-500 ml-2">W</span>
                             )}
                           </div>
 
                           {/* Player 2 */}
                           <div
-                            className={`flex justify-between items-center text-sm px-3 py-2 ${
+                            className={`flex justify-between items-center text-sm px-3 py-1.5 ${
                               match.winnerId && match.winnerId === match.player2Id
                                 ? 'text-green-400 font-semibold'
                                 : 'text-slate-300'
@@ -188,18 +190,16 @@ export default function BracketPage() {
                                 </span>
                               )}
                             </span>
-                            {match.score && match.score !== 'BYE' && (
-                              <span className="font-mono text-xs text-slate-500 ml-2">
-                                {match.winnerId === match.player2Id ? 'W' : 'L'}
-                              </span>
+                            {isComplete && match.winnerId === match.player2Id && (
+                              <span className="font-mono text-xs text-green-500 ml-2">W</span>
                             )}
                           </div>
 
-                          {/* Score */}
-                          {match.score && match.score !== 'BYE' && (
+                          {/* Set scores */}
+                          {scoreStr && (
                             <div className="border-t border-slate-700 px-3 py-1.5 text-center">
                               <span className="text-xs font-mono text-blue-400">
-                                {match.score}
+                                {scoreStr}
                               </span>
                             </div>
                           )}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { Settings, Trophy, Loader2, RefreshCw } from 'lucide-react';
-import { Category } from '../lib/types';
+import { Category } from '../lib/models';
 
 interface AdminRegistration {
   id: string;

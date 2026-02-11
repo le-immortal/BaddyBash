@@ -5,11 +5,28 @@
  * - Users partitioned by `id` (userId / alias) — high cardinality, direct point reads.
  * - Registrations partitioned by `userId` — all registrations for a user in same partition.
  * - Matches partitioned by `category` — bracket queries always scoped to a category.
+ *
+ * v2 changes:
+ * - MatchDocument: structured SetScore[], explicit MatchStatus, tournamentId.
+ * - UUID-based match IDs (round/position tracked separately).
+ * - Single source of truth for all types (types.ts & bracketUtils.ts deleted).
  */
 
 export type Category = "MS" | "WS" | "MD" | "WD" | "XD";
 
 export type RegistrationStatus = "confirmed" | "cancelled";
+
+export type MatchStatus = "scheduled" | "in_progress" | "completed" | "bye";
+
+/**
+ * A single set score in a badminton match.
+ * Standard rules: first to 21, win by 2, cap at 30.
+ */
+export interface SetScore {
+  set: number;            // 1, 2, or 3
+  score1: number;         // player1/team1 score
+  score2: number;         // player2/team2 score
+}
 
 /**
  * User document — stored in the `users` container.
@@ -40,6 +57,7 @@ export interface RegistrationDocument {
   userName: string;
   category: Category;
   status: RegistrationStatus;
+  tournamentId?: string;  // e.g., "baddybash-2026" — future-proofs multi-event
   partnerId?: string;     // for doubles (MD, WD, XD)
   partnerName?: string;
   partnerPhone?: string;
@@ -51,24 +69,74 @@ export interface RegistrationDocument {
 /**
  * Match document — stored in the `matches` container.
  * Partition key: /category
+ *
+ * Each match is a node in the single-elimination bracket tree.
+ * `nextMatchId` links to the parent node the winner advances into.
+ * `nextMatchSlot` indicates whether the winner fills slot 1 or 2 in the parent.
  */
 export interface MatchDocument {
-  id: string;             // unique match id
+  id: string;             // UUID — not tied to round/position
   category: Category;     // partition key
+  tournamentId?: string;  // e.g., "baddybash-2026"
   round: number;          // round number (1 = first round)
   position: number;       // position in the round (0-indexed)
+  status: MatchStatus;    // explicit lifecycle state
+
+  // Participants
   player1Id?: string;
   player1Name?: string;
   player2Id?: string;
   player2Name?: string;
-  score?: string;         // e.g., "21-19, 21-15"
+
+  // Result
+  sets: SetScore[];       // structured set scores (empty [] until played)
   winnerId?: string;
   winnerName?: string;
+
+  // Bracket tree links
   nextMatchId?: string;   // id of the match the winner advances to
+  nextMatchSlot?: 1 | 2;  // which slot (player1 or player2) in the next match
+
+  // Scheduling
   court?: string;         // assigned court
   scheduledTime?: string; // ISO date
+
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Helper: format SetScore[] into a display string.
+ * e.g., [{ set:1, score1:21, score2:19 }, { set:2, score1:21, score2:15 }] → "21-19, 21-15"
+ */
+export function formatSetScores(sets: SetScore[]): string {
+  if (!sets || sets.length === 0) return "";
+  return sets
+    .sort((a, b) => a.set - b.set)
+    .map((s) => `${s.score1}-${s.score2}`)
+    .join(", ");
+}
+
+/**
+ * Helper: validate a single set score against badminton rules.
+ * - Normal win: first to 21, leading by ≥ 2.
+ * - Deuce: at 20-20, play continues until 2-point lead or 30-29/30-28 cap.
+ * - Max score: 30.
+ */
+export function isValidSetScore(score1: number, score2: number): boolean {
+  const max = Math.max(score1, score2);
+  const min = Math.min(score1, score2);
+
+  if (max < 0 || min < 0) return false;
+  if (max > 30 || min > 30) return false;
+
+  // Normal win: 21+ with 2-point lead
+  if (max >= 21 && max - min >= 2 && max <= 29) return true;
+
+  // Deuce cap: 30-something (30-28, 30-29)
+  if (max === 30 && min >= 28) return true;
+
+  return false;
 }
 
 export const CATEGORIES: { id: Category; name: string; type: "singles" | "doubles" }[] = [

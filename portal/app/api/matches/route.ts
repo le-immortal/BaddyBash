@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { getMatchesContainer, getRegistrationsContainer } from "@/app/lib/cosmosClient";
-import { MatchDocument, RegistrationDocument, Category, isDoubles } from "@/app/lib/models";
+import {
+  MatchDocument, RegistrationDocument, Category, MatchStatus,
+  SetScore, isDoubles, isValidSetScore,
+} from "@/app/lib/models";
 
 /** A bracket participant — one player (singles) or one team (doubles). */
 interface BracketParticipant {
@@ -17,6 +21,40 @@ async function parallelBatch<T>(
 ): Promise<void> {
   for (let i = 0; i < items.length; i += chunkSize) {
     await Promise.all(items.slice(i, i + chunkSize).map(fn));
+  }
+}
+
+/**
+ * Generate standard tournament seeding order for a bracket of given size.
+ * E.g., size 8 → [1,8,4,5,2,7,3,6] — top seeds maximally separated,
+ * seed 1 faces seed N, seed 2 faces seed N-1, etc.
+ */
+function generateSeedOrder(bracketSize: number): number[] {
+  if (bracketSize === 1) return [1];
+  const half = generateSeedOrder(bracketSize / 2);
+  const result: number[] = [];
+  for (const seed of half) {
+    result.push(seed);
+    result.push(bracketSize + 1 - seed);
+  }
+  return result;
+}
+
+/** Fill the winner's slot in the parent match of the bracket tree. */
+function fillNextMatchSlot(
+  match: MatchDocument,
+  matchMap: Map<string, MatchDocument>
+): void {
+  if (!match.nextMatchId || !match.winnerId) return;
+  const next = matchMap.get(match.nextMatchId);
+  if (!next) return;
+
+  if (match.nextMatchSlot === 1) {
+    next.player1Id = match.winnerId;
+    next.player1Name = match.winnerName;
+  } else {
+    next.player2Id = match.winnerId;
+    next.player2Name = match.winnerName;
   }
 }
 
@@ -53,14 +91,22 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/matches
  * Generate a single-elimination bracket for a given category.
- * Pulls confirmed registrations, seeds them, and creates match documents.
  *
- * Body: { category }
+ * Algorithm:
+ * 1. Fetch confirmed registrations → build participant list.
+ * 2. Standard seeding: seed 1 vs N, 2 vs N-1 — top seeds maximally separated.
+ * 3. UUID-based match IDs; tree linked via nextMatchId + nextMatchSlot.
+ * 4. Byes cascade round-by-round: lone player auto-advances to parent slot.
+ *
+ * Body: { category, tournamentId? }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { category } = body as { category: Category };
+    const { category, tournamentId } = body as {
+      category: Category;
+      tournamentId?: string;
+    };
 
     if (!category) {
       return NextResponse.json({ error: "category is required" }, { status: 400 });
@@ -69,7 +115,7 @@ export async function POST(request: NextRequest) {
     const regContainer = getRegistrationsContainer();
     const matchContainer = getMatchesContainer();
 
-    // 1. Fetch confirmed registrations for this category
+    // ── 1. Fetch confirmed registrations ──────────────────────────────────
     const { resources: registrations } = await regContainer.items
       .query<RegistrationDocument>({
         query:
@@ -85,23 +131,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Build participant list — for doubles, dedup into teams
+    // ── 2. Build participant list ─────────────────────────────────────────
     let participants: BracketParticipant[];
 
     if (isDoubles(category)) {
-      // Each doubles pair has two registrations (one per partner).
-      // Dedup by canonical pair key: sorted [userId, partnerId].
       const seen = new Set<string>();
       const teams: BracketParticipant[] = [];
 
       for (const reg of registrations) {
-        const pairKey = [reg.userId, reg.partnerId || ''].sort().join('|');
+        const pairKey = [reg.userId, reg.partnerId || ""].sort().join("|");
         if (seen.has(pairKey)) continue;
         seen.add(pairKey);
 
         teams.push({
           id: pairKey,
-          name: `${reg.userName} & ${reg.partnerName || reg.partnerId || 'TBD'}`,
+          name: `${reg.userName} & ${reg.partnerName || reg.partnerId || "TBD"}`,
           seed: reg.seed,
         });
       }
@@ -112,18 +156,16 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-
       participants = teams;
     } else {
-      // Singles — each registration is one participant
-      participants = registrations.map(r => ({
+      participants = registrations.map((r) => ({
         id: r.userId,
         name: r.userName,
         seed: r.seed,
       }));
     }
 
-    // 3. Sort by seed (seeded first, then unseeded)
+    // ── 3. Sort by seed (seeded first, then unseeded) ─────────────────────
     participants.sort((a, b) => {
       if (a.seed && b.seed) return a.seed - b.seed;
       if (a.seed) return -1;
@@ -131,11 +173,11 @@ export async function POST(request: NextRequest) {
       return 0;
     });
 
-    // 4. Calculate bracket size (next power of 2)
+    // ── 4. Bracket geometry ───────────────────────────────────────────────
     const bracketSize = Math.pow(2, Math.ceil(Math.log2(participants.length)));
     const totalRounds = Math.log2(bracketSize);
 
-    // 4. Delete existing matches for this category
+    // ── 5. Delete existing matches for this category ──────────────────────
     const { resources: existingMatches } = await matchContainer.items
       .query<MatchDocument>({
         query: "SELECT c.id, c.category FROM c WHERE c.category = @category",
@@ -147,101 +189,91 @@ export async function POST(request: NextRequest) {
       matchContainer.item(m.id, category).delete()
     );
 
-    // 5. Build match tree
+    // ── 6. Create match tree (bottom-up, UUID IDs) ────────────────────────
     const now = new Date().toISOString();
-    const matches: MatchDocument[] = [];
-
-    // Create all match slots
-    const matchIds: string[][] = []; // matchIds[round][position]
+    const matchGrid: MatchDocument[][] = []; // matchGrid[roundIndex][position]
 
     for (let round = 1; round <= totalRounds; round++) {
-      const roundSize = bracketSize / Math.pow(2, round);
-      const roundIds: string[] = [];
-      for (let pos = 0; pos < roundSize; pos++) {
-        const id = `${category}-R${round}-M${pos + 1}`;
-        roundIds.push(id);
-      }
-      matchIds.push(roundIds);
-    }
+      const numMatches = bracketSize / Math.pow(2, round);
+      const roundMatches: MatchDocument[] = [];
 
-    // Create match documents with links to next match
-    for (let round = 1; round <= totalRounds; round++) {
-      const roundIndex = round - 1;
-      const roundSize = matchIds[roundIndex].length;
-
-      for (let pos = 0; pos < roundSize; pos++) {
-        const nextMatchId =
-          round < totalRounds
-            ? matchIds[roundIndex + 1][Math.floor(pos / 2)]
-            : undefined;
-
-        const match: MatchDocument = {
-          id: matchIds[roundIndex][pos],
+      for (let pos = 0; pos < numMatches; pos++) {
+        roundMatches.push({
+          id: randomUUID(),
           category,
+          tournamentId,
           round,
           position: pos,
-          nextMatchId,
+          status: "scheduled",
+          sets: [],
           createdAt: now,
           updatedAt: now,
-        };
+        });
+      }
+      matchGrid.push(roundMatches);
+    }
 
-        matches.push(match);
+    // Link each match to its parent in the next round
+    for (let ri = 0; ri < matchGrid.length - 1; ri++) {
+      for (const match of matchGrid[ri]) {
+        const parentPos = Math.floor(match.position / 2);
+        const parentMatch = matchGrid[ri + 1][parentPos];
+        match.nextMatchId = parentMatch.id;
+        match.nextMatchSlot = match.position % 2 === 0 ? 1 : 2;
       }
     }
 
-    // 7. Fill Round 1 with participants
-    const round1 = matches.filter((m) => m.round === 1);
-    const slots: (BracketParticipant | null)[] = new Array(bracketSize).fill(null);
+    // Flat list + lookup map for the cascade step
+    const allMatches = matchGrid.flat();
+    const matchMap = new Map(allMatches.map((m) => [m.id, m]));
 
-    // Place participants into slots
-    for (let i = 0; i < participants.length; i++) {
-      slots[i] = participants[i];
-    }
+    // ── 7. Seed participants into Round 1 (standard bracket order) ────────
+    const seedOrder = generateSeedOrder(bracketSize);
+    const round1 = matchGrid[0];
 
-    // Fill round 1 matches
-    for (let i = 0; i < round1.length; i++) {
-      const p1 = slots[i * 2];
-      const p2 = slots[i * 2 + 1];
+    for (let pos = 0; pos < round1.length; pos++) {
+      const slot1Idx = seedOrder[pos * 2] - 1;
+      const slot2Idx = seedOrder[pos * 2 + 1] - 1;
+
+      const p1 = slot1Idx < participants.length ? participants[slot1Idx] : null;
+      const p2 = slot2Idx < participants.length ? participants[slot2Idx] : null;
 
       if (p1) {
-        round1[i].player1Id = p1.id;
-        round1[i].player1Name = p1.name;
+        round1[pos].player1Id = p1.id;
+        round1[pos].player1Name = p1.name;
       }
       if (p2) {
-        round1[i].player2Id = p2.id;
-        round1[i].player2Name = p2.name;
+        round1[pos].player2Id = p2.id;
+        round1[pos].player2Name = p2.name;
       }
+    }
 
-      // Handle byes: if only one participant, auto-advance
-      if (p1 && !p2) {
-        round1[i].winnerId = p1.id;
-        round1[i].winnerName = p1.name;
-        round1[i].score = "BYE";
+    // ── 8. Cascade byes round-by-round ────────────────────────────────────
+    for (const roundMatches of matchGrid) {
+      for (const match of roundMatches) {
+        const hasP1 = !!match.player1Id;
+        const hasP2 = !!match.player2Id;
 
-        // Advance winner to next round
-        if (round1[i].nextMatchId) {
-          const nextMatch = matches.find(
-            (m) => m.id === round1[i].nextMatchId
-          );
-          if (nextMatch) {
-            if (i % 2 === 0) {
-              nextMatch.player1Id = p1.id;
-              nextMatch.player1Name = p1.name;
-            } else {
-              nextMatch.player2Id = p1.id;
-              nextMatch.player2Name = p1.name;
-            }
-          }
+        if (hasP1 && !hasP2) {
+          match.status = "bye";
+          match.winnerId = match.player1Id;
+          match.winnerName = match.player1Name;
+          fillNextMatchSlot(match, matchMap);
+        } else if (!hasP1 && hasP2) {
+          match.status = "bye";
+          match.winnerId = match.player2Id;
+          match.winnerName = match.player2Name;
+          fillNextMatchSlot(match, matchMap);
         }
       }
     }
 
-    // 8. Write all matches to Cosmos DB (parallel batches)
-    await parallelBatch(matches, (m) => matchContainer.items.create(m));
+    // ── 9. Write to Cosmos DB ─────────────────────────────────────────────
+    await parallelBatch(allMatches, (m) => matchContainer.items.create(m));
 
     return NextResponse.json({
       message: `Bracket generated for ${category}`,
-      totalMatches: matches.length,
+      totalMatches: allMatches.length,
       totalRounds,
       bracketSize,
       participants: participants.length,
@@ -254,14 +286,20 @@ export async function POST(request: NextRequest) {
 
 /**
  * PATCH /api/matches
- * Update a match result (score, winner). Advances winner to next match.
+ * Update a match result (set scores, winner). Advances winner to the next match.
  *
- * Body: { matchId, category, score, winnerId, winnerName }
+ * Body: { matchId, category, sets?: SetScore[], winnerId?, winnerName? }
  */
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { matchId, category, score, winnerId, winnerName } = body;
+    const { matchId, category, sets, winnerId, winnerName } = body as {
+      matchId: string;
+      category: Category;
+      sets?: SetScore[];
+      winnerId?: string;
+      winnerName?: string;
+    };
 
     if (!matchId || !category) {
       return NextResponse.json(
@@ -281,27 +319,64 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
 
-    // Update score and winner
+    if (match.status === "bye") {
+      return NextResponse.json(
+        { error: "Cannot update a bye match" },
+        { status: 400 }
+      );
+    }
+
+    // Validate set scores
+    if (sets && sets.length > 0) {
+      if (sets.length > 3) {
+        return NextResponse.json(
+          { error: "Maximum 3 sets allowed" },
+          { status: 400 }
+        );
+      }
+      for (const s of sets) {
+        if (!isValidSetScore(s.score1, s.score2)) {
+          return NextResponse.json(
+            { error: `Invalid score for set ${s.set}: ${s.score1}-${s.score2}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Determine new status
+    let newStatus: MatchStatus = match.status;
+    if (sets && sets.length > 0 && !winnerId) {
+      newStatus = "in_progress";
+    }
+    if (winnerId) {
+      newStatus = "completed";
+    }
+
+    // Apply updates
     const updatedMatch: MatchDocument = {
       ...match,
-      score: score || match.score,
-      winnerId: winnerId || match.winnerId,
-      winnerName: winnerName || match.winnerName,
+      sets: sets ?? match.sets,
+      winnerId: winnerId ?? match.winnerId,
+      winnerName: winnerName ?? match.winnerName,
+      status: newStatus,
       updatedAt: new Date().toISOString(),
     };
 
     await container.item(matchId, category).replace(updatedMatch);
 
-    // Advance winner to next match
+    // Advance winner to the next match
     if (winnerId && updatedMatch.nextMatchId) {
       const { resource: nextMatch } = await container
         .item(updatedMatch.nextMatchId, category)
         .read<MatchDocument>();
 
       if (nextMatch) {
-        // Determine if winner goes to player1 or player2 slot
-        // Even position → player1 of next, odd position → player2 of next
-        if (updatedMatch.position % 2 === 0) {
+        const slot =
+          updatedMatch.nextMatchSlot ??
+          (updatedMatch.position % 2 === 0 ? 1 : 2);
+
+        if (slot === 1) {
           nextMatch.player1Id = winnerId;
           nextMatch.player1Name = winnerName;
         } else {
@@ -319,6 +394,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(updatedMatch);
   } catch (error) {
     console.error("Error updating match:", error);
-    return NextResponse.json({ error: "Failed to update match" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update match" },
+      { status: 500 }
+    );
   }
 }

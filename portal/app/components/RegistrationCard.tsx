@@ -1,5 +1,5 @@
 'use client';
-import { Category } from '../lib/types';
+import { Category } from '../lib/models';
 import { CheckCircle, Plus } from 'lucide-react';
 import clsx from 'clsx';
 

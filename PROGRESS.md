@@ -2,7 +2,7 @@
 
 This document tracks the development progress against the [Product Requirements Document (PRD)](PRD.md).
 
-**Current Status:** 🟡 Phase 2 (Mostly Complete) — Phase 3 partially started
+**Current Status:** 🟡 Phase 2.5 — Bracket Redesign in progress, Phase 3 next
 
 ---
 
@@ -16,7 +16,7 @@ Focus: User Authentication, Registration logic, Partner constraints.
 
 - [x] **Authentication (FR-01)**
     - [x] Implement NextAuth.js v5 (Auth.js) with GitHub OAuth provider
-    - [x] Protect routes (`/dashboard`, `/admin`, `/bracket`) via Middleware
+    - [x] Protect routes (`/dashboard`, `/admin`, `/bracket`) via Proxy (Next.js 16)
     - [x] Sign In / Sign Out flow in Navbar (client component)
     - [x] SessionProvider integration in root layout
     - [x] Server actions for auth (signInAction, signOutAction)
@@ -68,27 +68,46 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] Generate Fixtures button (sends JSON body `{ category }`)
     - [x] Refresh button
 
-- [x] **Bracket Generation (FR-07)**
-    - [x] Algorithm: Generate Single Elimination Tree (Power of 2 logic)
-    - [x] Algorithm: Handle "Byes" automatically (auto-advance)
-    - [x] Algorithm: Seed-based ordering
-    - [x] **Doubles fix: Dedup registrations into teams** (canonical pair key, combined "A & B" display names)
-    - [x] Backend: Save generated fixture/match nodes (Cosmos DB)
-    - [x] UI: Dynamic Bracket Visualization (round columns, match cards, dark theme)
-    - [x] UI: Category tab switching (MS, WS, MD, WD, XD)
-    - [x] Frontend wired to API (bracket page)
+- [ ] **Bracket Redesign (FR-07) — v2** ⬅️ IN PROGRESS
+    - [ ] **Data model cleanup**
+        - [ ] Delete dead `bracketUtils.ts` (unused client-side code)
+        - [ ] Remove duplicate `Match` type from `types.ts`
+        - [ ] Single source of truth: `MatchDocument` in `models.ts`
+        - [ ] Add `tournamentId` field to `MatchDocument` and `RegistrationDocument`
+    - [ ] **Structured scores**
+        - [ ] Replace `score?: string` with `sets: SetScore[]` (`{ set, score1, score2 }`)
+    - [ ] **Match status**
+        - [ ] Add explicit `status: 'scheduled' | 'in_progress' | 'completed' | 'bye'`
+    - [ ] **Proper seeding algorithm**
+        - [ ] Standard bracket placement: seed 1 vs N, 2 vs N-1, etc.
+        - [ ] Top seeds placed at opposite poles of the draw
+    - [ ] **Bye cascading**
+        - [ ] Recursive auto-advance (not just Round 1)
+        - [ ] Handle double-bye matches (both slots empty → cascade to R2+)
+    - [ ] **UUID-based match IDs**
+        - [ ] Replace fragile `MS-R1-M1` with crypto UUIDs
+        - [ ] Round/position tracked as separate fields (already exists)
+    - [ ] **API update** (`POST /api/matches`)
+        - [ ] Integrate new seeding, bye logic, structured scores
+    - [ ] **API update** (`PATCH /api/matches`)
+        - [ ] Accept `sets[]` instead of raw score string
+        - [ ] Validate set scores (badminton rules: 21 pts, deuce at 20-20, max 30)
+    - [ ] **Frontend update** (`bracket/page.tsx`)
+        - [ ] Use shared `MatchDocument` type (no inline `MatchData`)
+        - [ ] Display set scores properly
+        - [ ] Show match status badges (scheduled, live, completed)
 
 ---
 
 ## 🎮 Phase 3: Game Day Live (Week 6)
 Focus: Real-time updates, Scoring.
 
-- [x] **Live Scoring (FR-09, FR-10) — Backend**
+- [ ] **Live Scoring (FR-09, FR-10)**
     - [x] Backend: `PATCH /api/matches` — update score & winner
     - [x] Backend: Auto-advance winner to next match node
-    - [ ] **UI: Score Input Modal (Admin clicks match → enters score)** ⬅️ NEXT
-    - [ ] UI: Score input form (Set 1, Set 2, Set 3)
-    - [ ] Backend: Real-time updates (SignalR / Polling)
+    - [ ] **UI: Score Input Modal** (Admin clicks match → enters set scores)
+    - [ ] UI: Score input form (Set 1, Set 2, Set 3) with validation
+    - [ ] Backend: Real-time updates (Polling / SSE)
 
 - [ ] **Public Views**
     - [x] Landing Page with Event Info
@@ -98,7 +117,15 @@ Focus: Real-time updates, Scoring.
 ---
 
 ## 🛠 Infrastructure & DevOps
-- [ ] Set up GitHub Repository
-- [ ] Configure CI/CD Pipeline (GitHub Actions)
-- [ ] Provision Azure Resources (Static Web App or App Service)
-- [ ] Domain & SSL Configuration
+- [x] Set up GitHub Repository (`le-immortal/BaddyBash`)
+- [x] Configure CI/CD Pipeline (GitHub Actions — build + deploy on push to main)
+- [x] Provision Azure Resources
+    - [x] App Service: `baddybashportal` (Node 20, South India)
+    - [x] Resource Group: `rg-baddybash` (VS Enterprise subscription)
+    - [x] Cosmos DB: `baddybash-cosmos` (separate subscription)
+    - [x] Runtime env vars configured on App Service
+    - [x] GitHub repo secrets configured (7 secrets)
+- [x] Dockerfile (multi-stage standalone build)
+- [x] Renamed `middleware.ts` → `proxy.ts` (Next.js 16)
+- [ ] Custom domain & SSL
+- [ ] Monitoring / Application Insights

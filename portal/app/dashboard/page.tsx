@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
-import { Category } from '../lib/types';
+import { Category } from '../lib/models';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 const CATEGORIES: { id: Category; name: string }[] = [
