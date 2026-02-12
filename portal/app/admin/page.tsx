@@ -34,7 +34,7 @@ export default function AdminDashboard() {
   const fetchPlayers = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/players');
+      const res = await fetch(`/api/admin/players?category=${selectedCategory}`);
       if (res.ok) {
         const data: AdminPlayer[] = await res.json();
         setPlayers(data);
@@ -56,14 +56,16 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchPlayers();
-  }, []);
+  }, [selectedCategory]);
 
   const handleSeedChange = async (registrationId: string, userId: string, value: string) => {
-    setSeedValues(prev => ({ ...prev, [registrationId]: value }));
-    
-    // Debounced save — fire on blur or after typing
+    const prev = seedValues[registrationId] || '';
+    if (value === prev) return; // no change — skip API call
+
+    setSeedValues(p => ({ ...p, [registrationId]: value }));
+
     try {
-      await fetch('/api/admin/players', {
+      const res = await fetch('/api/admin/players', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -72,8 +74,15 @@ export default function AdminDashboard() {
           seed: value ? Number(value) : null,
         }),
       });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to update seed');
+        // Revert to previous value
+        setSeedValues(p => ({ ...p, [registrationId]: prev }));
+      }
     } catch (err) {
       console.error('Failed to update seed:', err);
+      setSeedValues(p => ({ ...p, [registrationId]: prev }));
     }
   };
 
@@ -161,17 +170,15 @@ export default function AdminDashboard() {
               <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
                 {(() => {
                   const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
-                  const regsForCat = players.filter(p => p.registrations.some(r => r.category === selectedCategory));
-                  if (!isD) return `${regsForCat.length} Players`;
+                  if (!isD) return `${players.length} Players`;
                   // Deduplicate pairs
                   const seen = new Set<string>();
-                  let pairCount = 0;
-                  for (const p of regsForCat) {
-                    const reg = p.registrations.find(r => r.category === selectedCategory);
+                  for (const p of players) {
+                    const reg = p.registrations[0];
                     const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
-                    if (!seen.has(pairKey)) { seen.add(pairKey); pairCount++; }
+                    seen.add(pairKey);
                   }
-                  return `${pairCount} Teams`;
+                  return `${seen.size} Teams`;
                 })()}
               </span>
             </div>
@@ -203,6 +210,16 @@ export default function AdminDashboard() {
                   return true;
                 });
               }
+
+              // Sort: seeded first (ascending seed), then unseeded
+              displayRows.sort((a, b) => {
+                const sA = a.registrations[0]?.seed;
+                const sB = b.registrations[0]?.seed;
+                if (sA && sB) return sA - sB;
+                if (sA) return -1;
+                if (sB) return 1;
+                return a.name.localeCompare(b.name);
+              });
 
               if (displayRows.length === 0) {
                 return (
@@ -256,13 +273,32 @@ export default function AdminDashboard() {
                           )}
                         </td>
                         <td className="p-4">
-                          <input
-                            type="number"
-                            className="w-20 border rounded px-2 py-1 text-center text-sm"
-                            placeholder="-"
-                            value={seedValues[reg.id] || ''}
-                            onChange={(e) => handleSeedChange(reg.id, reg.userId, e.target.value)}
-                          />
+                          {(() => {
+                            const val = seedValues[reg.id] || '';
+                            // Check if this seed value is duplicated by another registration in the same category
+                            const isDuplicate = val !== '' && Object.entries(seedValues).some(([otherId, otherVal]) => {
+                              if (otherId === reg.id || otherVal !== val) return false;
+                              // Only flag if the other registration is in the same category
+                              const otherPlayer = displayRows.find(p => p.registrations.some(r => r.id === otherId));
+                              return !!otherPlayer;
+                            });
+                            return (
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  className={`w-20 border rounded px-2 py-1 text-center text-sm ${isDuplicate ? 'border-red-500 bg-red-50 text-red-700' : ''}`}
+                                  placeholder="-"
+                                  value={val}
+                                  onChange={(e) => setSeedValues(p => ({ ...p, [reg.id]: e.target.value }))}
+                                  onBlur={() => handleSeedChange(reg.id, reg.userId, val)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                />
+                                {isDuplicate && (
+                                  <p className="absolute text-[10px] text-red-500 font-medium whitespace-nowrap mt-0.5">Duplicate</p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-right">
                           <button className="text-slate-400 hover:text-blue-600">

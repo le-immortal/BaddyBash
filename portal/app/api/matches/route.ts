@@ -249,20 +249,58 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 8. Cascade byes round-by-round ────────────────────────────────────
-    for (const roundMatches of matchGrid) {
-      for (const match of roundMatches) {
+    // Build a reverse lookup: matchId → { slot1Feeder, slot2Feeder }
+    // so we can check whether an empty slot is permanently empty (dead feeder)
+    // or just waiting for a result from a real match.
+    const feeders = new Map<string, { slot1?: MatchDocument; slot2?: MatchDocument }>();
+    for (const m of allMatches) {
+      if (m.nextMatchId) {
+        const entry = feeders.get(m.nextMatchId) || {};
+        if (m.nextMatchSlot === 1) entry.slot1 = m;
+        else entry.slot2 = m;
+        feeders.set(m.nextMatchId, entry);
+      }
+    }
+
+    // Round 1: straightforward byes (one real player, one empty slot)
+    for (const match of matchGrid[0]) {
+      const hasP1 = !!match.player1Id;
+      const hasP2 = !!match.player2Id;
+
+      if (hasP1 && !hasP2) {
+        match.status = "bye";
+        match.winnerId = match.player1Id;
+        match.winnerName = match.player1Name;
+        fillNextMatchSlot(match, matchMap);
+      } else if (!hasP1 && hasP2) {
+        match.status = "bye";
+        match.winnerId = match.player2Id;
+        match.winnerName = match.player2Name;
+        fillNextMatchSlot(match, matchMap);
+      }
+    }
+
+    // Round 2+: only mark as bye if the feeder for the empty slot is
+    // permanently dead (zero players — never produces a winner).
+    for (let ri = 1; ri < matchGrid.length; ri++) {
+      for (const match of matchGrid[ri]) {
         const hasP1 = !!match.player1Id;
         const hasP2 = !!match.player2Id;
 
-        if (hasP1 && !hasP2) {
+        if (hasP1 === hasP2) continue; // both filled or both empty → skip
+
+        const emptySlot = hasP1 ? 2 : 1;
+        const f = feeders.get(match.id);
+        const feeder = emptySlot === 1 ? f?.slot1 : f?.slot2;
+
+        // Feeder is dead if it has no players on either side
+        const feederIsDead =
+          feeder && !feeder.player1Id && !feeder.player2Id;
+
+        if (feederIsDead) {
           match.status = "bye";
-          match.winnerId = match.player1Id;
-          match.winnerName = match.player1Name;
-          fillNextMatchSlot(match, matchMap);
-        } else if (!hasP1 && hasP2) {
-          match.status = "bye";
-          match.winnerId = match.player2Id;
-          match.winnerName = match.player2Name;
+          match.winnerId = hasP1 ? match.player1Id : match.player2Id;
+          match.winnerName = hasP1 ? match.player1Name : match.player2Name;
           fillNextMatchSlot(match, matchMap);
         }
       }

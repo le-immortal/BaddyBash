@@ -4,27 +4,56 @@ import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument } from "@/app/lib/models";
 
 /**
- * GET /api/admin/players
- * Returns all players with their registrations for the admin dashboard.
+ * GET /api/admin/players?category=MS
+ * Returns players registered in the given category.
+ * Fetches only relevant registrations, then point-reads their user docs.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const category = request.nextUrl.searchParams.get("category");
+    if (!category) {
+      return NextResponse.json(
+        { error: "category query parameter is required" },
+        { status: 400 }
+      );
+    }
+
     const usersContainer = getUsersContainer();
     const registrationsContainer = getRegistrationsContainer();
 
-    // Fetch all users
-    const { resources: users } = await usersContainer.items
-      .query<UserDocument>("SELECT * FROM c ORDER BY c.name")
-      .fetchAll();
-
-    // Fetch all active registrations
+    // Single-partition query — category IS the partition key for registrations? No, userId is.
+    // But this still only scans rows matching the category, much smaller result set.
     const { resources: registrations } = await registrationsContainer.items
-      .query<RegistrationDocument>(
-        "SELECT * FROM c WHERE c.status != 'cancelled'"
-      )
+      .query<RegistrationDocument>({
+        query:
+          "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
+        parameters: [{ name: "@cat", value: category }],
+      })
       .fetchAll();
 
-    // Build a map: userId -> registrations
+    // Collect unique userIds and batch-read user docs
+    const userIds = [...new Set(registrations.map((r) => r.userId))];
+
+    // Parallel point-reads (partition key = id)
+    const BATCH = 50;
+    const userMap = new Map<string, UserDocument>();
+    for (let i = 0; i < userIds.length; i += BATCH) {
+      const chunk = userIds.slice(i, i + BATCH);
+      const results = await Promise.all(
+        chunk.map((uid) =>
+          usersContainer
+            .item(uid, uid)
+            .read<UserDocument>()
+            .then((r) => r.resource)
+            .catch(() => null)
+        )
+      );
+      for (const u of results) {
+        if (u) userMap.set(u.id, u);
+      }
+    }
+
+    // Build a map: userId -> registrations for this category
     const regMap = new Map<string, RegistrationDocument[]>();
     for (const reg of registrations) {
       const list = regMap.get(reg.userId) || [];
@@ -32,14 +61,19 @@ export async function GET() {
       regMap.set(reg.userId, list);
     }
 
-    // Combine into response
-    const players = users.map((user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      registrations: regMap.get(user.id) || [],
-    }));
+    // Combine — only users with registrations in this category
+    const players = userIds
+      .map((uid) => {
+        const user = userMap.get(uid);
+        return {
+          id: uid,
+          name: user?.name || uid,
+          email: user?.email || "",
+          phoneNumber: user?.phoneNumber,
+          registrations: regMap.get(uid) || [],
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json(players);
   } catch (error) {
@@ -79,6 +113,28 @@ export async function PATCH(request: NextRequest) {
         { error: "Registration not found" },
         { status: 404 }
       );
+    }
+
+    // Duplicate seed check: no two registrations in the same category may share a seed
+    if (seed) {
+      const { resources: sameCat } = await container.items
+        .query<RegistrationDocument>({
+          query:
+            "SELECT c.id, c.userId, c.seed FROM c WHERE c.category = @cat AND c.seed = @seed AND c.status != 'cancelled'",
+          parameters: [
+            { name: "@cat", value: existing.category },
+            { name: "@seed", value: Number(seed) },
+          ],
+        })
+        .fetchAll();
+
+      const conflict = sameCat.find((r) => r.id !== registrationId);
+      if (conflict) {
+        return NextResponse.json(
+          { error: `Seed ${seed} is already assigned to another player in ${existing.category}` },
+          { status: 409 }
+        );
+      }
     }
 
     const updated: RegistrationDocument = {
