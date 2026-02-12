@@ -2,7 +2,7 @@
 
 This document tracks the development progress against the [Product Requirements Document (PRD)](PRD.md).
 
-**Current Status:** 🟡 Phase 2.5 — Bracket Redesign in progress, Phase 3 next
+**Current Status:** 🟡 Phase 3 — Game Day Live (Score Input Modal next)
 
 ---
 
@@ -68,45 +68,47 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] Generate Fixtures button (sends JSON body `{ category }`)
     - [x] Refresh button
 
-- [ ] **Bracket Redesign (FR-07) — v2** ⬅️ IN PROGRESS
-    - [ ] **Data model cleanup**
-        - [ ] Delete dead `bracketUtils.ts` (unused client-side code)
-        - [ ] Remove duplicate `Match` type from `types.ts`
-        - [ ] Single source of truth: `MatchDocument` in `models.ts`
-        - [ ] Add `tournamentId` field to `MatchDocument` and `RegistrationDocument`
-    - [ ] **Structured scores**
-        - [ ] Replace `score?: string` with `sets: SetScore[]` (`{ set, score1, score2 }`)
-    - [ ] **Match status**
-        - [ ] Add explicit `status: 'scheduled' | 'in_progress' | 'completed' | 'bye'`
-    - [ ] **Proper seeding algorithm**
-        - [ ] Standard bracket placement: seed 1 vs N, 2 vs N-1, etc.
-        - [ ] Top seeds placed at opposite poles of the draw
-    - [ ] **Bye cascading**
-        - [ ] Recursive auto-advance (not just Round 1)
-        - [ ] Handle double-bye matches (both slots empty → cascade to R2+)
-    - [ ] **UUID-based match IDs**
-        - [ ] Replace fragile `MS-R1-M1` with crypto UUIDs
-        - [ ] Round/position tracked as separate fields (already exists)
-    - [ ] **API update** (`POST /api/matches`)
-        - [ ] Integrate new seeding, bye logic, structured scores
-    - [ ] **API update** (`PATCH /api/matches`)
-        - [ ] Accept `sets[]` instead of raw score string
-        - [ ] Validate set scores (badminton rules: 21 pts, deuce at 20-20, max 30)
-    - [ ] **Frontend update** (`bracket/page.tsx`)
-        - [ ] Use shared `MatchDocument` type (no inline `MatchData`)
-        - [ ] Display set scores properly
-        - [ ] Show match status badges (scheduled, live, completed)
+- [x] **Bracket Redesign (FR-07) — v2** ✅ COMPLETE
+    - [x] **Data model cleanup**
+        - [x] Deleted dead `bracketUtils.ts`, `mockData.ts`, `types.ts`
+        - [x] Single source of truth: `MatchDocument` in `models.ts`
+        - [x] Migrated all imports from `types.ts` → `models.ts`
+        - [x] Added `tournamentId` field to `MatchDocument` and `RegistrationDocument`
+    - [x] **Structured scores**
+        - [x] Replaced `score?: string` with `sets: SetScore[]` (`{ set, score1, score2 }`)
+        - [x] Added `formatSetScores()` helper for display
+    - [x] **Match status**
+        - [x] Added explicit `status: 'scheduled' | 'in_progress' | 'completed' | 'bye'`
+    - [x] **Proper seeding algorithm**
+        - [x] Standard bracket placement: seed 1 vs N, 2 vs N-1 (recursive `generateSeedOrder()`)
+        - [x] Top seeds placed at opposite poles of the draw
+    - [x] **Bye cascading**
+        - [x] Round-by-round cascade via `fillNextMatchSlot()` (not just Round 1)
+    - [x] **UUID-based match IDs**
+        - [x] Replaced fragile `MS-R1-M1` with `crypto.randomUUID()`
+        - [x] Added `nextMatchSlot: 1 | 2` for deterministic winner advancement
+    - [x] **API update** (`POST /api/matches`)
+        - [x] Integrated new seeding, bye logic, UUID IDs, structured scores
+    - [x] **API update** (`PATCH /api/matches`)
+        - [x] Accepts `sets: SetScore[]` instead of raw score string
+        - [x] Validates set scores via `isValidSetScore()` (21 pts, deuce, 30-cap)
+        - [x] Auto-transitions status: scheduled → in_progress → completed
+        - [x] Rejects updates to bye matches
+    - [x] **Frontend update** (`bracket/page.tsx`)
+        - [x] Uses shared `MatchDocument` + `CATEGORIES` from `models.ts`
+        - [x] Displays set scores via `formatSetScores()`
+        - [x] Status badges: Upcoming (slate), Live (amber glow), Final (green), BYE (dim)
 
 ---
 
 ## 🎮 Phase 3: Game Day Live (Week 6)
 Focus: Real-time updates, Scoring.
 
-- [ ] **Live Scoring (FR-09, FR-10)**
-    - [x] Backend: `PATCH /api/matches` — update score & winner
-    - [x] Backend: Auto-advance winner to next match node
+- [ ] **Live Scoring (FR-09, FR-10)** ⬅️ NEXT
+    - [x] Backend: `PATCH /api/matches` — accepts `SetScore[]`, validates, auto-advances winner
+    - [x] Backend: Status transitions (scheduled → in_progress → completed)
     - [ ] **UI: Score Input Modal** (Admin clicks match → enters set scores)
-    - [ ] UI: Score input form (Set 1, Set 2, Set 3) with validation
+    - [ ] UI: Score input form (Set 1, Set 2, Set 3) with badminton validation
     - [ ] Backend: Real-time updates (Polling / SSE)
 
 - [ ] **Public Views**
@@ -127,5 +129,9 @@ Focus: Real-time updates, Scoring.
     - [x] GitHub repo secrets configured (7 secrets)
 - [x] Dockerfile (multi-stage standalone build)
 - [x] Renamed `middleware.ts` → `proxy.ts` (Next.js 16)
+- [x] Fixed deployment: `startup-command` set on App Service (not in workflow)
+- [x] Fixed artifact: `include-hidden-files: true` for `.next` directory
+- [x] Disabled Oryx build: `SCM_DO_BUILD_DURING_DEPLOYMENT=false`
+- [x] App live at `https://baddybashportal-b9b4bnd8bef5eadq.southindia-01.azurewebsites.net`
 - [ ] Custom domain & SSL
 - [ ] Monitoring / Application Insights

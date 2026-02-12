@@ -84,6 +84,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For doubles: validate partner hasn't hit max-2 BEFORE creating anything
+    if (isDoubles(category) && partnerId) {
+      const { resources: partnerRegs } = await container.items
+        .query<RegistrationDocument>({
+          query: "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
+          parameters: [{ name: "@userId", value: partnerId }],
+        })
+        .fetchAll();
+
+      if (partnerRegs.length >= MAX_CATEGORIES) {
+        return NextResponse.json(
+          { error: `Partner "${partnerName || partnerId}" already has ${partnerRegs.length} registrations (max ${MAX_CATEGORIES}). They need to cancel one first.` },
+          { status: 409 }
+        );
+      }
+
+      if (partnerRegs.some((r) => r.category === category)) {
+        return NextResponse.json(
+          { error: `Partner "${partnerName || partnerId}" is already registered for ${category}.` },
+          { status: 409 }
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     const registration: RegistrationDocument = {
       id: `${userId}_${category}`,
@@ -127,7 +151,7 @@ export async function POST(request: NextRequest) {
         await usersContainer.items.upsert(partnerUser);
       }
 
-      // Create confirmed registration for partner (if not already registered for this category)
+      // Create confirmed registration for partner (already validated max-2 above)
       const partnerRegId = `${partnerId}_${category}`;
       let partnerRegExists = false;
       try {
@@ -138,34 +162,24 @@ export async function POST(request: NextRequest) {
       }
 
       if (!partnerRegExists) {
-        // Check partner's Max-2 before creating
-        const { resources: partnerRegs } = await container.items
-          .query<RegistrationDocument>({
-            query: "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
-            parameters: [{ name: "@userId", value: partnerId }],
-          })
-          .fetchAll();
-
-        if (partnerRegs.length < MAX_CATEGORIES) {
-          const partnerRegistration: RegistrationDocument = {
-            id: partnerRegId,
-            userId: partnerId,
-            userName: partnerName || partnerId,
-            category,
-            status: "confirmed",
-            partnerId: userId,
-            partnerName: userName,
-            partnerPhone: body.userPhone || '',
-            createdAt: now,
-            updatedAt: now,
-          };
-          try {
-            await container.items.create(partnerRegistration);
-          } catch (e: unknown) {
-            // 409 = already exists, that's fine
-            const cosmosErr = e as { code?: number };
-            if (cosmosErr.code !== 409) console.error('Failed to create partner registration:', e);
-          }
+        const partnerRegistration: RegistrationDocument = {
+          id: partnerRegId,
+          userId: partnerId,
+          userName: partnerName || partnerId,
+          category,
+          status: "confirmed",
+          partnerId: userId,
+          partnerName: userName,
+          partnerPhone: body.userPhone || '',
+          createdAt: now,
+          updatedAt: now,
+        };
+        try {
+          await container.items.create(partnerRegistration);
+        } catch (e: unknown) {
+          // 409 = already exists, that's fine
+          const cosmosErr = e as { code?: number };
+          if (cosmosErr.code !== 409) console.error('Failed to create partner registration:', e);
         }
       }
     }
