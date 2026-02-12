@@ -144,7 +144,7 @@ export default function BracketPage() {
                       return (
                         <div
                           key={match.id}
-                          className={`w-56 rounded border transition-all ${
+                          className={`w-72 rounded border transition-all ${
                             isLive
                               ? 'bg-slate-800 border-amber-600/50 ring-1 ring-amber-500/20'
                               : isComplete
@@ -165,13 +165,13 @@ export default function BracketPage() {
                                 : 'text-slate-300'
                             }`}
                           >
-                            <span className="truncate max-w-[140px]">
+                            <span className="truncate min-w-0 flex-1">
                               {match.player1Name || (
                                 <span className="text-slate-600 italic">TBD</span>
                               )}
                             </span>
                             {isComplete && match.winnerId === match.player1Id && (
-                              <span className="font-mono text-xs text-green-500 ml-2">W</span>
+                              <span className="font-mono text-xs text-green-500 ml-2 shrink-0">W</span>
                             )}
                           </div>
 
@@ -183,15 +183,15 @@ export default function BracketPage() {
                                 : 'text-slate-300'
                             }`}
                           >
-                            <span className="truncate max-w-[140px]">
+                            <span className="truncate min-w-0 flex-1">
                               {match.player2Name || (
                                 <span className="text-slate-600 italic">
-                                  {isBye ? '—' : 'TBD'}
+                                  {isBye ? '\u2014' : 'TBD'}
                                 </span>
                               )}
                             </span>
                             {isComplete && match.winnerId === match.player2Id && (
-                              <span className="font-mono text-xs text-green-500 ml-2">W</span>
+                              <span className="font-mono text-xs text-green-500 ml-2 shrink-0">W</span>
                             )}
                           </div>
 
