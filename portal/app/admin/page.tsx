@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw } from 'lucide-react';
+import { Settings, Trophy, Loader2, RefreshCw, Search } from 'lucide-react';
 import { Category } from '../lib/models';
 
 interface AdminRegistration {
@@ -20,6 +20,7 @@ interface AdminPlayer {
   id: string;
   name: string;
   email: string;
+  alias?: string;
   phoneNumber?: string;
   registrations: AdminRegistration[];
 }
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
   const [generating, setGenerating] = useState(false);
   const [seedValues, setSeedValues] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchPlayers = async () => {
     try {
@@ -163,24 +165,36 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Registered Players — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
-              </h2>
-              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-                {(() => {
-                  const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
-                  if (!isD) return `${players.length} Players`;
-                  // Deduplicate pairs
-                  const seen = new Set<string>();
-                  for (const p of players) {
-                    const reg = p.registrations[0];
-                    const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
-                    seen.add(pairKey);
-                  }
-                  return `${seen.size} Teams`;
-                })()}
-              </span>
+            <div className="p-6 border-b border-slate-100 flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-slate-800">
+                  Registered Players — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
+                </h2>
+                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+                  {(() => {
+                    const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
+                    if (!isD) return `${players.length} Players`;
+                    // Deduplicate pairs
+                    const seen = new Set<string>();
+                    for (const p of players) {
+                      const reg = p.registrations[0];
+                      const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
+                      seen.add(pairKey);
+                    }
+                    return `${seen.size} Teams`;
+                  })()}
+                </span>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+                />
+              </div>
             </div>
 
             {players.length === 0 ? (
@@ -196,19 +210,27 @@ export default function AdminDashboard() {
                 }))
                 .filter(p => p.registrations.length > 0);
 
-              // For doubles, deduplicate pairs — keep only one row per pair
+              // For doubles, deduplicate pairs — keep the partner who carries the seed
               let displayRows = filtered;
               if (isDoubles) {
-                const seen = new Set<string>();
-                displayRows = filtered.filter(player => {
+                const pairMap = new Map<string, typeof filtered[number]>();
+                for (const player of filtered) {
                   const reg = player.registrations[0];
                   const partnerId = reg.partnerId || '';
-                  // Create a canonical pair key (sorted) so A+B and B+A are the same
                   const pairKey = [player.id, partnerId].sort().join('|||');
-                  if (seen.has(pairKey)) return false;
-                  seen.add(pairKey);
-                  return true;
-                });
+                  const existing = pairMap.get(pairKey);
+                  if (!existing) {
+                    pairMap.set(pairKey, player);
+                  } else {
+                    // Prefer the partner with a seed
+                    const existingSeed = existing.registrations[0]?.seed;
+                    const thisSeed = reg.seed;
+                    if (!existingSeed && thisSeed) {
+                      pairMap.set(pairKey, player);
+                    }
+                  }
+                }
+                displayRows = Array.from(pairMap.values());
               }
 
               // Sort: seeded first (ascending seed), then unseeded
@@ -220,6 +242,16 @@ export default function AdminDashboard() {
                 if (sB) return 1;
                 return a.name.localeCompare(b.name);
               });
+
+              // Filter by search query
+              if (searchQuery.trim()) {
+                const q = searchQuery.trim().toLowerCase();
+                displayRows = displayRows.filter(p => {
+                  const reg = p.registrations[0];
+                  const partnerName = reg?.partnerName || '';
+                  return p.name.toLowerCase().includes(q) || partnerName.toLowerCase().includes(q);
+                });
+              }
 
               if (displayRows.length === 0) {
                 return (
@@ -257,7 +289,7 @@ export default function AdminDashboard() {
                               </div>
                               <div>
                                 <p className="font-semibold text-slate-900">{player.name} <span className="text-slate-400 font-normal">&</span> {reg.partnerName || 'TBD'}</p>
-                                <p className="text-xs text-slate-400">{player.email}</p>
+                                <p className="text-xs text-slate-400">{player.alias || player.email}</p>
                               </div>
                             </div>
                           ) : (
@@ -267,7 +299,7 @@ export default function AdminDashboard() {
                               </div>
                               <div>
                                 <p className="font-semibold text-slate-900">{player.name}</p>
-                                <p className="text-xs text-slate-400">{player.email}</p>
+                                <p className="text-xs text-slate-400">{player.alias || player.email}</p>
                               </div>
                             </div>
                           )}

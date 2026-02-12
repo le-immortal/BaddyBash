@@ -223,6 +223,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Assign sequential match numbers (R1 first, then R2, etc.)
+    let matchNum = 1;
+    for (const roundArr of matchGrid) {
+      for (const m of roundArr) {
+        m.matchNumber = matchNum++;
+      }
+    }
+
     // Flat list + lookup map for the cascade step
     const allMatches = matchGrid.flat();
     const matchMap = new Map(allMatches.map((m) => [m.id, m]));
@@ -241,10 +249,12 @@ export async function POST(request: NextRequest) {
       if (p1) {
         round1[pos].player1Id = p1.id;
         round1[pos].player1Name = p1.name;
+        if (p1.seed) round1[pos].player1Seed = p1.seed;
       }
       if (p2) {
         round1[pos].player2Id = p2.id;
         round1[pos].player2Name = p2.name;
+        if (p2.seed) round1[pos].player2Seed = p2.seed;
       }
     }
 

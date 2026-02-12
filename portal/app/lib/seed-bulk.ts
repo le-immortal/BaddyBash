@@ -1,22 +1,28 @@
 /**
- * Bulk seed script — generates ~1000 registration entries for scale testing.
+ * Bulk seed script — wipes ALL data, then reseeds with exact counts.
+ * Some players are shared between singles and doubles (max 2 categories).
  *
  * Usage: npx tsx app/lib/seed-bulk.ts
  *
- * Strategy (max 2 categories per player, doubles need both-side registrations):
- *   MS: 200 players → 200 entries
- *   WS: 150 players → 150 entries
- *   MD: 130 teams  → 260 entries (260 male players, some overlap with MS)
- *   WD: 100 teams  → 200 entries (200 female players, some overlap with WS)
- *   XD: 100 teams  → 200 entries (100 male + 100 female, no overlap since they'd hit max-2)
+ * Target counts:
+ *   MS:  443 players  → 443 registrations
+ *   WS:   69 players  →  69 registrations
+ *   MD:  280 teams    → 560 registrations
+ *   WD:  129 teams    → 258 registrations
+ *   XD:  129 teams    → 258 registrations
  *   ─────────────────────────────
- *   Total:          ~1010 entries
+ *   Total:            1588 registrations
+ *
+ * Overlap:
+ *   - First 100 MS players also play MD (50 MD teams from MS pool)
+ *   - First 30 WS players also play WD (15 WD teams from WS pool)
+ *   - Top seeds appear in both their singles and doubles categories
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { CosmosClient } from "@azure/cosmos";
-import type { UserDocument, RegistrationDocument, Category } from "./models";
+import type { UserDocument, RegistrationDocument } from "./models";
 
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
@@ -76,6 +82,31 @@ function generateUsers(prefix: string, count: number, firstNames: string[]): Use
   return users;
 }
 
+/* ── Wipe helper ────────────────────────────────────────────────────── */
+async function wipeContainer(
+  container: ReturnType<ReturnType<CosmosClient["database"]>["container"]>,
+  partitionKeyPath: string,
+  label: string,
+) {
+  console.log(`🗑️  Wiping ${label}...`);
+  const { resources } = await container.items
+    .query({ query: `SELECT c.id, c${partitionKeyPath} AS pk FROM c` })
+    .fetchAll();
+  const BATCH = 50;
+  let deleted = 0;
+  for (let i = 0; i < resources.length; i += BATCH) {
+    const chunk = resources.slice(i, i + BATCH);
+    await Promise.all(
+      chunk.map((doc: { id: string; pk: string }) =>
+        container.item(doc.id, doc.pk).delete().catch(() => {})
+      )
+    );
+    deleted += chunk.length;
+    process.stdout.write(`  ${deleted}/${resources.length}\r`);
+  }
+  console.log(`  ✅ Deleted ${resources.length} ${label}.`);
+}
+
 /* ── Main ───────────────────────────────────────────────────────────── */
 async function bulkSeed() {
   if (!endpoint || !key) {
@@ -86,7 +117,6 @@ async function bulkSeed() {
   const client = new CosmosClient({ endpoint, key });
   const { database } = await client.databases.createIfNotExists({ id: databaseId });
 
-  // Ensure containers exist
   for (const c of ["users", "registrations", "matches"]) {
     const pk = c === "users" ? "/id" : c === "registrations" ? "/userId" : "/category";
     await database.containers.createIfNotExists({ id: c, partitionKey: { paths: [pk] } });
@@ -94,48 +124,43 @@ async function bulkSeed() {
 
   const usersContainer = database.container("users");
   const regsContainer = database.container("registrations");
+  const matchesContainer = database.container("matches");
+
+  // ── Step 1: Wipe all data ───────────────────────────────────────────
+  console.log("\n═══ WIPING ALL DATA ═══");
+  await wipeContainer(matchesContainer, ".category", "matches");
+  await wipeContainer(regsContainer, ".userId", "registrations");
+  await wipeContainer(usersContainer, ".id", "users");
+  console.log("═══ WIPE COMPLETE ═══\n");
+
   const now = new Date().toISOString();
+  const BATCH = 50;
 
-  /* ── Generate user pools ─────────────────────────────────────────── */
-  // Male pools (non-overlapping ID ranges):
-  //   m1–m200   → MS only
-  //   m201–m330 → MD only (130 players for 65 extra MD teams; 65 overlap teams come from MS pool)
-  //   m331-m430 → XD only
-  // Female pools:
-  //   f1–f150   → WS only
-  //   f151–f350 → WD only (100 teams = 200 players; some overlap with WS)
-  //   f351–f450 → XD only
+  /* ── Step 2: Generate user pools ─────────────────────────────────── */
+  // Overlap plan (max 2 categories per user):
+  //   MS: 443 males (m1–m443). First 100 (m1–m100) ALSO play MD.
+  //   MD: 280 teams = 560 players.
+  //       50 teams from MS overlap: m1+m2, m3+m4, …, m99+m100
+  //       230 teams from MD-only: md1–md460
+  //   WS: 69 females (f1–f69). First 30 (f1–f30) ALSO play WD.
+  //   WD: 129 teams = 258 players.
+  //       15 teams from WS overlap: f1+f2, f3+f4, …, f29+f30
+  //       114 teams from WD-only: fd1–fd228
+  //   XD: 129 teams. mx1–mx129 (males) + fx1–fx129 (females). All XD-only.
+  //
+  // Unique users: 443 + 460 + 69 + 228 + 129 + 129 = 1458
+  // Registrations: 443 + 560 + 69 + 258 + 258 = 1588
 
-  // But to keep it clean with max-2:
-  //   MS players (m1-m200): 70 of them ALSO play MD (so they hit 2 categories)
-  //   The other 130 MS players only play MS (1 category)
-  //   MD needs 130 teams = 260 players. 70 come from MS pool, 190 are MD-only (m201-m390)
-  //   XD needs 100 teams. 100 new males (m391-m490), 100 new females (f251-f350)
-  //   WS players (f1-f150): 50 of them ALSO play WD
-  //   WD needs 100 teams = 200 players. 50 from WS pool, 150 are WD-only (f151-f300)... wait that's 200 total for WD side, let me recalc.
+  const maleMS    = generateUsers("m",  443, maleFirst);      // m1–m443 → MS (first 100 also MD)
+  const maleMDonly = generateUsers("md", 460, maleFirst);     // md1–md460 → MD only (230 teams)
+  const femaleWS  = generateUsers("f",   69, femaleFirst);    // f1–f69 → WS (first 30 also WD)
+  const femaleWDonly = generateUsers("fd", 228, femaleFirst); // fd1–fd228 → WD only (114 teams)
+  const maleXD    = generateUsers("mx", 129, maleFirst);      // mx1–mx129 → XD
+  const femaleXD  = generateUsers("fx", 129, femaleFirst);    // fx1–fx129 → XD
 
-  // Simpler plan:
-  //   MS: 200 solo-MS males (m1-m200)
-  //   WS: 150 solo-WS females (f1-f150)
-  //   MD: 130 teams from 260 unique males (m201-m460) — only play MD
-  //   WD: 100 teams from 200 unique females (f151-f350) — only play WD
-  //   XD: 100 teams from 100 new males (m461-m560) + 100 new females (f351-f450)
-  //   Total users: 560 males + 450 females = 1010 users
-  //   Total regs:  200 + 150 + 260 + 200 + 200 = 1010 registrations ✓
-  //   Max categories per user: exactly 1
-
-  const maleMS = generateUsers("m", 200, maleFirst);        // m1–m200 → MS
-  const maleMD = generateUsers("md", 260, maleFirst);       // md1–md260 → MD (130 teams)
-  const maleXD = generateUsers("mx", 100, maleFirst);       // mx1–mx100 → XD
-  const femaleWS = generateUsers("f", 150, femaleFirst);    // f1–f150 → WS
-  const femaleWD = generateUsers("fd", 200, femaleFirst);   // fd1–fd200 → WD (100 teams)
-  const femaleXD = generateUsers("fx", 100, femaleFirst);   // fx1–fx100 → XD
-
-  const allUsers = [...maleMS, ...maleMD, ...maleXD, ...femaleWS, ...femaleWD, ...femaleXD];
+  const allUsers = [...maleMS, ...maleMDonly, ...femaleWS, ...femaleWDonly, ...maleXD, ...femaleXD];
   console.log(`👤 Upserting ${allUsers.length} users...`);
 
-  // Batch upsert in parallel (chunks of 50)
-  const BATCH = 50;
   for (let i = 0; i < allUsers.length; i += BATCH) {
     const chunk = allUsers.slice(i, i + BATCH);
     await Promise.all(chunk.map((u) => usersContainer.items.upsert(u)));
@@ -143,34 +168,48 @@ async function bulkSeed() {
   }
   console.log(`  ✅ ${allUsers.length} users upserted.`);
 
-  /* ── Build registrations ─────────────────────────────────────────── */
+  /* ── Step 3: Build registrations ─────────────────────────────────── */
   const regs: RegistrationDocument[] = [];
 
-  // MS — 200 singles
+  // ── MS — 443 singles, top 16 seeded ─────────────────────────────────
   for (let i = 0; i < maleMS.length; i++) {
     const u = maleMS[i];
     regs.push({
       id: `${u.id}_MS`, userId: u.id, userName: u.name, category: "MS",
-      status: "confirmed", seed: i < 8 ? i + 1 : undefined,
+      status: "confirmed", seed: i < 16 ? i + 1 : undefined,
       createdAt: now, updatedAt: now,
     });
   }
 
-  // WS — 150 singles
-  for (let i = 0; i < femaleWS.length; i++) {
-    const u = femaleWS[i];
+  // ── MD — 280 teams total ────────────────────────────────────────────
+  // First 50 teams from MS overlap (m1+m2, m3+m4, …, m99+m100)
+  const msOverlap = maleMS.slice(0, 100); // first 100 MS players
+  for (let i = 0; i < msOverlap.length; i += 2) {
+    const a = msOverlap[i];
+    const b = msOverlap[i + 1];
+    const teamIdx = i / 2; // 0–49
+    // Top 4 MS-overlap teams are seeded 1–4 in MD
+    const teamSeed = teamIdx < 4 ? teamIdx + 1 : undefined;
     regs.push({
-      id: `${u.id}_WS`, userId: u.id, userName: u.name, category: "WS",
-      status: "confirmed", seed: i < 8 ? i + 1 : undefined,
+      id: `${a.id}_MD`, userId: a.id, userName: a.name, category: "MD",
+      status: "confirmed", seed: teamSeed,
+      partnerId: b.id, partnerName: b.name, partnerPhone: b.phoneNumber,
+      createdAt: now, updatedAt: now,
+    });
+    regs.push({
+      id: `${b.id}_MD`, userId: b.id, userName: b.name, category: "MD",
+      status: "confirmed",
+      partnerId: a.id, partnerName: a.name, partnerPhone: a.phoneNumber,
       createdAt: now, updatedAt: now,
     });
   }
-
-  // MD — 130 teams (260 players, paired sequentially)
-  for (let i = 0; i < maleMD.length; i += 2) {
-    const a = maleMD[i];
-    const b = maleMD[i + 1];
-    const teamSeed = i < 8 ? (i / 2) + 1 : undefined;
+  // Remaining 230 teams from MD-only pool (md1+md2, md3+md4, …)
+  for (let i = 0; i < maleMDonly.length; i += 2) {
+    const a = maleMDonly[i];
+    const b = maleMDonly[i + 1];
+    const teamIdx = i / 2; // 0–229
+    // Seeds 5–8 come from MD-only pool (teamIdx 0–3)
+    const teamSeed = teamIdx < 4 ? teamIdx + 5 : undefined;
     regs.push({
       id: `${a.id}_MD`, userId: a.id, userName: a.name, category: "MD",
       status: "confirmed", seed: teamSeed,
@@ -185,11 +224,43 @@ async function bulkSeed() {
     });
   }
 
-  // WD — 100 teams (200 players, paired sequentially)
-  for (let i = 0; i < femaleWD.length; i += 2) {
-    const a = femaleWD[i];
-    const b = femaleWD[i + 1];
-    const teamSeed = i < 8 ? (i / 2) + 1 : undefined;
+  // ── WS — 69 singles, top 8 seeded ──────────────────────────────────
+  for (let i = 0; i < femaleWS.length; i++) {
+    const u = femaleWS[i];
+    regs.push({
+      id: `${u.id}_WS`, userId: u.id, userName: u.name, category: "WS",
+      status: "confirmed", seed: i < 8 ? i + 1 : undefined,
+      createdAt: now, updatedAt: now,
+    });
+  }
+
+  // ── WD — 129 teams total ───────────────────────────────────────────
+  // First 15 teams from WS overlap (f1+f2, f3+f4, …, f29+f30)
+  const wsOverlap = femaleWS.slice(0, 30); // first 30 WS players
+  for (let i = 0; i < wsOverlap.length; i += 2) {
+    const a = wsOverlap[i];
+    const b = wsOverlap[i + 1];
+    const teamIdx = i / 2; // 0–14
+    const teamSeed = teamIdx < 4 ? teamIdx + 1 : undefined;
+    regs.push({
+      id: `${a.id}_WD`, userId: a.id, userName: a.name, category: "WD",
+      status: "confirmed", seed: teamSeed,
+      partnerId: b.id, partnerName: b.name, partnerPhone: b.phoneNumber,
+      createdAt: now, updatedAt: now,
+    });
+    regs.push({
+      id: `${b.id}_WD`, userId: b.id, userName: b.name, category: "WD",
+      status: "confirmed",
+      partnerId: a.id, partnerName: a.name, partnerPhone: a.phoneNumber,
+      createdAt: now, updatedAt: now,
+    });
+  }
+  // Remaining 114 teams from WD-only pool
+  for (let i = 0; i < femaleWDonly.length; i += 2) {
+    const a = femaleWDonly[i];
+    const b = femaleWDonly[i + 1];
+    const teamIdx = i / 2; // 0–113
+    const teamSeed = teamIdx < 4 ? teamIdx + 5 : undefined;
     regs.push({
       id: `${a.id}_WD`, userId: a.id, userName: a.name, category: "WD",
       status: "confirmed", seed: teamSeed,
@@ -204,11 +275,11 @@ async function bulkSeed() {
     });
   }
 
-  // XD — 100 teams (100 males + 100 females)
+  // ── XD — 129 teams (129 males + 129 females), top 8 seeded ─────────
   for (let i = 0; i < maleXD.length; i++) {
     const m = maleXD[i];
     const f = femaleXD[i];
-    const teamSeed = i < 4 ? i + 1 : undefined;
+    const teamSeed = i < 8 ? i + 1 : undefined;
     regs.push({
       id: `${m.id}_XD`, userId: m.id, userName: m.name, category: "XD",
       status: "confirmed", seed: teamSeed,
@@ -234,12 +305,23 @@ async function bulkSeed() {
   // Print summary
   const summary: Record<string, number> = {};
   for (const r of regs) summary[r.category] = (summary[r.category] || 0) + 1;
-  console.log("\n📊 Registration breakdown:");
-  for (const [cat, count] of Object.entries(summary).sort()) {
-    console.log(`  ${cat}: ${count} entries`);
+
+  // Count shared users
+  const userCatCount = new Map<string, Set<string>>();
+  for (const r of regs) {
+    if (!userCatCount.has(r.userId)) userCatCount.set(r.userId, new Set());
+    userCatCount.get(r.userId)!.add(r.category);
   }
-  console.log(`  TOTAL: ${regs.length}`);
-  console.log(`  Users: ${allUsers.length}`);
+  const sharedUsers = [...userCatCount.values()].filter(s => s.size > 1).length;
+
+  console.log("\n📊 Registration breakdown:");
+  console.log(`  MS: ${summary["MS"]} regs (443 players)`);
+  console.log(`  WS: ${summary["WS"]} regs (69 players)`);
+  console.log(`  MD: ${summary["MD"]} regs (280 teams)`);
+  console.log(`  WD: ${summary["WD"]} regs (129 teams)`);
+  console.log(`  XD: ${summary["XD"]} regs (129 teams)`);
+  console.log(`  TOTAL: ${regs.length} registrations, ${allUsers.length} unique users`);
+  console.log(`  🔗 ${sharedUsers} players appear in 2 categories (singles + doubles)`);
   console.log("\n🎉 Bulk seed complete!");
 }
 

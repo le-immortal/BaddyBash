@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
           id: uid,
           name: user?.name || uid,
           email: user?.email || "",
+          alias: user?.alias || "",
           phoneNumber: user?.phoneNumber,
           registrations: regMap.get(uid) || [],
         };

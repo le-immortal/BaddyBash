@@ -82,11 +82,15 @@ export interface MatchDocument {
   position: number;       // position in the round (0-indexed)
   status: MatchStatus;    // explicit lifecycle state
 
+  matchNumber?: number;   // sequential match number for display (M1, M2, ...)
+
   // Participants
   player1Id?: string;
   player1Name?: string;
+  player1Seed?: number;   // admin-assigned seed (only if seeded)
   player2Id?: string;
   player2Name?: string;
+  player2Seed?: number;   // admin-assigned seed (only if seeded)
 
   // Result
   sets: SetScore[];       // structured set scores (empty [] until played)

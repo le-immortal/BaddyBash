@@ -43,8 +43,11 @@ function MatchCard({ match }: { match: MatchDocument }) {
               : 'bg-slate-800 border-slate-700'
       }`}
     >
-      {/* Badge */}
-      <div className="flex justify-end px-1.5 pt-0.5">
+      {/* Header: match number + badge */}
+      <div className="flex items-center justify-between px-1.5 pt-0.5">
+        {match.matchNumber ? (
+          <span className="text-[9px] font-mono text-slate-500">M{match.matchNumber}</span>
+        ) : <span />}
         <span className={`text-[8px] font-bold uppercase tracking-wider px-1 rounded ${
           isBye ? 'bg-slate-700/50 text-slate-500'
           : isLive ? 'bg-amber-900/60 text-amber-400'
@@ -57,7 +60,10 @@ function MatchCard({ match }: { match: MatchDocument }) {
 
       {/* Player 1 */}
       <div className={`flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 ${p1Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
-        <span className="truncate flex-1">
+        <span className="truncate flex-1 flex items-center gap-1">
+          {match.player1Seed && (
+            <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player1Seed}]</span>
+          )}
           {match.player1Name || <span className="text-slate-600 italic text-[10px]">TBD</span>}
         </span>
         {isComplete && p1Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
@@ -65,7 +71,10 @@ function MatchCard({ match }: { match: MatchDocument }) {
 
       {/* Player 2 */}
       <div className={`flex items-center justify-between px-2 py-0.5 ${p2Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
-        <span className="truncate flex-1">
+        <span className="truncate flex-1 flex items-center gap-1">
+          {match.player2Seed && (
+            <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player2Seed}]</span>
+          )}
           {match.player2Name || (
             <span className="text-slate-600 italic text-[10px]">{isBye ? '— bye —' : 'TBD'}</span>
           )}
