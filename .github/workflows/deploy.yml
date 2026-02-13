@@ -12,7 +12,7 @@ on:
       - 'portal/**'
 
 env:
-  AZURE_WEBAPP_NAME: baddybashportal     # App Service in rg-baddybash (VS Enterprise sub)
+  AZURE_WEBAPP_NAME: baddybashapp        # App Service in test-rg (IntegratedPlanning sub)
   NODE_VERSION: '20'
 
 jobs:
