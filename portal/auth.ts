@@ -10,9 +10,16 @@ const isDev = process.env.NODE_ENV === "development";
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
 async function getClientAssertion(): Promise<string> {
-  const credential = new ManagedIdentityCredential();
-  const result = await credential.getToken("api://AzureADTokenExchange");
-  return result.token;
+  try {
+    console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
+    const credential = new ManagedIdentityCredential();
+    const result = await credential.getToken("api://AzureADTokenExchange");
+    console.log("[AUTH] MI token acquired successfully, expires:", result.expiresOnTimestamp);
+    return result.token;
+  } catch (err) {
+    console.error("[AUTH] Failed to get MI token:", err);
+    throw err;
+  }
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -30,6 +37,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           issuer: `https://login.microsoftonline.com/${process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID}/v2.0`,
           token: {
             async request({ params, provider }: { params: URLSearchParams; provider: { callbackUrl: string } }) {
+              console.log("[AUTH] Token exchange starting...");
+              console.log("[AUTH] Callback URL:", provider.callbackUrl);
               const assertion = await getClientAssertion();
               const body = new URLSearchParams({
                 grant_type: "authorization_code",
@@ -44,6 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               const codeVerifier = params.get("code_verifier");
               if (codeVerifier) body.set("code_verifier", codeVerifier);
 
+              console.log("[AUTH] Sending token request to Entra ID...");
               const response = await fetch(
                 `https://login.microsoftonline.com/${process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID}/oauth2/v2.0/token`,
                 {
@@ -54,10 +64,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               );
               const tokens = await response.json();
               if (!response.ok) {
+                console.error("[AUTH] Token exchange failed:", response.status, JSON.stringify(tokens));
                 throw new Error(
                   `Token request failed: ${tokens.error_description || tokens.error}`
                 );
               }
+              console.log("[AUTH] Token exchange successful!");
               return { tokens };
             },
           },
