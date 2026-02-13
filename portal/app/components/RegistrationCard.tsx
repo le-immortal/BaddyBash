@@ -71,7 +71,7 @@ export default function RegistrationCard({
               <input 
                 type="text" 
                 placeholder="e.g., Jane Doe"
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white placeholder-slate-400"
                 value={partnerName || ''}
                 onChange={(e) => onNameChange?.(e.target.value)}
                 disabled={status !== 'selected'} 
@@ -82,7 +82,7 @@ export default function RegistrationCard({
               <input 
                 type="text" 
                 placeholder="e.g., v-john"
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white placeholder-slate-400"
                 value={partnerAlias || ''}
                 onChange={(e) => onAliasChange?.(e.target.value)}
                 disabled={status !== 'selected'} 
@@ -93,7 +93,7 @@ export default function RegistrationCard({
               <input 
                 type="tel" 
                 placeholder="e.g., +1 555-0199"
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white placeholder-slate-400"
                 value={partnerPhone || ''}
                 onChange={(e) => onPhoneChange?.(e.target.value)}
                 disabled={status !== 'selected'} 

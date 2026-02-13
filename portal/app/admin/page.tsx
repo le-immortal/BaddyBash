@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords } from 'lucide-react';
-import { Category, MatchDocument, formatSetScores } from '../lib/models';
+import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock } from 'lucide-react';
+import { Category, MatchDocument } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import * as XLSX from 'xlsx';
 
@@ -47,6 +47,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
   const exportRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -58,7 +59,31 @@ export default function AdminDashboard() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const fetchPlayers = async () => {
+  useEffect(() => {
+    fetch('/api/settings').then(res => res.json()).then(data => {
+      setRegistrationOpen(data.registrationOpen !== false);
+    }).catch(console.error);
+  }, []);
+
+  const toggleRegistration = async () => {
+    const newState = !registrationOpen;
+    if (!confirm(newState ? 'Re-open registrations?' : 'Close registrations? Users won\'t be able to sign up.')) return;
+    
+    setRegistrationOpen(newState);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationOpen: newState }),
+      });
+    } catch (err) {
+      console.error(err);
+      setRegistrationOpen(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const fetchPlayers = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/admin/players?category=${selectedCategory}`);
@@ -76,7 +101,12 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
-  const fetchMatches = async () => {
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCategory]);
+
+  const fetchMatches = useCallback(async () => {
     try {
       setMatchesLoading(true);
       const res = await fetch(`/api/matches?category=${selectedCategory}`);
@@ -92,7 +122,7 @@ export default function AdminDashboard() {
     } finally {
       setMatchesLoading(false);
     }
-  };
+  }, [selectedCategory]);
 
   useEffect(() => {
     if (activeTab === 'registrations') {
@@ -100,7 +130,7 @@ export default function AdminDashboard() {
     } else {
       fetchMatches();
     }
-  }, [selectedCategory, activeTab]);
+  }, [selectedCategory, activeTab, fetchPlayers, fetchMatches]);
 
   const handleSeedChange = async (registrationId: string, userId: string, value: string) => {
     const prev = seedValues[registrationId] || '';
@@ -279,7 +309,6 @@ export default function AdminDashboard() {
         [isDoubles ? 'Team 2' : 'Player 2']: m.player2Name || '',
         'Seed 2': m.player2Seed || '',
         'Status': m.status.charAt(0).toUpperCase() + m.status.slice(1).replace('_', ' '),
-        'Score': formatSetScores(m.sets ?? []),
         'Winner': m.winnerName || '',
       }));
 
@@ -346,6 +375,18 @@ export default function AdminDashboard() {
             <p className="text-slate-600 mt-2">Manage players, seeds, and fixtures.</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleRegistration}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                registrationOpen 
+                  ? 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100' 
+                  : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
+              }`}
+              title={registrationOpen ? 'Close Registrations' : 'Re-open Registrations'}
+            >
+              {registrationOpen ? <Lock size={16} /> : <Unlock size={16} />}
+              {registrationOpen ? 'Close Reg' : 'Open Reg'}
+            </button>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as Category)}
@@ -382,8 +423,15 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               )}
-            </div>data...</span>
+            </div>
           </div>
+        </header>
+
+        {loading ? (
+           <div className="flex justify-center items-center py-12">
+             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+             <span className="ml-3 text-slate-500">Loading data...</span>
+           </div>
         ) : (
           <>
             {/* Tabs */}
@@ -406,7 +454,7 @@ export default function AdminDashboard() {
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                Matches & Scores
+                Matches
               </button>
             </div>
 
@@ -601,14 +649,40 @@ export default function AdminDashboard() {
                             <Swords className="w-5 h-5 text-blue-600" />
                             Match List — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
                         </h2>
-                        <button onClick={fetchMatches} className="text-slate-500 hover:text-blue-600 p-2 rounded hover:bg-slate-100">
-                             <RefreshCw className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2">
+                            {matches.length > 0 && (
+                                <button
+                                    onClick={handleGenerateFixtures}
+                                    disabled={generating}
+                                    className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50"
+                                    title="Regenerate Bracket"
+                                >
+                                    {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                                </button>
+                            )}
+                            <button onClick={fetchMatches} className="text-slate-500 hover:text-blue-600 p-2 rounded hover:bg-slate-100" title="Refresh Matches">
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                     
-                    {matches.length === 0 ? (
-                        <div className="p-12 text-center text-slate-500">
-                             No matches found. Generate fixtures first.
+                    {matchesLoading ? (
+                        <div className="p-12 text-center text-slate-500 flex flex-col items-center gap-3">
+                             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                             <p>Loading matches...</p>
+                        </div>
+                    ) : matches.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500 flex flex-col items-center gap-4">
+                             <Trophy className="w-12 h-12 text-slate-300" />
+                             <p>No matches found for this category.</p>
+                             <button 
+                                onClick={handleGenerateFixtures}
+                                disabled={generating}
+                                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
+                             >
+                                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                                Generate Bracket
+                             </button>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -618,7 +692,7 @@ export default function AdminDashboard() {
                                         <th className="p-4">#</th>
                                         <th className="p-4">Round</th>
                                         <th className="p-4 text-right">Player 1</th>
-                                        <th className="p-4 text-center">Score</th>
+                                        <th className="p-4 text-center text-xs text-slate-300">vs</th>
                                         <th className="p-4 text-left">Player 2</th>
                                         <th className="p-4 text-center">Status</th>
                                         <th className="p-4 text-right">Action</th>
@@ -642,12 +716,12 @@ export default function AdminDashboard() {
                                             </td>
                                             <td className={`p-4 text-right font-semibold ${m.winnerId === m.player1Id ? 'text-green-600' : 'text-slate-700'}`}>
                                                 {m.player1Name || 'TBD'}
+                                                {m.winnerId === m.player1Id && <span className="ml-2 text-xs text-green-500">🏆</span>}
                                             </td>
-                                            <td className="p-4 text-center font-mono text-slate-800 bg-slate-50/50">
-                                                {formatSetScores(m.sets || [])}
-                                            </td>
+                                            <td className="p-4 text-center text-slate-300 text-xs">-</td>
                                             <td className={`p-4 text-left font-semibold ${m.winnerId === m.player2Id ? 'text-green-600' : 'text-slate-700'}`}>
                                                 {m.player2Name || 'TBD'}
+                                                {m.winnerId === m.player2Id && <span className="ml-2 text-xs text-green-500">🏆</span>}
                                             </td>
                                             <td className="p-4 text-center">
                                                 <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide 
@@ -685,29 +759,7 @@ export default function AdminDashboard() {
                     onUpdate={fetchMatches}
                 />
             )}
-          </               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                />
-                                {isDuplicate && (
-                                  <p className="absolute text-[10px] text-red-500 font-medium whitespace-nowrap mt-0.5">Duplicate</p>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="p-4 text-right">
-                          <button className="text-slate-400 hover:text-blue-600">
-                            <Settings className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              );
-            })()}
-          </section>
+          </>
         )}
       </main>
     </div>

@@ -118,7 +118,6 @@ export default function BracketVisualizer({ matches, onMatchClick }: BracketVisu
       <div className="flex-1 overflow-auto bg-slate-900/40 rounded border border-slate-700/50 p-6">
         <div className="flex items-stretch min-h-min">
           {visibleRounds.map(([roundNum, roundMatches], i) => {
-            const isLastVisible = i === visibleRounds.length - 1;
             const absoluteColIdx = roundOffset + i;
             const bh = blockH(absoluteColIdx);
 

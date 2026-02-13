@@ -1,4 +1,4 @@
-import { MatchDocument, formatSetScores } from '../lib/models';
+import { MatchDocument } from '../lib/models';
 
 interface MatchCardProps {
   match: MatchDocument;
@@ -9,7 +9,6 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
   const isBye = match.status === 'bye';
   const isLive = match.status === 'in_progress';
   const isComplete = match.status === 'completed';
-  const scoreStr = formatSetScores(match.sets ?? []);
   const p1Win = match.winnerId && match.winnerId === match.player1Id;
   const p2Win = match.winnerId && match.winnerId === match.player2Id;
 
@@ -41,7 +40,7 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
           : isComplete ? 'bg-green-900/60 text-green-400'
           : 'bg-slate-700 text-slate-400'
         }`}>
-          {isBye ? 'BYE' : isLive ? 'Live' : isComplete ? 'Final' : 'Upcoming'}
+          {isBye ? 'BYE' : isLive ? 'Live' : isComplete ? 'Winner' : 'Upcoming'}
         </span>
       </div>
 
@@ -68,13 +67,6 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
         </span>
         {isComplete && p2Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
       </div>
-
-      {/* Score */}
-      {scoreStr && (
-        <div className="border-t border-slate-700/40 px-2 py-0.5 text-center font-mono text-blue-400 text-[10px]">
-          {scoreStr}
-        </div>
-      )}
     </div>
   );
 }

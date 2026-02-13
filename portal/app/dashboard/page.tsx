@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import { Category } from '../lib/models';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Lock } from 'lucide-react';
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -42,6 +42,14 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [linkingAlias, setLinkingAlias] = useState(false);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
+
+  // Check global registration setting
+  useEffect(() => {
+    fetch('/api/settings').then(res => res.json()).then(data => {
+      setRegistrationOpen(data.registrationOpen !== false);
+    }).catch(console.error);
+  }, []);
 
   const profileSaved = !!(savedName && savedAlias && savedPhone);
 
@@ -115,6 +123,7 @@ export default function Dashboard() {
   const hasWomenSelection = allActive.some(c => c === 'WS' || c === 'WD');
 
   const handleSelect = (catId: Category) => {
+    if (!registrationOpen) return;
     if (isMaxReached) return;
     if (committedCategories.includes(catId)) return;
     if ((catId === 'MS' || catId === 'MD') && hasWomenSelection) return;
@@ -298,7 +307,7 @@ export default function Dashboard() {
                   placeholder="e.g., John Doe"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
                 />
               </div>
               <div>
@@ -308,7 +317,7 @@ export default function Dashboard() {
                   placeholder="e.g., v-john"
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
                 />
                 <p className="mt-1 text-xs text-slate-400">This is your unique identifier. If a partner registered you, use the alias they provided.</p>
               </div>
@@ -319,7 +328,7 @@ export default function Dashboard() {
                   placeholder="+91 98765 43210"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
                 />
               </div>
               <button
@@ -344,35 +353,35 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50">
       <Navbar />
       <main className="container mx-auto py-8 px-4">
-        <header className="mb-8 flex justify-between items-end">
+        <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-800">Player Dashboard</h1>
             <p className="text-slate-600 mt-2">Manage your tournament entries. Max {maxSelections} categories allowed.</p>
 
-            <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">
+            <div className="mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-sm text-slate-600">
               <span className="font-medium text-slate-800">{savedName}</span>
-              <span className="text-slate-300">·</span>
+              <span className="hidden md:inline text-slate-300">·</span>
               <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full font-medium">
                 <span className="w-2 h-2 rounded-full bg-green-500" /> {savedAlias}
               </span>
-              <span className="text-slate-300">·</span>
+              <span className="hidden md:inline text-slate-300">·</span>
               <span className="text-slate-600">{savedPhone}</span>
             </div>
           </div>
           {selection.length > 0 && (
             <button
               onClick={handleSave}
-              disabled={!isSelectionValid || saving}
-              className={`font-bold py-3 px-6 rounded-lg shadow-md transition-all ${
-                isSelectionValid && !saving
+              disabled={!isSelectionValid || saving || !registrationOpen}
+              className={`w-full md:w-auto font-bold py-3 px-6 rounded-lg shadow-md transition-all ${
+                isSelectionValid && !saving && registrationOpen
                   ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
               {saving ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
+                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
               ) : (
-                `Save Changes (${selection.length} Pending)`
+                `Save Changes (${selection.length} Selected)`
               )}
             </button>
           )}
@@ -394,6 +403,15 @@ export default function Dashboard() {
               </div>
             )}
 
+            {!registrationOpen && (
+              <div className="flex items-center p-3 mb-6 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
+                <Lock className="w-5 h-5 mr-3 flex-shrink-0" />
+                <div>
+                  <span className="font-bold">Registrations Closed.</span> New registrations are currently paused.
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {CATEGORIES.map(category => {
                 const isCommitted = committedCategories.includes(category.id);
@@ -404,6 +422,7 @@ export default function Dashboard() {
                 else if (isSelected) status = 'selected';
 
                 let isDisabled = status === 'available' && isMaxReached;
+                if (!registrationOpen && status === 'available') isDisabled = true;
                 if (status === 'available') {
                   if ((category.id === 'MS' || category.id === 'MD') && hasWomenSelection) isDisabled = true;
                   if ((category.id === 'WS' || category.id === 'WD') && hasMenSelection) isDisabled = true;

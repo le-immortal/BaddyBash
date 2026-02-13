@@ -179,17 +179,24 @@ Focus: Real-time updates, Scoring.
     - [x] Navbar: Admin link only visible to admins
     - [x] Admin page: "Access Denied" screen for non-admins with redirect to dashboard
 
-3. **Phase C: Score Update**
+3. **Phase C: Registration Control** ✅ COMPLETE
+    - [x] Backend: Global config settings (`CONFIG_GLOBAL` in `users` container)
+    - [x] API: `GET/POST /api/settings` for toggling `registrationOpen`
+    - [x] Admin UI: Lock/Unlock toggle button in dashboard header
+    - [x] User UI: "Registrations Closed" banner on dashboard
+    - [x] User UI: Disable new selections and "Save" button when closed
+
+4. **Phase D: Score Update**
     - [ ] Score Input Modal (admin clicks match → enters set scores)
     - [ ] Score input form (Set 1, Set 2, Set 3) with badminton validation
     - [ ] Real-time bracket updates (Polling / SSE)
 
-4. **Phase D: Entra ID Login**
-    - [ ] Replace GitHub OAuth with Microsoft Entra ID
-    - [ ] @microsoft.com domain restriction
-    - [ ] Seamless SSO for Microsoft employees
+5. **Phase E: Entra ID Login** ✅ COMPLETE
+    - [x] Replace GitHub OAuth with Microsoft Entra ID
+    - [x] @microsoft.com domain restriction
+    - [x] Seamless SSO for Microsoft employees (via Entra provider)
 
-5. **Phase E: Mobile Friendly**
+6. **Phase F: Mobile Friendly**
     - [ ] Responsive design audit & fixes across all pages
     - [ ] Touch-friendly bracket navigation
     - [ ] Mobile-optimized admin dashboard

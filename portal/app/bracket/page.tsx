@@ -54,7 +54,7 @@ function MatchCard({ match }: { match: MatchDocument }) {
           : isComplete ? 'bg-green-900/60 text-green-400'
           : 'bg-slate-700 text-slate-400'
         }`}>
-          {isBye ? 'BYE' : isLive ? 'Live' : isComplete ? 'Final' : 'Upcoming'}
+          {isBye ? 'BYE' : isLive ? 'Live' : isComplete ? 'Winner' : 'Upcoming'}
         </span>
       </div>
 
