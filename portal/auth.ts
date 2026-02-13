@@ -1,25 +1,71 @@
-import NextAuth from "next-auth";
+import NextAuth, { customFetch } from "next-auth";
 import GitHub from "next-auth/providers/github"
-import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
 import { ManagedIdentityCredential } from "@azure/identity"
 import { getUsersContainer } from "@/app/lib/cosmosClient"
 import type { UserDocument } from "@/app/lib/models"
+import type { OIDCConfig } from "next-auth/providers"
 
 const isDev = process.env.NODE_ENV === "development";
+const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
+const clientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID!;
 
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
 async function getClientAssertion(): Promise<string> {
-  try {
-    console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
-    const credential = new ManagedIdentityCredential();
-    const result = await credential.getToken("api://AzureADTokenExchange");
-    console.log("[AUTH] MI token acquired successfully, expires:", result.expiresOnTimestamp);
-    return result.token;
-  } catch (err) {
-    console.error("[AUTH] Failed to get MI token:", err);
-    throw err;
-  }
+  console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
+  const credential = new ManagedIdentityCredential();
+  const result = await credential.getToken("api://AzureADTokenExchange");
+  console.log("[AUTH] MI token acquired, expires:", result.expiresOnTimestamp);
+  return result.token;
+}
+
+// Custom OIDC provider for Entra ID with Federated Identity Credential.
+// Auth.js v5 uses oauth4webapi internally and ignores token.request overrides.
+// We use the customFetch symbol to intercept the token endpoint request
+// and inject the Managed Identity client assertion.
+function EntraIDWithFIC() {
+  return {
+    id: "microsoft-entra-id",
+    name: "Microsoft Entra ID",
+    type: "oidc" as const,
+    clientId,
+    clientSecret: "unused",
+    issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    authorization: { params: { scope: "openid profile email User.Read" } },
+    client: { token_endpoint_auth_method: "none" as const },
+    [customFetch]: async (...args: Parameters<typeof fetch>) => {
+      const url = new URL(args[0] instanceof Request ? args[0].url : (args[0] as string));
+
+      // Fix OpenID discovery tenant placeholder (same as default MicrosoftEntraID provider)
+      if (url.pathname.endsWith(".well-known/openid-configuration")) {
+        const response = await fetch(...args);
+        const json = await response.json();
+        const issuer = json.issuer.replace("{tenantid}", tenantId);
+        return Response.json({ ...json, issuer });
+      }
+
+      // Intercept token endpoint — inject MI client assertion
+      if (url.pathname.endsWith("/oauth2/v2.0/token")) {
+        console.log("[AUTH] Intercepting token endpoint, injecting MI client assertion...");
+        const assertion = await getClientAssertion();
+        const body = args[1]?.body as URLSearchParams;
+        body.set("client_id", clientId);
+        body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
+        body.set("client_assertion", assertion);
+        console.log("[AUTH] Client assertion injected, sending token request...");
+      }
+
+      return fetch(...args);
+    },
+    profile(profile: Record<string, string>) {
+      return {
+        id: profile.sub,
+        name: profile.name,
+        email: profile.email,
+        image: null,
+      };
+    },
+  } satisfies OIDCConfig<Record<string, string>>;
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -30,51 +76,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           clientSecret: process.env.AUTH_GITHUB_SECRET,
         }),
       ]
-    : [
-        MicrosoftEntraID({
-          clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
-          clientSecret: "unused", // required by Auth.js type but not sent
-          issuer: `https://login.microsoftonline.com/${process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID}/v2.0`,
-          token: {
-            async request({ params, provider }: { params: URLSearchParams; provider: { callbackUrl: string } }) {
-              console.log("[AUTH] Token exchange starting...");
-              console.log("[AUTH] Callback URL:", provider.callbackUrl);
-              const assertion = await getClientAssertion();
-              const body = new URLSearchParams({
-                grant_type: "authorization_code",
-                code: params.get("code")!,
-                redirect_uri: provider.callbackUrl,
-                client_id: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
-                client_assertion_type:
-                  "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: assertion,
-              });
-              // Include code_verifier for PKCE if present
-              const codeVerifier = params.get("code_verifier");
-              if (codeVerifier) body.set("code_verifier", codeVerifier);
-
-              console.log("[AUTH] Sending token request to Entra ID...");
-              const response = await fetch(
-                `https://login.microsoftonline.com/${process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID}/oauth2/v2.0/token`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                  body,
-                }
-              );
-              const tokens = await response.json();
-              if (!response.ok) {
-                console.error("[AUTH] Token exchange failed:", response.status, JSON.stringify(tokens));
-                throw new Error(
-                  `Token request failed: ${tokens.error_description || tokens.error}`
-                );
-              }
-              console.log("[AUTH] Token exchange successful!");
-              return { tokens };
-            },
-          },
-        }),
-      ],
+    : [EntraIDWithFIC()],
   callbacks: {
     async signIn({ user, account }) {
       // Allow GitHub/Dev login without domain restriction
