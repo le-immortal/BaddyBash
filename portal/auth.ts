@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github"
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
 import { ManagedIdentityCredential } from "@azure/identity"
