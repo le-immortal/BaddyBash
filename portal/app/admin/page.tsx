@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert } from 'lucide-react';
+import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords } from 'lucide-react';
 import { Category, MatchDocument, formatSetScores } from '../lib/models';
+import EditMatchModal from '../components/EditMatchModal';
 import * as XLSX from 'xlsx';
 
 interface AdminRegistration {
@@ -34,7 +35,12 @@ export default function AdminDashboard() {
   const isAdmin = session?.user?.isAdmin === true;
 
   const [players, setPlayers] = useState<AdminPlayer[]>([]);
+  const [matches, setMatches] = useState<MatchDocument[]>([]);
+  const [activeTab, setActiveTab] = useState<'registrations' | 'matches'>('registrations');
+  const [editingMatch, setEditingMatch] = useState<MatchDocument | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [seedValues, setSeedValues] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
@@ -70,14 +76,31 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
+  const fetchMatches = async () => {
+    try {
+      setMatchesLoading(true);
+      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      if (res.ok) {
+        const data: MatchDocument[] = await res.json();
+        setMatches(data);
+      } else {
+        setMatches([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch matches:', err);
+      setMatches([]);
     } finally {
-      setLoading(false);
+      setMatchesLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPlayers();
-  }, [selectedCategory]);
+    if (activeTab === 'registrations') {
+      fetchPlayers();
+    } else {
+      fetchMatches();
+    }
+  }, [selectedCategory, activeTab]);
 
   const handleSeedChange = async (registrationId: string, userId: string, value: string) => {
     const prev = seedValues[registrationId] || '';
@@ -359,191 +382,310 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               )}
-            </div>
-            <button
-              onClick={handleGenerateFixtures}
-              disabled={generating}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
-              Generate Fixtures
-            </button>
-            <button
-              onClick={fetchPlayers}
-              className="text-slate-500 hover:text-slate-700 p-2"
-              title="Refresh"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-3 text-slate-600">Loading players...</span>
+            </div>data...</span>
           </div>
         ) : (
-          <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex flex-col gap-3">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-slate-800">
-                  Registered Players — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
-                </h2>
-                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-                  {(() => {
-                    const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
-                    if (!isD) return `${players.length} Players`;
-                    // Deduplicate pairs
-                    const seen = new Set<string>();
-                    for (const p of players) {
-                      const reg = p.registrations[0];
-                      const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
-                      seen.add(pairKey);
-                    }
-                    return `${seen.size} Teams`;
-                  })()}
-                </span>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
-                />
-              </div>
+          <>
+            {/* Tabs */}
+            <div className="flex border-b border-slate-200 mb-6">
+              <button
+                onClick={() => setActiveTab('registrations')}
+                className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                  activeTab === 'registrations'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Registrations & Seeds
+              </button>
+              <button
+                onClick={() => setActiveTab('matches')}
+                className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                  activeTab === 'matches'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Matches & Scores
+              </button>
             </div>
 
-            {players.length === 0 ? (
-              <div className="p-12 text-center text-slate-500">
-                No players have registered yet.
-              </div>
-            ) : (() => {
-              const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
-              const filtered = players
-                .map(p => ({
-                  ...p,
-                  registrations: p.registrations.filter(r => r.category === selectedCategory),
-                }))
-                .filter(p => p.registrations.length > 0);
-
-              // For doubles, deduplicate pairs — keep the partner who carries the seed
-              let displayRows = filtered;
-              if (isDoubles) {
-                const pairMap = new Map<string, typeof filtered[number]>();
-                for (const player of filtered) {
-                  const reg = player.registrations[0];
-                  const partnerId = reg.partnerId || '';
-                  const pairKey = [player.id, partnerId].sort().join('|||');
-                  const existing = pairMap.get(pairKey);
-                  if (!existing) {
-                    pairMap.set(pairKey, player);
-                  } else {
-                    // Prefer the partner with a seed
-                    const existingSeed = existing.registrations[0]?.seed;
-                    const thisSeed = reg.seed;
-                    if (!existingSeed && thisSeed) {
-                      pairMap.set(pairKey, player);
-                    }
-                  }
-                }
-                displayRows = Array.from(pairMap.values());
-              }
-
-              // Sort: seeded first (ascending seed), then unseeded
-              displayRows.sort((a, b) => {
-                const sA = a.registrations[0]?.seed;
-                const sB = b.registrations[0]?.seed;
-                if (sA && sB) return sA - sB;
-                if (sA) return -1;
-                if (sB) return 1;
-                return a.name.localeCompare(b.name);
-              });
-
-              // Filter by search query
-              if (searchQuery.trim()) {
-                const q = searchQuery.trim().toLowerCase();
-                displayRows = displayRows.filter(p => {
-                  const reg = p.registrations[0];
-                  const partnerName = reg?.partnerName || '';
-                  return p.name.toLowerCase().includes(q) || partnerName.toLowerCase().includes(q);
-                });
-              }
-
-              if (displayRows.length === 0) {
-                return (
-                  <div className="p-12 text-center text-slate-500">
-                    No players registered for {CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory}.
+            {activeTab === 'registrations' ? (
+              <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-6 border-b border-slate-100 flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-slate-800">
+                      Registered Players — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
+                    </h2>
+                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+                      {(() => {
+                        const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
+                        if (!isD) return `${players.length} Players`;
+                        // Deduplicate pairs
+                        const seen = new Set<string>();
+                        for (const p of players) {
+                          const reg = p.registrations[0];
+                          const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
+                          seen.add(pairKey);
+                        }
+                        return `${seen.size} Teams`;
+                      })()}
+                    </span>
                   </div>
-                );
-              }
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+                    />
+                  </div>
+                </div>
 
-              return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 text-slate-500 uppercase font-medium">
-                    <tr>
-                      <th className="p-4">{isDoubles ? 'Team' : 'Name / ID'}</th>
-                      <th className="p-4">Seed Rank</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {displayRows.map(player => {
+                {players.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500">
+                    No players have registered yet.
+                  </div>
+                ) : (() => {
+                  const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
+                  const filtered = players
+                    .map(p => ({
+                      ...p,
+                      registrations: p.registrations.filter(r => r.category === selectedCategory),
+                    }))
+                    .filter(p => p.registrations.length > 0);
+
+                  // For doubles, deduplicate pairs — keep the partner who carries the seed
+                  let displayRows = filtered;
+                  if (isDoubles) {
+                    const pairMap = new Map<string, typeof filtered[number]>();
+                    for (const player of filtered) {
                       const reg = player.registrations[0];
-                      return (
-                      <tr key={player.id} className="hover:bg-slate-50">
-                        <td className="p-4">
-                          {isDoubles ? (
-                            <div className="flex items-center gap-3">
-                              <div className="flex -space-x-2">
-                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold border-2 border-white z-10">
-                                  {player.name[0]}
+                      const partnerId = reg.partnerId || '';
+                      const pairKey = [player.id, partnerId].sort().join('|||');
+                      const existing = pairMap.get(pairKey);
+                      if (!existing) {
+                        pairMap.set(pairKey, player);
+                      } else {
+                        // Prefer the partner with a seed
+                        const existingSeed = existing.registrations[0]?.seed;
+                        const thisSeed = reg.seed;
+                        if (!existingSeed && thisSeed) {
+                          pairMap.set(pairKey, player);
+                        }
+                      }
+                    }
+                    displayRows = Array.from(pairMap.values());
+                  }
+
+                  // Sort: seeded first (ascending seed), then unseeded
+                  displayRows.sort((a, b) => {
+                    const sA = a.registrations[0]?.seed;
+                    const sB = b.registrations[0]?.seed;
+                    if (sA && sB) return sA - sB;
+                    if (sA) return -1;
+                    if (sB) return 1;
+                    return a.name.localeCompare(b.name);
+                  });
+
+                  // Filter by search query
+                  if (searchQuery.trim()) {
+                    const q = searchQuery.trim().toLowerCase();
+                    displayRows = displayRows.filter(p => {
+                      const reg = p.registrations[0];
+                      const partnerName = reg?.partnerName || '';
+                      return p.name.toLowerCase().includes(q) || partnerName.toLowerCase().includes(q);
+                    });
+                  }
+
+                  if (displayRows.length === 0) {
+                    return (
+                      <div className="p-12 text-center text-slate-500">
+                        No players registered for {CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory}.
+                      </div>
+                    );
+                  }
+
+                  return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600">
+                      <thead className="bg-slate-50 text-slate-500 uppercase font-medium">
+                        <tr>
+                          <th className="p-4">{isDoubles ? 'Team' : 'Name / ID'}</th>
+                          <th className="p-4">Seed Rank</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {displayRows.map(player => {
+                          const reg = player.registrations[0];
+                          return (
+                          <tr key={player.id} className="hover:bg-slate-50">
+                            <td className="p-4">
+                              {isDoubles ? (
+                                <div className="flex items-center gap-3">
+                                  <div className="flex -space-x-2">
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold border-2 border-white z-10">
+                                      {player.name[0]}
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold border-2 border-white">
+                                      {reg.partnerName?.[0] || '?'}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-slate-900">{player.name} <span className="text-slate-400 font-normal">&</span> {reg.partnerName || 'TBD'}</p>
+                                    <p className="text-xs text-slate-400">{player.alias || player.email}</p>
+                                  </div>
                                 </div>
-                                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold border-2 border-white">
-                                  {reg.partnerName?.[0] || '?'}
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                                    {player.name[0]}
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-slate-900">{player.name}</p>
+                                    <p className="text-xs text-slate-400">{player.alias || player.email}</p>
+                                  </div>
                                 </div>
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-900">{player.name} <span className="text-slate-400 font-normal">&</span> {reg.partnerName || 'TBD'}</p>
-                                <p className="text-xs text-slate-400">{player.alias || player.email}</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                                {player.name[0]}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-900">{player.name}</p>
-                                <p className="text-xs text-slate-400">{player.alias || player.email}</p>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          {(() => {
-                            const val = seedValues[reg.id] || '';
-                            // Check if this seed value is duplicated by another registration in the same category
-                            const isDuplicate = val !== '' && Object.entries(seedValues).some(([otherId, otherVal]) => {
-                              if (otherId === reg.id || otherVal !== val) return false;
-                              // Only flag if the other registration is in the same category
-                              const otherPlayer = displayRows.find(p => p.registrations.some(r => r.id === otherId));
-                              return !!otherPlayer;
-                            });
-                            return (
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  className={`w-20 border rounded px-2 py-1 text-center text-sm ${isDuplicate ? 'border-red-500 bg-red-50 text-red-700' : ''}`}
-                                  placeholder="-"
-                                  value={val}
-                                  onChange={(e) => setSeedValues(p => ({ ...p, [reg.id]: e.target.value }))}
-                                  onBlur={() => handleSeedChange(reg.id, reg.userId, val)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {(() => {
+                                const val = seedValues[reg.id] || '';
+                                // Check if this seed value is duplicated by another registration in the same category
+                                const isDuplicate = val !== '' && Object.entries(seedValues).some(([otherId, otherVal]) => {
+                                  if (otherId === reg.id || otherVal !== val) return false;
+                                  // Only flag if the other registration is in the same category
+                                  const otherPlayer = displayRows.find(p => p.registrations.some(r => r.id === otherId));
+                                  return !!otherPlayer;
+                                });
+                                return (
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      className={`w-20 border rounded px-2 py-1 text-center text-sm ${isDuplicate ? 'border-red-500 bg-red-50 text-red-700' : ''}`}
+                                      placeholder="-"
+                                      value={val}
+                                      onChange={(e) => setSeedValues(p => ({ ...p, [reg.id]: e.target.value }))}
+                                      onBlur={() => handleSeedChange(reg.id, reg.userId, val)}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    />
+                                    {isDuplicate && (
+                                      <p className="absolute text-[10px] text-red-500 font-medium whitespace-nowrap mt-0.5">Duplicate</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td className="p-4 text-right">
+                              <button className="text-slate-400 hover:text-blue-600">
+                                <Settings className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  );
+                })()}
+              </section>
+            ) : (
+                /* MATCHES SECTION */
+                <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+                            <Swords className="w-5 h-5 text-blue-600" />
+                            Match List — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
+                        </h2>
+                        <button onClick={fetchMatches} className="text-slate-500 hover:text-blue-600 p-2 rounded hover:bg-slate-100">
+                             <RefreshCw className="w-4 h-4" />
+                        </button>
+                    </div>
+                    
+                    {matches.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500">
+                             No matches found. Generate fixtures first.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-slate-600">
+                                <thead className="bg-slate-50 text-slate-500 uppercase font-medium">
+                                    <tr>
+                                        <th className="p-4">#</th>
+                                        <th className="p-4">Round</th>
+                                        <th className="p-4 text-right">Player 1</th>
+                                        <th className="p-4 text-center">Score</th>
+                                        <th className="p-4 text-left">Player 2</th>
+                                        <th className="p-4 text-center">Status</th>
+                                        <th className="p-4 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {[...matches]
+                                        .sort((a,b) => a.round - b.round || a.position - b.position)
+                                        .map(m => (
+                                        <tr key={m.id} className="hover:bg-slate-50">
+                                            <td className="p-4 text-slate-400 font-mono text-xs">M{m.matchNumber}</td>
+                                            <td className="p-4 font-medium">
+                                                {(() => {
+                                                    const maxR = Math.max(...matches.map(x => x.round));
+                                                    const r = maxR - m.round;
+                                                    if (r === 0) return 'Final';
+                                                    if (r === 1) return 'Semis';
+                                                    if (r === 2) return 'Quarters';
+                                                    return `R${m.round}`;
+                                                })()}
+                                            </td>
+                                            <td className={`p-4 text-right font-semibold ${m.winnerId === m.player1Id ? 'text-green-600' : 'text-slate-700'}`}>
+                                                {m.player1Name || 'TBD'}
+                                            </td>
+                                            <td className="p-4 text-center font-mono text-slate-800 bg-slate-50/50">
+                                                {formatSetScores(m.sets || [])}
+                                            </td>
+                                            <td className={`p-4 text-left font-semibold ${m.winnerId === m.player2Id ? 'text-green-600' : 'text-slate-700'}`}>
+                                                {m.player2Name || 'TBD'}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide 
+                                                    ${m.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                                                      m.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 
+                                                      m.status === 'bye' ? 'bg-slate-100 text-slate-500' : 
+                                                      'bg-blue-50 text-blue-600'}
+                                                `}>
+                                                    {m.status.replace('_', ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                {m.status !== 'bye' && (
+                                                    <button 
+                                                        onClick={() => setEditingMatch(m)}
+                                                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-xs font-semibold transition-colors"
+                                                    >
+                                                        Update
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </section>
+            )}
+            
+            {editingMatch && (
+                <EditMatchModal 
+                    match={editingMatch}
+                    onClose={() => setEditingMatch(null)}
+                    onUpdate={fetchMatches}
+                />
+            )}
+          </               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                 />
                                 {isDuplicate && (
                                   <p className="absolute text-[10px] text-red-500 font-medium whitespace-nowrap mt-0.5">Duplicate</p>
