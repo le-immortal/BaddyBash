@@ -8,6 +8,7 @@ import { signInAction, signOutAction } from '@/app/lib/actions';
 
 export default function Navbar() {
   const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin === true;
 
   return (
     <nav className="bg-slate-900 text-white p-4 shadow-md">
@@ -19,7 +20,9 @@ export default function Navbar() {
         <div className="flex items-center space-x-6">
           <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
           <Link href="/bracket" className="hover:text-gray-300">Brackets</Link>
-          <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
+          {isAdmin && (
+            <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
+          )}
           
           {session?.user ? (
             <div className="flex items-center space-x-4">

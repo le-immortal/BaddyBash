@@ -5,6 +5,7 @@ import {
   MatchDocument, RegistrationDocument, Category, MatchStatus,
   SetScore, isDoubles, isValidSetScore,
 } from "@/app/lib/models";
+import { requireAdmin } from "@/app/lib/authHelpers";
 
 /** A bracket participant — one player (singles) or one team (doubles). */
 interface BracketParticipant {
@@ -101,6 +102,11 @@ export async function GET(request: NextRequest) {
  * Body: { category, tournamentId? }
  */
 export async function POST(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { category, tournamentId } = body as {
@@ -339,6 +345,11 @@ export async function POST(request: NextRequest) {
  * Body: { matchId, category, sets?: SetScore[], winnerId?, winnerName? }
  */
 export async function PATCH(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { matchId, category, sets, winnerId, winnerName } = body as {

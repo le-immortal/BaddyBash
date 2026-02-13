@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw, Search } from 'lucide-react';
-import { Category } from '../lib/models';
+import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert } from 'lucide-react';
+import { Category, MatchDocument, formatSetScores } from '../lib/models';
+import * as XLSX from 'xlsx';
 
 interface AdminRegistration {
   id: string;
@@ -26,12 +29,28 @@ interface AdminPlayer {
 }
 
 export default function AdminDashboard() {
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+  const isAdmin = session?.user?.isAdmin === true;
+
   const [players, setPlayers] = useState<AdminPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [seedValues, setSeedValues] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const fetchPlayers = async () => {
     try {
@@ -121,6 +140,179 @@ export default function AdminDashboard() {
     { id: 'XD', name: "Mixed Doubles" },
   ];
 
+  const handleExport = () => {
+    const wb = XLSX.utils.book_new();
+
+    const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
+    const filtered = players
+      .map(p => ({
+        ...p,
+        registrations: p.registrations.filter(r => r.category === selectedCategory),
+      }))
+      .filter(p => p.registrations.length > 0);
+
+    let rows = filtered;
+    if (isDoubles) {
+      const pairMap = new Map<string, typeof filtered[number]>();
+      for (const player of filtered) {
+        const reg = player.registrations[0];
+        const partnerId = reg.partnerId || '';
+        const pairKey = [player.id, partnerId].sort().join('|||');
+        const existing = pairMap.get(pairKey);
+        if (!existing) {
+          pairMap.set(pairKey, player);
+        } else {
+          const existingSeed = existing.registrations[0]?.seed;
+          const thisSeed = reg.seed;
+          if (!existingSeed && thisSeed) pairMap.set(pairKey, player);
+        }
+      }
+      rows = Array.from(pairMap.values());
+    }
+
+    rows.sort((a, b) => {
+      const sA = a.registrations[0]?.seed;
+      const sB = b.registrations[0]?.seed;
+      if (sA && sB) return sA - sB;
+      if (sA) return -1;
+      if (sB) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
+
+    const sheetData = isDoubles
+      ? rows.map((p, i) => {
+          const reg = p.registrations[0];
+          return {
+            '#': i + 1,
+            'Seed': reg.seed || '',
+            'Player 1': p.name,
+            'Alias 1': p.alias || '',
+            'Player 2': reg.partnerName || 'TBD',
+            'Category': selectedCategory,
+          };
+        })
+      : rows.map((p, i) => {
+          const reg = p.registrations[0];
+          return {
+            '#': i + 1,
+            'Seed': reg.seed || '',
+            'Name': p.name,
+            'Alias': p.alias || '',
+            'Phone': p.phoneNumber || '',
+            'Category': selectedCategory,
+          };
+        });
+
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+
+    // Auto-size columns
+    const colWidths = Object.keys(sheetData[0] || {}).map(key => {
+      const maxLen = Math.max(
+        key.length,
+        ...sheetData.map(row => String((row as Record<string, unknown>)[key] || '').length)
+      );
+      return { wch: Math.min(maxLen + 2, 40) };
+    });
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, catName);
+    XLSX.writeFile(wb, `BaddyBash_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleExportBracket = async () => {
+    setShowExportMenu(false);
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      const matches: MatchDocument[] = await res.json();
+      if (matches.length === 0) { alert('No bracket generated yet for this category.'); return; }
+
+      const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
+      const totalRounds = Math.max(...matches.map(m => m.round));
+
+      const getRoundName = (round: number) => {
+        const r = totalRounds - round;
+        if (r === 0) return 'Final';
+        if (r === 1) return 'Semis';
+        if (r === 2) return 'Quarters';
+        return `Round ${round}`;
+      };
+
+      // Sort by round, then position
+      matches.sort((a, b) => a.round - b.round || a.position - b.position);
+
+      const wb = XLSX.utils.book_new();
+      const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
+
+      const sheetData = matches.map(m => ({
+        'Match #': m.matchNumber ? `M${m.matchNumber}` : '',
+        'Round': getRoundName(m.round),
+        'Position': m.position + 1,
+        [isDoubles ? 'Team 1' : 'Player 1']: m.player1Name || '',
+        'Seed 1': m.player1Seed || '',
+        [isDoubles ? 'Team 2' : 'Player 2']: m.player2Name || '',
+        'Seed 2': m.player2Seed || '',
+        'Status': m.status.charAt(0).toUpperCase() + m.status.slice(1).replace('_', ' '),
+        'Score': formatSetScores(m.sets ?? []),
+        'Winner': m.winnerName || '',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      const colWidths = Object.keys(sheetData[0] || {}).map(key => {
+        const maxLen = Math.max(
+          key.length,
+          ...sheetData.map(row => String((row as Record<string, unknown>)[key] || '').length)
+        );
+        return { wch: Math.min(maxLen + 2, 40) };
+      });
+      ws['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, catName);
+      XLSX.writeFile(wb, `BaddyBash_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export bracket:', err);
+      alert('Failed to export bracket.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Auth loading
+  if (sessionStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navbar />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-slate-600">Checking access...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Non-admin gate
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <ShieldAlert className="w-16 h-16 text-red-400" />
+          <h1 className="text-2xl font-bold text-slate-800">Access Denied</h1>
+          <p className="text-slate-500">You don&apos;t have admin privileges to view this page.</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
@@ -140,6 +332,34 @@ export default function AdminDashboard() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <div ref={exportRef} className="relative">
+              <button
+                onClick={() => setShowExportMenu(v => !v)}
+                disabled={exporting}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Export
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1">
+                  <button
+                    onClick={() => { setShowExportMenu(false); handleExport(); }}
+                    disabled={loading || players.length === 0}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    📋 Players List
+                  </button>
+                  <button
+                    onClick={handleExportBracket}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    🏆 Bracket / Draw
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleGenerateFixtures}
               disabled={generating}

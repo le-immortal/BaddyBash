@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument } from "@/app/lib/models";
+import { requireAdmin } from "@/app/lib/authHelpers";
 
 /**
  * GET /api/admin/players?category=MS
@@ -9,6 +10,11 @@ import { RegistrationDocument, UserDocument } from "@/app/lib/models";
  * Fetches only relevant registrations, then point-reads their user docs.
  */
 export async function GET(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     const category = request.nextUrl.searchParams.get("category");
     if (!category) {
@@ -92,6 +98,11 @@ export async function GET(request: NextRequest) {
  * Body: { registrationId, userId, seed }
  */
 export async function PATCH(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { registrationId, userId, seed } = body;

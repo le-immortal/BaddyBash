@@ -159,3 +159,37 @@ Focus: Real-time updates, Scoring.
 - [x] App live at `https://baddybashportal-b9b4bnd8bef5eadq.southindia-01.azurewebsites.net`
 - [ ] Custom domain & SSL
 - [ ] Monitoring / Application Insights
+
+---
+
+## 📋 Upcoming Phases (in order)
+
+1. **Phase A: Export to Excel** ✅ COMPLETE
+    - [x] Export player list to `.xlsx` from admin dashboard (current category)
+    - [x] Export bracket / draw to `.xlsx` (match numbers, rounds, seeds, scores, winners)
+    - [x] Dropdown menu: "Players List" or "Bracket / Draw"
+    - [x] Auto-sized columns, proper naming (`BaddyBash_Players_MS_2026-02-12.xlsx`)
+
+2. **Phase B: Admin Flow & Role-Based Display** ✅ COMPLETE
+    - [x] `isAdmin` field on `UserDocument` (set via Cosmos DB)
+    - [x] NextAuth JWT + session callbacks: look up `isAdmin` from Cosmos on sign-in
+    - [x] Type augmentation (`types/next-auth.d.ts`) for `session.user.isAdmin`
+    - [x] Server-side auth helper (`authHelpers.ts` → `requireAdmin()`)
+    - [x] Admin API routes gated: `GET/PATCH /api/admin/players`, `POST/PATCH /api/matches` return 403
+    - [x] Navbar: Admin link only visible to admins
+    - [x] Admin page: "Access Denied" screen for non-admins with redirect to dashboard
+
+3. **Phase C: Score Update**
+    - [ ] Score Input Modal (admin clicks match → enters set scores)
+    - [ ] Score input form (Set 1, Set 2, Set 3) with badminton validation
+    - [ ] Real-time bracket updates (Polling / SSE)
+
+4. **Phase D: Entra ID Login**
+    - [ ] Replace GitHub OAuth with Microsoft Entra ID
+    - [ ] @microsoft.com domain restriction
+    - [ ] Seamless SSO for Microsoft employees
+
+5. **Phase E: Mobile Friendly**
+    - [ ] Responsive design audit & fixes across all pages
+    - [ ] Touch-friendly bracket navigation
+    - [ ] Mobile-optimized admin dashboard
