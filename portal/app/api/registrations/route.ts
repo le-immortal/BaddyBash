@@ -127,7 +127,8 @@ export async function POST(request: NextRequest) {
             { status: 409 }
           );
         }
-        // Partner is already registered for this category (possibly with current user or alone)
+        // Partner is already registered for this category (with current user, alone, or other edge case)
+        // Note: This case should be rare since the check at line 97 would catch if current user already has this category
         return NextResponse.json(
           { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category}.` },
           { status: 409 }
