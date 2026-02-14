@@ -67,6 +67,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Prevent self-partnering
+    if (isDoubles(category) && cleanPartnerId === cleanUserId) {
+      return NextResponse.json(
+        { error: "You cannot register with yourself as a partner" },
+        { status: 400 }
+      );
+    }
+
     const container = getRegistrationsContainer();
 
     // Server-side Max-2 check: count existing active registrations
@@ -109,9 +117,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (partnerRegs.some((r) => r.category === category)) {
+      // Check if partner is already registered for this category
+      const partnerExistingReg = partnerRegs.find((r) => r.category === category);
+      if (partnerExistingReg) {
+        // If they're already registered with a different partner, reject
+        if (partnerExistingReg.partnerId !== cleanUserId) {
+          return NextResponse.json(
+            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with a different partner.` },
+            { status: 409 }
+          );
+        }
+        // If they're already registered with the same partner (this user), it's a duplicate submission
         return NextResponse.json(
-          { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category}.` },
+          { error: `You and "${partnerName || cleanPartnerId}" are already registered together for ${category}.` },
           { status: 409 }
         );
       }
