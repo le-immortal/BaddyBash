@@ -67,6 +67,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate user is not trying to partner with themselves
+    if (isDoubles(category) && cleanPartnerId === cleanUserId) {
+      return NextResponse.json(
+        { error: "You cannot register with yourself as a partner" },
+        { status: 400 }
+      );
+    }
+
     const container = getRegistrationsContainer();
 
     // Server-side Max-2 check: count existing active registrations
@@ -109,7 +117,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (partnerRegs.some((r) => r.category === category)) {
+      // Check if partner is already registered for this category
+      const existingCategoryReg = partnerRegs.find((r) => r.category === category);
+      if (existingCategoryReg) {
+        // Check if partner is already paired with someone else
+        if (existingCategoryReg.partnerId && existingCategoryReg.partnerId !== cleanUserId) {
+          return NextResponse.json(
+            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with "${existingCategoryReg.partnerName || existingCategoryReg.partnerId}". A player can only be paired with one person per category.` },
+            { status: 409 }
+          );
+        }
+        // Partner is already registered for this category (possibly with current user or alone)
         return NextResponse.json(
           { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category}.` },
           { status: 409 }
