@@ -38,12 +38,6 @@ export default async function Home() {
             </p>
             <div className="flex gap-4">
               <SignInButton />
-              <Link 
-                href="/bracket"
-                className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-full font-bold text-lg transition-all"
-              >
-                View Brackets
-              </Link>
             </div>
           </div>
           
