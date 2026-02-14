@@ -123,13 +123,13 @@ export async function POST(request: NextRequest) {
         // If they're already registered with a different partner, reject
         if (partnerExistingReg.partnerId !== cleanUserId) {
           return NextResponse.json(
-            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with a different partner.` },
+            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with a different partner. Please choose a different partner or category.` },
             { status: 409 }
           );
         }
         // If they're already registered with the same partner (this user), it's a duplicate submission
         return NextResponse.json(
-          { error: `You and "${partnerName || cleanPartnerId}" are already registered together for ${category}.` },
+          { error: `You and "${partnerName || cleanPartnerId}" are already registered together for ${category}. This appears to be a duplicate submission.` },
           { status: 409 }
         );
       }
