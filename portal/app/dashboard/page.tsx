@@ -399,7 +399,7 @@ export default function Dashboard() {
             {isMaxReached && (
               <div className="flex items-center p-3 mb-6 bg-orange-50 text-orange-800 rounded-lg text-sm border border-orange-200">
                 <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0" />
-                You have reached the maximum number of registrations per player. Unregister from one to select another.
+                You have reached the maximum number of registrations per player.
               </div>
             )}
 
