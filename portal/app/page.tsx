@@ -27,9 +27,9 @@ export default async function Home() {
         <div className="container mx-auto px-4 py-20 md:py-32 flex flex-col md:flex-row items-center">
           <div className="md:w-1/2 mb-10 md:mb-0">
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
-              Smash Hard.<br/>
+              Rally Together.<br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-                Play Fair.
+                Compete as One.
               </span>
             </h1>
             <p className="text-xl text-slate-300 mb-8 max-w-lg">
