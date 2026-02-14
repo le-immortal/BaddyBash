@@ -108,7 +108,9 @@ export async function POST(request: NextRequest) {
       id: cleanId,
       name: String(name).trim() || existing?.name || '',
       email: cleanEmail || existing?.email || '',
+      // In this system, id and alias are the same (id is the alias)
       alias: cleanAlias || existing?.alias || cleanId,
+      // phoneNumber is required in the model, use empty string if not provided
       phoneNumber: body.phoneNumber ? String(body.phoneNumber).trim() : (existing?.phoneNumber || ''),
       avatar: body.avatar || existing?.avatar || undefined,
       isAdmin: body.isAdmin ?? existing?.isAdmin ?? false,
