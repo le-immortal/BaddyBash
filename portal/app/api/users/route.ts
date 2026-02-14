@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
 
     if (userId) {
       // Point read — O(1) since id is the partition key
-      const { resource } = await container.item(userId, userId).read<UserDocument>();
+      // Trim and lowercase for case-insensitive matching
+      const cleanUserId = userId.trim().toLowerCase();
+      const { resource } = await container.item(cleanUserId, cleanUserId).read<UserDocument>();
       if (!resource) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
@@ -24,11 +26,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (aliasParam) {
-      // Query by alias
+      // Query by alias - trim and lowercase for case-insensitive matching
+      const cleanAlias = aliasParam.trim().toLowerCase();
       const { resources } = await container.items
         .query<UserDocument>({
           query: "SELECT * FROM c WHERE c.alias = @alias",
-          parameters: [{ name: "@alias", value: aliasParam }],
+          parameters: [{ name: "@alias", value: cleanAlias }],
         })
         .fetchAll();
 
@@ -39,11 +42,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (emailParam) {
-      // Query by email
+      // Query by email - trim and lowercase for case-insensitive matching
+      const cleanEmail = emailParam.trim().toLowerCase();
       const { resources } = await container.items
         .query<UserDocument>({
           query: "SELECT * FROM c WHERE c.email = @email",
-          parameters: [{ name: "@email", value: emailParam }],
+          parameters: [{ name: "@email", value: cleanEmail }],
         })
         .fetchAll();
 
@@ -85,21 +89,26 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const container = getUsersContainer();
 
+    // Trim and lowercase id (alias) and email for consistency
+    const cleanId = id.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanAlias = body.alias ? body.alias.trim().toLowerCase() : undefined;
+
     // Check if user already exists — preserve saved fields
     let existing: UserDocument | undefined;
     try {
-      const { resource } = await container.item(id, id).read<UserDocument>();
+      const { resource } = await container.item(cleanId, cleanId).read<UserDocument>();
       existing = resource;
     } catch {
       // User doesn't exist yet — that's fine
     }
 
     const user: UserDocument = {
-      id,
-      name: name || existing?.name || '',
-      email: email || existing?.email || '',
-      alias: body.alias || existing?.alias || undefined,
-      phoneNumber: body.phoneNumber || existing?.phoneNumber || undefined,
+      id: cleanId,
+      name: name.trim() || existing?.name || '',
+      email: cleanEmail || existing?.email || '',
+      alias: cleanAlias || existing?.alias || undefined,
+      phoneNumber: body.phoneNumber ? body.phoneNumber.trim() : (existing?.phoneNumber || undefined),
       avatar: body.avatar || existing?.avatar || undefined,
       isAdmin: body.isAdmin ?? existing?.isAdmin ?? false,
       createdAt: existing?.createdAt || now,
@@ -130,19 +139,37 @@ export async function PATCH(request: NextRequest) {
 
     const container = getUsersContainer();
 
+    // Trim and lowercase id for consistency
+    const cleanId = id.trim().toLowerCase();
+
     // Read existing
-    const { resource: existing } = await container.item(id, id).read<UserDocument>();
+    const { resource: existing } = await container.item(cleanId, cleanId).read<UserDocument>();
     if (!existing) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Clean up email and alias in updates if present
+    const cleanUpdates = { ...updates };
+    if (cleanUpdates.email) {
+      cleanUpdates.email = cleanUpdates.email.trim().toLowerCase();
+    }
+    if (cleanUpdates.alias) {
+      cleanUpdates.alias = cleanUpdates.alias.trim().toLowerCase();
+    }
+    if (cleanUpdates.name) {
+      cleanUpdates.name = cleanUpdates.name.trim();
+    }
+    if (cleanUpdates.phoneNumber) {
+      cleanUpdates.phoneNumber = cleanUpdates.phoneNumber.trim();
+    }
+
     const updated: UserDocument = {
       ...existing,
-      ...updates,
+      ...cleanUpdates,
       updatedAt: new Date().toISOString(),
     };
 
-    const { resource } = await container.item(id, id).replace(updated);
+    const { resource } = await container.item(cleanId, cleanId).replace(updated);
     return NextResponse.json(resource);
   } catch (error) {
     console.error("Error updating user:", error);

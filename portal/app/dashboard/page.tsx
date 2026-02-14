@@ -168,10 +168,11 @@ export default function Dashboard() {
 
     setLinkingAlias(true);
     try {
+      // Trim and lowercase alias for consistency
+      const cleanAlias = alias.trim().toLowerCase();
+      
       // Check if a user with this alias already exists (pre-created by a partner)
-      const aliasRes = await fetch(`/api/users?alias=${encodeURIComponent(alias.trim())}`);
-
-      const aliasId = alias.trim();
+      const aliasRes = await fetch(`/api/users?alias=${encodeURIComponent(cleanAlias)}`);
 
       if (aliasRes.ok) {
         const existingUser = await aliasRes.json();
@@ -189,28 +190,28 @@ export default function Dashboard() {
         });
         setResolvedUserId(existingUser.id);
         setSavedName(playerName.trim());
-        setSavedAlias(alias.trim());
+        setSavedAlias(cleanAlias);
         setSavedPhone(phoneNumber.trim());
         await fetchRegistrations(existingUser.id);
       } else {
-        // No pre-existing user — create a new user with id = alias
+        // No pre-existing user — create a new user with id = alias (lowercase)
         await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: aliasId,
+            id: cleanAlias,
             name: playerName.trim(),
             email: session?.user?.email || '',
-            alias: aliasId,
+            alias: cleanAlias,
             phoneNumber: phoneNumber.trim(),
             avatar: session?.user?.image || undefined,
           }),
         });
-        setResolvedUserId(aliasId);
+        setResolvedUserId(cleanAlias);
         setSavedName(playerName.trim());
-        setSavedAlias(alias.trim());
+        setSavedAlias(cleanAlias);
         setSavedPhone(phoneNumber.trim());
-        await fetchRegistrations(aliasId);
+        await fetchRegistrations(cleanAlias);
       }
     } catch (err) {
       console.error('Profile save failed:', err);
@@ -235,9 +236,10 @@ export default function Dashboard() {
           category: catId,
         };
         if (isDoubles(catId)) {
-          body.partnerId = partners[catId]?.alias || '';
-          body.partnerName = partners[catId]?.name || '';
-          body.partnerPhone = partners[catId]?.phone || '';
+          // Trim and lowercase partner alias
+          body.partnerId = partners[catId]?.alias?.trim().toLowerCase() || '';
+          body.partnerName = partners[catId]?.name?.trim() || '';
+          body.partnerPhone = partners[catId]?.phone?.trim() || '';
           body.userPhone = savedPhone || phoneNumber || '';
         }
         const res = await fetch('/api/registrations', {

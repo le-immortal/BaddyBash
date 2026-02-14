@@ -18,10 +18,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const container = getRegistrationsContainer();
+    
+    // Trim and lowercase userId for consistency
+    const cleanUserId = userId.trim().toLowerCase();
+    
     const { resources } = await container.items
       .query<RegistrationDocument>({
         query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: userId }],
+        parameters: [{ name: "@userId", value: cleanUserId }],
       })
       .fetchAll();
 
@@ -50,8 +54,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Trim and lowercase userId (alias) for consistency
+    const cleanUserId = userId.trim().toLowerCase();
+    const cleanPartnerId = partnerId ? partnerId.trim().toLowerCase() : undefined;
+
     // Validate doubles have a partner
-    if (isDoubles(category) && !partnerId) {
+    if (isDoubles(category) && !cleanPartnerId) {
       return NextResponse.json(
         { error: "Partner is required for doubles categories" },
         { status: 400 }
@@ -65,7 +73,7 @@ export async function POST(request: NextRequest) {
       .query<RegistrationDocument>({
         query:
           "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
-        parameters: [{ name: "@userId", value: userId }],
+        parameters: [{ name: "@userId", value: cleanUserId }],
       })
       .fetchAll();
 
@@ -85,24 +93,24 @@ export async function POST(request: NextRequest) {
     }
 
     // For doubles: validate partner hasn't hit max-2 BEFORE creating anything
-    if (isDoubles(category) && partnerId) {
+    if (isDoubles(category) && cleanPartnerId) {
       const { resources: partnerRegs } = await container.items
         .query<RegistrationDocument>({
           query: "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
-          parameters: [{ name: "@userId", value: partnerId }],
+          parameters: [{ name: "@userId", value: cleanPartnerId }],
         })
         .fetchAll();
 
       if (partnerRegs.length >= MAX_CATEGORIES) {
         return NextResponse.json(
-          { error: `Partner "${partnerName || partnerId}" already has ${partnerRegs.length} registrations (max ${MAX_CATEGORIES}). They need to cancel one first.` },
+          { error: `Partner "${partnerName || cleanPartnerId}" already has ${partnerRegs.length} registrations (max ${MAX_CATEGORIES}). They need to cancel one first.` },
           { status: 409 }
         );
       }
 
       if (partnerRegs.some((r) => r.category === category)) {
         return NextResponse.json(
-          { error: `Partner "${partnerName || partnerId}" is already registered for ${category}.` },
+          { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category}.` },
           { status: 409 }
         );
       }
@@ -110,14 +118,14 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
     const registration: RegistrationDocument = {
-      id: `${userId}_${category}`,
-      userId,
-      userName,
+      id: `${cleanUserId}_${category}`,
+      userId: cleanUserId,
+      userName: userName.trim(),
       category,
       status: "confirmed",
-      partnerId: partnerId || undefined,
-      partnerName: partnerName || undefined,
-      partnerPhone: partnerPhone || undefined,
+      partnerId: cleanPartnerId || undefined,
+      partnerName: partnerName ? partnerName.trim() : undefined,
+      partnerPhone: partnerPhone ? partnerPhone.trim() : undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -125,13 +133,13 @@ export async function POST(request: NextRequest) {
     const { resource } = await container.items.create(registration);
 
     // For doubles: auto-create user and registration for the partner
-    if (isDoubles(category) && partnerId) {
+    if (isDoubles(category) && cleanPartnerId) {
       const usersContainer = getUsersContainer();
 
       // Create user for partner if they don't exist (keyed by alias)
       let partnerExists = false;
       try {
-        const { resource: existingPartner } = await usersContainer.item(partnerId, partnerId).read<UserDocument>();
+        const { resource: existingPartner } = await usersContainer.item(cleanPartnerId, cleanPartnerId).read<UserDocument>();
         if (existingPartner) partnerExists = true;
       } catch {
         // Partner user doesn't exist yet
@@ -139,11 +147,11 @@ export async function POST(request: NextRequest) {
 
       if (!partnerExists) {
         const partnerUser: UserDocument = {
-          id: partnerId,
-          name: partnerName || partnerId,
+          id: cleanPartnerId,
+          name: partnerName ? partnerName.trim() : cleanPartnerId,
           email: '',
-          alias: partnerId,
-          phoneNumber: partnerPhone || '',
+          alias: cleanPartnerId,
+          phoneNumber: partnerPhone ? partnerPhone.trim() : '',
           isAdmin: false,
           createdAt: now,
           updatedAt: now,
@@ -152,10 +160,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Create confirmed registration for partner (already validated max-2 above)
-      const partnerRegId = `${partnerId}_${category}`;
+      const partnerRegId = `${cleanPartnerId}_${category}`;
       let partnerRegExists = false;
       try {
-        const { resource: existingReg } = await container.item(partnerRegId, partnerId).read<RegistrationDocument>();
+        const { resource: existingReg } = await container.item(partnerRegId, cleanPartnerId).read<RegistrationDocument>();
         if (existingReg && existingReg.status !== 'cancelled') partnerRegExists = true;
       } catch {
         // Doesn't exist
@@ -164,13 +172,13 @@ export async function POST(request: NextRequest) {
       if (!partnerRegExists) {
         const partnerRegistration: RegistrationDocument = {
           id: partnerRegId,
-          userId: partnerId,
-          userName: partnerName || partnerId,
+          userId: cleanPartnerId,
+          userName: partnerName ? partnerName.trim() : cleanPartnerId,
           category,
           status: "confirmed",
-          partnerId: userId,
-          partnerName: userName,
-          partnerPhone: body.userPhone || '',
+          partnerId: cleanUserId,
+          partnerName: userName.trim(),
+          partnerPhone: body.userPhone ? body.userPhone.trim() : '',
           createdAt: now,
           updatedAt: now,
         };
@@ -213,8 +221,12 @@ export async function DELETE(request: NextRequest) {
   try {
     const container = getRegistrationsContainer();
 
+    // Trim and lowercase userId for consistency
+    const cleanUserId = userId.trim().toLowerCase();
+    const cleanId = id.trim();
+
     // Read existing
-    const { resource: existing } = await container.item(id, userId).read<RegistrationDocument>();
+    const { resource: existing } = await container.item(cleanId, cleanUserId).read<RegistrationDocument>();
     if (!existing) {
       return NextResponse.json({ error: "Registration not found" }, { status: 404 });
     }
@@ -226,7 +238,7 @@ export async function DELETE(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    await container.item(id, userId).replace(updated);
+    await container.item(cleanId, cleanUserId).replace(updated);
     return NextResponse.json({ message: "Registration cancelled" });
   } catch (error) {
     console.error("Error cancelling registration:", error);
