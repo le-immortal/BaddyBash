@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const container = getRegistrationsContainer();
     
     // Trim and lowercase userId for consistency
-    const cleanUserId = userId.trim().toLowerCase();
+    const cleanUserId = String(userId).trim().toLowerCase();
     
     const { resources } = await container.items
       .query<RegistrationDocument>({
@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Trim and lowercase userId (alias) for consistency
-    const cleanUserId = userId.trim().toLowerCase();
-    const cleanPartnerId = partnerId ? partnerId.trim().toLowerCase() : undefined;
+    // Type assertion safe because we validate above
+    const cleanUserId = String(userId).trim().toLowerCase();
+    const cleanPartnerId = partnerId ? String(partnerId).trim().toLowerCase() : undefined;
 
     // Validate doubles have a partner
     if (isDoubles(category) && !cleanPartnerId) {
@@ -222,9 +223,12 @@ export async function DELETE(request: NextRequest) {
     const container = getRegistrationsContainer();
 
     // Trim and lowercase userId for consistency
-    const cleanUserId = userId.trim().toLowerCase();
-    // The id format is ${userId}_${category}, so we need to ensure it's lowercase too
-    const cleanId = id.trim().toLowerCase();
+    const cleanUserId = String(userId).trim().toLowerCase();
+    
+    // Registration ID format is ${userId}_${category}
+    // Since we lowercase userId, we need to ensure the ID is also consistent
+    // The safest approach is to lowercase the entire ID
+    const cleanId = String(id).trim().toLowerCase();
 
     // Read existing
     const { resource: existing } = await container.item(cleanId, cleanUserId).read<RegistrationDocument>();

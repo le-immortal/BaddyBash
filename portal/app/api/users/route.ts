@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     if (userId) {
       // Point read — O(1) since id is the partition key
       // Trim and lowercase for case-insensitive matching
-      const cleanUserId = userId.trim().toLowerCase();
+      const cleanUserId = String(userId).trim().toLowerCase();
       const { resource } = await container.item(cleanUserId, cleanUserId).read<UserDocument>();
       if (!resource) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     if (aliasParam) {
       // Query by alias - trim and lowercase for case-insensitive matching
-      const cleanAlias = aliasParam.trim().toLowerCase();
+      const cleanAlias = String(aliasParam).trim().toLowerCase();
       const { resources } = await container.items
         .query<UserDocument>({
           query: "SELECT * FROM c WHERE c.alias = @alias",
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     if (emailParam) {
       // Query by email - trim and lowercase for case-insensitive matching
-      const cleanEmail = emailParam.trim().toLowerCase();
+      const cleanEmail = String(emailParam).trim().toLowerCase();
       const { resources } = await container.items
         .query<UserDocument>({
           query: "SELECT * FROM c WHERE c.email = @email",
@@ -90,9 +90,10 @@ export async function POST(request: NextRequest) {
     const container = getUsersContainer();
 
     // Trim and lowercase id (alias) and email for consistency
-    const cleanId = id.trim().toLowerCase();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanAlias = body.alias ? body.alias.trim().toLowerCase() : undefined;
+    // Type assertion safe because we validate above
+    const cleanId = String(id).trim().toLowerCase();
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanAlias = body.alias ? String(body.alias).trim().toLowerCase() : undefined;
 
     // Check if user already exists — preserve saved fields
     let existing: UserDocument | undefined;
@@ -105,10 +106,10 @@ export async function POST(request: NextRequest) {
 
     const user: UserDocument = {
       id: cleanId,
-      name: name.trim() || existing?.name || '',
+      name: String(name).trim() || existing?.name || '',
       email: cleanEmail || existing?.email || '',
-      alias: cleanAlias || existing?.alias || undefined,
-      phoneNumber: body.phoneNumber ? body.phoneNumber.trim() : (existing?.phoneNumber || undefined),
+      alias: cleanAlias || existing?.alias || cleanId,
+      phoneNumber: body.phoneNumber ? String(body.phoneNumber).trim() : (existing?.phoneNumber || ''),
       avatar: body.avatar || existing?.avatar || undefined,
       isAdmin: body.isAdmin ?? existing?.isAdmin ?? false,
       createdAt: existing?.createdAt || now,
@@ -140,7 +141,7 @@ export async function PATCH(request: NextRequest) {
     const container = getUsersContainer();
 
     // Trim and lowercase id for consistency
-    const cleanId = id.trim().toLowerCase();
+    const cleanId = String(id).trim().toLowerCase();
 
     // Read existing
     const { resource: existing } = await container.item(cleanId, cleanId).read<UserDocument>();
@@ -151,16 +152,16 @@ export async function PATCH(request: NextRequest) {
     // Clean up email and alias in updates if present
     const cleanUpdates = { ...updates };
     if (cleanUpdates.email) {
-      cleanUpdates.email = cleanUpdates.email.trim().toLowerCase();
+      cleanUpdates.email = String(cleanUpdates.email).trim().toLowerCase();
     }
     if (cleanUpdates.alias) {
-      cleanUpdates.alias = cleanUpdates.alias.trim().toLowerCase();
+      cleanUpdates.alias = String(cleanUpdates.alias).trim().toLowerCase();
     }
     if (cleanUpdates.name) {
-      cleanUpdates.name = cleanUpdates.name.trim();
+      cleanUpdates.name = String(cleanUpdates.name).trim();
     }
     if (cleanUpdates.phoneNumber) {
-      cleanUpdates.phoneNumber = cleanUpdates.phoneNumber.trim();
+      cleanUpdates.phoneNumber = String(cleanUpdates.phoneNumber).trim();
     }
 
     const updated: UserDocument = {
