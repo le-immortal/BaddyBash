@@ -31,7 +31,9 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
+            {session?.user && (
+              <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
+            )}
             <Link href="/bracket" className="hover:text-gray-300">Brackets</Link>
             {isAdmin && (
               <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
@@ -64,13 +66,15 @@ export default function Navbar() {
         {/* Mobile Dropdown */}
         {isMobileMenuOpen && (
           <div className="md:hidden mt-4 pt-4 border-t border-slate-800 flex flex-col space-y-4 animate-in slide-in-from-top-2 duration-200">
-            <Link 
-              href="/dashboard" 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="block py-2 px-4 rounded hover:bg-slate-800 transition"
-            >
-              Dashboard
-            </Link>
+            {session?.user && (
+              <Link 
+                href="/dashboard" 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block py-2 px-4 rounded hover:bg-slate-800 transition"
+              >
+                Dashboard
+              </Link>
+            )}
             <Link 
               href="/bracket" 
               onClick={() => setIsMobileMenuOpen(false)}
