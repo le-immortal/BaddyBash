@@ -223,7 +223,8 @@ export async function DELETE(request: NextRequest) {
 
     // Trim and lowercase userId for consistency
     const cleanUserId = userId.trim().toLowerCase();
-    const cleanId = id.trim();
+    // The id format is ${userId}_${category}, so we need to ensure it's lowercase too
+    const cleanId = id.trim().toLowerCase();
 
     // Read existing
     const { resource: existing } = await container.item(cleanId, cleanUserId).read<RegistrationDocument>();
