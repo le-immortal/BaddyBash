@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
  * DELETE /api/registrations?id=xxx&userId=xxx
  * Cancel a registration (soft delete — sets status to cancelled).
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   // Cancellations are handled manually by DB admins only
   return NextResponse.json(
     { error: "Cancellations are not allowed online. Please contact the organizers." },

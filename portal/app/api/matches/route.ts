@@ -6,7 +6,7 @@ import {
   SetScore, isDoubles, isValidSetScore,
 } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
-import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
+import { generateSeedOrder } from "@/app/lib/bracketUtils";
 
 
 /** A bracket participant — one player (singles) or one team (doubles). */
