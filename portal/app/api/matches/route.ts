@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
 
         teams.push({
           id: pairKey,
-          name: ${p1Name} & ,
+          name: `${p1Name} & ${p2Name}`,
           seed: seedVal,
         });
       }
