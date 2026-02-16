@@ -45,6 +45,7 @@ export default function SeedingVisualizer({ participants, onSeedsChange, categor
     
     const newMatchups = [];
     for (let i = 0; i < order.length; i += 2) {
+      if (i + 1 >= order.length) break;
       const s1 = order[i];
       const s2 = order[i+1];
       
@@ -91,13 +92,13 @@ export default function SeedingVisualizer({ participants, onSeedsChange, categor
         if (p.id === targetPlayer.id) return { ...p, currentSeed: sourceSeed };
         return p;
       });
+      setItems(newItems);
+      onSeedsChange(newItems);
     } else {
-      // Ignore drops on BYEs
+      // Ignore drops on BYEs or handle appropriately if supported
       return; 
     }
-
-    setItems(newItems);
-    onSeedsChange(newItems);
+    
     setDraggedId(null);
   };
 
@@ -105,7 +106,7 @@ export default function SeedingVisualizer({ participants, onSeedsChange, categor
     <div className="flex flex-col gap-6 select-none">
        {/* Instruction Banner */}
        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-         <h3 className="font-semibold mb-1">Seeding Strategy</h3>
+         <h3 className="font-semibold mb-1">Seeding Strategy: {categoryName}</h3>
          <p>Drag and drop players onto each other to swap their seeds. The bracket matches below update in real-time.</p>
          <div className="mt-2 flex gap-4 text-xs opacity-75">
             <span>Participants: <strong>{items.length}</strong></span>
@@ -170,14 +171,20 @@ function PlayerSlot({
 }) {
   return (
     <div 
-      className={p-3 transition-all duration-200 border-l-4 }
+      className={`p-3 transition-all duration-200 border-l-4 ${
+        isBye 
+          ? "bg-slate-50 border-slate-200 cursor-default opacity-60" 
+          : "bg-white border-blue-500 shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-600"
+      }`}
       draggable={!isBye}
       onDragStart={(e) => player && onDragStart(e, player.id)}
       onDragOver={!isBye ? onDragOver : undefined}
       onDrop={!isBye ? (e) => onDrop(e, seed) : undefined}
     >
       <div className="flex items-center gap-3">
-        <span className={lex items-center justify-center w-6 h-6 rounded text-xs font-bold shadow-sm }>
+        <span className={`flex items-center justify-center w-6 h-6 rounded text-xs font-bold shadow-sm ${
+           isBye ? "bg-slate-200 text-slate-500" : "bg-blue-100 text-blue-700"
+        }`}>
           {seed}
         </span>
         

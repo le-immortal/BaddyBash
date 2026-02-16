@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Calendar, MapPin, Shield } from 'lucide-react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
