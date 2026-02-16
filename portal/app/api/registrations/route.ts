@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         // Check if partner is already paired with someone else
         if (existingCategoryReg.partnerId && existingCategoryReg.partnerId !== cleanUserId) {
           return NextResponse.json(
-            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with "${existingCategoryReg.partnerName || existingCategoryReg.partnerId}". A player can only be paired with one person per category.` },
+            { error: `Partner "${partnerName || cleanPartnerId}" is already registered for ${category} with another player. A player can only be paired with one person per category.` },
             { status: 409 }
           );
         }
@@ -137,6 +137,28 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
+
+    // 1. Resolve Partner Details Logic
+    let finalPartnerName = partnerName ? partnerName.trim() : undefined;
+    let finalPartnerPhone = partnerPhone ? partnerPhone.trim() : undefined;
+    let existingPartner: UserDocument | undefined;
+
+    if (isDoubles(category) && cleanPartnerId) {
+      const usersContainer = getUsersContainer();
+      try {
+        const { resource } = await usersContainer.item(cleanPartnerId, cleanPartnerId).read<UserDocument>();
+        existingPartner = resource;
+        if (existingPartner) {
+           // B's existing details take precedence over A's input
+           finalPartnerName = existingPartner.name;
+           finalPartnerPhone = existingPartner.phoneNumber;
+        }
+      } catch {
+        // Partner user doesn't exist yet - we'll create them below
+      }
+    }
+
+    // 2. Create MAIN Registration
     const registration: RegistrationDocument = {
       id: `${cleanUserId}_${category}`,
       userId: cleanUserId,
@@ -144,42 +166,38 @@ export async function POST(request: NextRequest) {
       category,
       status: "confirmed",
       partnerId: cleanPartnerId || undefined,
-      partnerName: partnerName ? partnerName.trim() : undefined,
-      partnerPhone: partnerPhone ? partnerPhone.trim() : undefined,
+      partnerName: finalPartnerName,
+      partnerPhone: finalPartnerPhone,
       createdAt: now,
       updatedAt: now,
     };
 
     const { resource } = await container.items.create(registration);
 
-    // For doubles: auto-create user and registration for the partner
+    // 3. Handle Partner Side (User + Registration)
     if (isDoubles(category) && cleanPartnerId) {
       const usersContainer = getUsersContainer();
 
-      // Create user for partner if they don't exist (keyed by alias)
-      let partnerExists = false;
-      try {
-        const { resource: existingPartner } = await usersContainer.item(cleanPartnerId, cleanPartnerId).read<UserDocument>();
-        if (existingPartner) partnerExists = true;
-      } catch {
-        // Partner user doesn't exist yet
-      }
-
-      if (!partnerExists) {
+      // Create user for partner if they don't exist (using A's input as fallback)
+      if (!existingPartner) {
         const partnerUser: UserDocument = {
           id: cleanPartnerId,
-          name: partnerName ? partnerName.trim() : cleanPartnerId,
-          email: '',
+          name: finalPartnerName || cleanPartnerId,
+          email: '', // Placeholder, will be filled when B logs in
           alias: cleanPartnerId,
-          phoneNumber: partnerPhone ? partnerPhone.trim() : '',
+          phoneNumber: finalPartnerPhone || '',
           isAdmin: false,
           createdAt: now,
           updatedAt: now,
         };
+        // Use upsert just in case of race condition
         await usersContainer.items.upsert(partnerUser);
+      } else {
+        // Partner exists: DO NOT update their profile with A's input. 
+        // We trust B's existing data (which we used for finalPartnerName above).
       }
 
-      // Create confirmed registration for partner (already validated max-2 above)
+      // Create confirmed registration for partner
       const partnerRegId = `${cleanPartnerId}_${category}`;
       let partnerRegExists = false;
       try {
@@ -193,7 +211,7 @@ export async function POST(request: NextRequest) {
         const partnerRegistration: RegistrationDocument = {
           id: partnerRegId,
           userId: cleanPartnerId,
-          userName: partnerName ? partnerName.trim() : cleanPartnerId,
+          userName: finalPartnerName || cleanPartnerId,
           category,
           status: "confirmed",
           partnerId: cleanUserId,
@@ -231,41 +249,9 @@ export async function POST(request: NextRequest) {
  * Cancel a registration (soft delete — sets status to cancelled).
  */
 export async function DELETE(request: NextRequest) {
-  const id = request.nextUrl.searchParams.get("id");
-  const userId = request.nextUrl.searchParams.get("userId");
-
-  if (!id || !userId) {
-    return NextResponse.json({ error: "id and userId are required" }, { status: 400 });
-  }
-
-  try {
-    const container = getRegistrationsContainer();
-
-    // Trim and lowercase userId for consistency
-    const cleanUserId = String(userId).trim().toLowerCase();
-    
-    // Registration ID format is ${userId}_${category}
-    // Since we lowercase userId, we need to ensure the ID is also consistent
-    // The safest approach is to lowercase the entire ID
-    const cleanId = String(id).trim().toLowerCase();
-
-    // Read existing
-    const { resource: existing } = await container.item(cleanId, cleanUserId).read<RegistrationDocument>();
-    if (!existing) {
-      return NextResponse.json({ error: "Registration not found" }, { status: 404 });
-    }
-
-    // Soft delete
-    const updated: RegistrationDocument = {
-      ...existing,
-      status: "cancelled",
-      updatedAt: new Date().toISOString(),
-    };
-
-    await container.item(cleanId, cleanUserId).replace(updated);
-    return NextResponse.json({ message: "Registration cancelled" });
-  } catch (error) {
-    console.error("Error cancelling registration:", error);
-    return NextResponse.json({ error: "Failed to cancel registration" }, { status: 500 });
-  }
+  // Cancellations are handled manually by DB admins only
+  return NextResponse.json(
+    { error: "Cancellations are not allowed online. Please contact the organizers." },
+    { status: 403 }
+  );
 }

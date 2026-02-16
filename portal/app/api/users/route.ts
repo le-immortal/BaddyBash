@@ -104,6 +104,14 @@ export async function POST(request: NextRequest) {
       // User doesn't exist yet — that's fine
     }
 
+    // Security Check: If user exists and has an email, do not allow overwriting it with a different email
+    if (existing && existing.email && cleanEmail && existing.email !== cleanEmail) {
+      return NextResponse.json(
+        { error: "Alias is already associated with another email address." },
+        { status: 409 }
+      );
+    }
+
     const user: UserDocument = {
       id: cleanId,
       name: String(name).trim() || existing?.name || '',
@@ -164,6 +172,16 @@ export async function PATCH(request: NextRequest) {
     }
     if (cleanUpdates.phoneNumber) {
       cleanUpdates.phoneNumber = String(cleanUpdates.phoneNumber).trim();
+    }
+
+    // Security Check: Prevent hijacking of existing accounts
+    // If the user already has an email set, do not allow changing it to a different email
+    // This prevents malicious users from "claiming" an active user's account
+    if (cleanUpdates.email && existing.email && existing.email !== cleanUpdates.email) {
+       return NextResponse.json(
+        { error: "Cannot change email of an already active account" },
+        { status: 403 }
+      );
     }
 
     const updated: UserDocument = {

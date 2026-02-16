@@ -51,7 +51,10 @@ export default function Dashboard() {
     }).catch(console.error);
   }, []);
 
-  const profileSaved = !!(savedName && savedAlias && savedPhone);
+  // Determine if profile is fully set up.
+  // The user is considered registered if they have an alias associated with their account.
+  // Email is used for login/lookup, but the alias is the core identity.
+  const profileSaved = !!savedAlias;
 
   // sessionEmail is used only for lookup — the actual Cosmos user ID is always the alias
   const sessionEmail = session?.user?.email || '';
@@ -87,13 +90,14 @@ export default function Dashboard() {
         const res = await fetch(`/api/users?email=${encodeURIComponent(sessionEmail)}`);
         if (res.ok) {
           const user = await res.json();
-          if (user.alias && user.phoneNumber && user.name) {
+          // Check if we got a valid user object with required fields
+          if (user && user.alias) {
             setSavedName(user.name);
             setSavedAlias(user.alias);
             setSavedPhone(user.phoneNumber);
             setPlayerName(user.name);
             setAlias(user.alias);
-            setPhoneNumber(user.phoneNumber);
+            setPhoneNumber(user.phoneNumber || '');
             setResolvedUserId(user.id); // id = alias
           }
         }
@@ -177,7 +181,7 @@ export default function Dashboard() {
       if (aliasRes.ok) {
         const existingUser = await aliasRes.json();
         // Found a pre-created user (partner registered them) — link email/avatar to it
-        await fetch('/api/users', {
+        const linkRes = await fetch('/api/users', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -188,6 +192,12 @@ export default function Dashboard() {
             phoneNumber: phoneNumber.trim(),
           }),
         });
+        
+        if (!linkRes.ok) {
+          const errData = await linkRes.json();
+          throw new Error(errData.error || 'Failed to update profile.');
+        }
+
         setResolvedUserId(existingUser.id);
         setSavedName(playerName.trim());
         setSavedAlias(cleanAlias);
@@ -195,7 +205,7 @@ export default function Dashboard() {
         await fetchRegistrations(existingUser.id);
       } else {
         // No pre-existing user — create a new user with id = alias (lowercase)
-        await fetch('/api/users', {
+        const createRes = await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -207,15 +217,23 @@ export default function Dashboard() {
             avatar: session?.user?.image || undefined,
           }),
         });
+
+        if (!createRes.ok) {
+           const errData = await createRes.json();
+           throw new Error(errData.error || 'Failed to create profile.');
+        }
+
         setResolvedUserId(cleanAlias);
         setSavedName(playerName.trim());
         setSavedAlias(cleanAlias);
         setSavedPhone(phoneNumber.trim());
         await fetchRegistrations(cleanAlias);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Profile save failed:', err);
-      alert('Failed to save profile. Please try again.');
+      // Better error handling
+      const msg = err instanceof Error ? err.message : 'Failed to save profile. Please check if the alias is already in use by another email.';
+      alert(msg);
     } finally {
       setLinkingAlias(false);
     }
