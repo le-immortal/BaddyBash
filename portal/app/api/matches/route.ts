@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getMatchesContainer, getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import {
-  MatchDocument, RegistrationDocument, UserDocument, Category, MatchStatus,
+  MatchDocument, RegistrationDocument, UserDocument, Category,
   isDoubles,
 } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
@@ -234,7 +234,8 @@ export async function POST(request: NextRequest) {
             tournamentId,
             round: r,
             position: pos,
-            status: 'pending',
+            status: 'scheduled',
+            sets: [],
             createdAt: now,
             updatedAt: now,
          };
@@ -296,18 +297,16 @@ export async function POST(request: NextRequest) {
         if (hasP1 && !hasP2) {
             match.winnerId = p1.id;
             match.winnerName = p1.name;
-            match.status = 'completed';
-            match.score = [{ set: 1, p1: 0, p2: 0 }];
+            match.status = 'bye';
             fillNextMatchSlot(match, matchMap);
         } else if (!hasP1 && hasP2) {
             match.winnerId = p2.id;
             match.winnerName = p2.name;
-            match.status = 'completed';
-            match.score = [{ set: 1, p1: 0, p2: 0 }];
+            match.status = 'bye';
             fillNextMatchSlot(match, matchMap);
         } else if (!hasP1 && !hasP2) {
             // Double Bye (rare)
-            match.status = 'completed';
+            match.status = 'bye';
         } else {
             match.status = 'scheduled'; // Ready to play
         }
@@ -361,5 +360,83 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error generating bracket:", error);
     return NextResponse.json({ error: "Failed to generate bracket" }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/matches
+ * Update match winner and advance to next round.
+ * Body: { matchId, category, winnerId, winnerName }
+ */
+export async function PATCH(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  try {
+    const { matchId, category, winnerId, winnerName } = (await request.json()) as {
+      matchId: string;
+      category: Category;
+      winnerId: string;
+      winnerName: string;
+    };
+
+    if (!matchId || !category || !winnerId || !winnerName) {
+      return NextResponse.json(
+        { error: "matchId, category, winnerId, and winnerName are required" },
+        { status: 400 }
+      );
+    }
+
+    const container = getMatchesContainer();
+
+    // 1. Read the current match (partition key = category)
+    const { resource: match } = await container
+      .item(matchId, category)
+      .read<MatchDocument>();
+
+    if (!match) {
+      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    }
+
+    // 2. Update winner fields and status
+    match.winnerId = winnerId;
+    match.winnerName = winnerName;
+    match.status = "completed";
+    match.updatedAt = new Date().toISOString();
+
+    await container.item(matchId, category).replace(match);
+
+    // 3. Advance winner to the next match (if any)
+    if (match.nextMatchId) {
+      const { resource: nextMatch } = await container
+        .item(match.nextMatchId, category)
+        .read<MatchDocument>();
+
+      if (nextMatch) {
+        // Determine which seed to carry forward
+        const winnerSeed =
+          winnerId === match.player1Id ? match.player1Seed : match.player2Seed;
+
+        if (match.nextMatchSlot === 1) {
+          nextMatch.player1Id = winnerId;
+          nextMatch.player1Name = winnerName;
+          nextMatch.player1Seed = winnerSeed;
+        } else {
+          nextMatch.player2Id = winnerId;
+          nextMatch.player2Name = winnerName;
+          nextMatch.player2Seed = winnerSeed;
+        }
+
+        nextMatch.updatedAt = new Date().toISOString();
+        await container.item(nextMatch.id, category).replace(nextMatch);
+      }
+    }
+
+    return NextResponse.json({ message: "Match updated successfully" });
+  } catch (error) {
+    console.error("Error updating match:", error);
+    return NextResponse.json({ error: "Failed to update match" }, { status: 500 });
   }
 }
