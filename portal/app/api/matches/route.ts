@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getMatchesContainer, getRegistrationsContainer } from "@/app/lib/cosmosClient";
+import { getMatchesContainer, getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import {
-  MatchDocument, RegistrationDocument, Category, MatchStatus,
+  MatchDocument, RegistrationDocument, UserDocument, Category, MatchStatus,
   SetScore, isDoubles, isValidSetScore,
 } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
+import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
+
 
 /** A bracket participant — one player (singles) or one team (doubles). */
 interface BracketParticipant {
@@ -25,21 +27,13 @@ async function parallelBatch<T>(
   }
 }
 
+
 /**
  * Generate standard tournament seeding order for a bracket of given size.
- * E.g., size 8 → [1,8,4,5,2,7,3,6] — top seeds maximally separated,
- * seed 1 faces seed N, seed 2 faces seed N-1, etc.
+ * (Logic now in lib/bracketUtils.ts)
  */
-function generateSeedOrder(bracketSize: number): number[] {
-  if (bracketSize === 1) return [1];
-  const half = generateSeedOrder(bracketSize / 2);
-  const result: number[] = [];
-  for (const seed of half) {
-    result.push(seed);
-    result.push(bracketSize + 1 - seed);
-  }
-  return result;
-}
+// generateSeedOrder removed
+
 
 /** Fill the winner's slot in the parent match of the bracket tree. */
 function fillNextMatchSlot(
@@ -120,6 +114,7 @@ export async function POST(request: NextRequest) {
 
     const regContainer = getRegistrationsContainer();
     const matchContainer = getMatchesContainer();
+    const userContainer = getUsersContainer();
 
     // ── 1. Fetch confirmed registrations ──────────────────────────────────
     const { resources: registrations } = await regContainer.items
@@ -137,6 +132,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── 1b. Hydrate names from Users container (to get fresh profile updates) ──
+    const allUserIds = new Set<string>();
+    for (const r of registrations) {
+      if (r.userId) allUserIds.add(r.userId);
+      if (r.partnerId) allUserIds.add(r.partnerId);
+    }
+
+    const nameMap = new Map<string, string>();
+    const userIdArray = Array.from(allUserIds);
+    
+    // Batch read users in chunks of 50
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < userIdArray.length; i += CHUNK_SIZE) {
+      const chunk = userIdArray.slice(i, i + CHUNK_SIZE);
+      // For read efficiency, try point reads in parallel
+      const userDocs = await Promise.all(
+        chunk.map(uid => 
+          userContainer.item(uid, uid).read<UserDocument>()
+            .then(r => r.resource)
+            .catch(() => null)
+        )
+      );
+      
+      for (const u of userDocs) {
+        if (u && u.name) {
+          nameMap.set(u.id, u.name);
+        }
+      }
+    }
+
+    // Helper to get fresh name or fallback to registration snapshot
+    const getName = (id?: string, fallback?: string) => {
+      if (!id) return fallback || 'TBD';
+      return nameMap.get(id) || fallback || id;
+    };
+
     // ── 2. Build participant list ─────────────────────────────────────────
     let participants: BracketParticipant[];
 
@@ -145,14 +176,19 @@ export async function POST(request: NextRequest) {
       const teams: BracketParticipant[] = [];
 
       for (const reg of registrations) {
-        const pairKey = [reg.userId, reg.partnerId || ""].sort().join("|");
+        const p1Id = reg.userId;
+        const p2Id = reg.partnerId || "";
+        const pairKey = [p1Id, p2Id].sort().join("|");
         if (seen.has(pairKey)) continue;
         seen.add(pairKey);
 
+        const p1Name = getName(p1Id, reg.userName);
+        const p2Name = getName(p2Id, reg.partnerName);
+
         teams.push({
           id: pairKey,
-          name: `${reg.userName} & ${reg.partnerName || reg.partnerId || "TBD"}`,
-          seed: reg.seed,
+          name: `${p1Name} & ${p2Name}`,
+          seed: reg.seed, // Only one partner carries the seed in our UI logic, hopefully consistent
         });
       }
 
@@ -166,7 +202,7 @@ export async function POST(request: NextRequest) {
     } else {
       participants = registrations.map((r) => ({
         id: r.userId,
-        name: r.userName,
+        name: getName(r.userId, r.userName),
         seed: r.seed,
       }));
     }

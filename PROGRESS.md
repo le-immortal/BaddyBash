@@ -71,6 +71,11 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] Optimized GET `/api/admin/players?category=` — single category fetch + parallel point-reads (was 13s → fast)
     - [x] Search by name (filters players/teams, matches partner names in doubles)
     - [x] Show alias instead of email for both singles and doubles
+    - [ ] **Seeding UX refinement** (needs work)
+        - [ ] Bulk seed assignment / drag-to-reorder
+        - [ ] Visual seed ranking list (sorted view with position numbers)
+        - [ ] Clear all seeds button per category
+        - [ ] Seed validation: warn if seeded player count exceeds recommended (e.g., top 8/16)
 
 - [x] **Bracket Redesign (FR-07) — v2** ✅ COMPLETE
     - [x] **Data model cleanup**
@@ -116,12 +121,13 @@ Focus: Admin capabilities, Seeding, Brackets.
         - [x] Stats bar: match count, bye count, round count
 
 - [x] **Seed Data** ✅ COMPLETE
-    - [x] Small seed: 10 users, 20 registrations (`seed.ts`)
+    - [x] Small seed: 9 users, 18 registrations (`seed.ts`)
     - [x] Bulk seed: 1458 users, 1588 registrations (`seed-bulk.ts`)
         - [x] MS: 443, WS: 69, MD: 280 teams, WD: 129 teams, XD: 129 teams
         - [x] 130 players shared between singles & doubles (100 MS→MD, 30 WS→WD)
         - [x] Proper seeding: MS top 16, WS top 8, MD/WD/XD top 8
         - [x] Wipes all data before reseeding (matches, registrations, users)
+    - [x] Reseeded on new Cosmos DB (`baddybashdb` in `test-rg`)
 
 ---
 
@@ -145,18 +151,20 @@ Focus: Real-time updates, Scoring.
 ## 🛠 Infrastructure & DevOps
 - [x] Set up GitHub Repository (`le-immortal/BaddyBash`)
 - [x] Configure CI/CD Pipeline (GitHub Actions — build + deploy on push to main)
-- [x] Provision Azure Resources
-    - [x] App Service: `baddybashportal` (Node 20, South India)
-    - [x] Resource Group: `rg-baddybash` (VS Enterprise subscription)
-    - [x] Cosmos DB: `baddybash-cosmos` (separate subscription)
+- [x] Provision Azure Resources (v2 — all in MS corp tenant `72f988bf`)
+    - [x] App Service: `baddybashapp` (Node 24-lts, South India, `test-rg`)
+    - [x] Cosmos DB: `baddybashdb` (serverless, South India, `test-rg`)
+    - [x] System-assigned Managed Identity enabled (principal: `1ef5fa62-...`)
+    - [x] Federated Identity Credential configured on Entra app for MI
     - [x] Runtime env vars configured on App Service
-    - [x] GitHub repo secrets configured (7 secrets)
+    - [x] GitHub repo secrets configured (publish profile)
+    - [ ] ~~Old resources: `baddybashportal` in `rg-baddybash` (abandoned)~~
 - [x] Dockerfile (multi-stage standalone build)
 - [x] Renamed `middleware.ts` → `proxy.ts` (Next.js 16)
-- [x] Fixed deployment: `startup-command` set on App Service (not in workflow)
+- [x] Fixed deployment: `startup-command` set on App Service (`node server.js`)
 - [x] Fixed artifact: `include-hidden-files: true` for `.next` directory
 - [x] Disabled Oryx build: `SCM_DO_BUILD_DURING_DEPLOYMENT=false`
-- [x] App live at `https://baddybashportal-b9b4bnd8bef5eadq.southindia-01.azurewebsites.net`
+- [x] App live at `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
 - [ ] Custom domain & SSL
 - [ ] Monitoring / Application Insights
 
@@ -191,10 +199,14 @@ Focus: Real-time updates, Scoring.
     - [ ] Score input form (Set 1, Set 2, Set 3) with badminton validation
     - [ ] Real-time bracket updates (Polling / SSE)
 
-5. **Phase E: Entra ID Login** ✅ COMPLETE
-    - [x] Replace GitHub OAuth with Microsoft Entra ID
-    - [x] @microsoft.com domain restriction
-    - [x] Seamless SSO for Microsoft employees (via Entra provider)
+5. **Phase E: Entra ID Login** 🟡 IN PROGRESS
+    - [x] Replace GitHub OAuth with Microsoft Entra ID (MicrosoftEntraID provider)
+    - [x] @microsoft.com domain restriction in signIn callback
+    - [x] Federated Identity Credential + Managed Identity approach (org blocks secrets & certs)
+    - [x] Custom OIDC provider with `[customFetch]` symbol to inject MI client assertion
+    - [x] `token_endpoint_auth_method: "none"` — prevents Auth.js sending fake client_secret
+    - [x] OpenID discovery tenant placeholder fix replicated
+    - [ ] Verify sign-in flow end-to-end (deployed, pending test)
 
 6. **Phase F: Mobile Friendly**
     - [ ] Responsive design audit & fixes across all pages
