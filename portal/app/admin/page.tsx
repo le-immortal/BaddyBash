@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock } from 'lucide-react';
+import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight } from 'lucide-react';
 import { Category, MatchDocument } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
+import SeedingVisualizer from '../components/SeedingVisualizer';
 import * as XLSX from 'xlsx';
 
 interface AdminRegistration {
@@ -43,6 +44,8 @@ export default function AdminDashboard() {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [seedValues, setSeedValues] = useState<Record<string, string>>({});
+  const [seedingMode, setSeedingMode] = useState(false);
+  const [currentSeeds, setCurrentSeeds] = useState<{ id: string, name: string, currentSeed: number }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -89,7 +92,16 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/players?category=${selectedCategory}`);
       if (res.ok) {
         const data: AdminPlayer[] = await res.json();
-        setPlayers(data);
+        setPlayers(data);        
+        // Prepare initial seeds for the visualizer
+        const flattened = data.flatMap(p => 
+          p.registrations.map(r => ({
+            id: r.id, // Registration ID
+            name: r.category.includes('D') ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
+            currentSeed: r.seed || 999
+          }))
+        );
+        setCurrentSeeds(flattened);
         // Initialize seed values from existing data
         const seeds: Record<string, string> = {};
         data.forEach(p => {
@@ -161,18 +173,30 @@ export default function AdminDashboard() {
   };
 
   const handleGenerateFixtures = async () => {
-    if (!confirm(`Generate bracket for ${selectedCategory}? This will replace any existing bracket.`)) return;
+    if (!seedingMode && !confirm(`Generate bracket for ${selectedCategory}? This will replace any existing bracket.`)) return;
     
+    // Build seed map from visualizer state if active
+    const seedMap: Record<string, number> = {};
+    if (seedingMode) {
+       currentSeeds.forEach(s => seedMap[s.id] = s.currentSeed);
+    }
+
     setGenerating(true);
     try {
       const res = await fetch('/api/matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: selectedCategory }),
+        body: JSON.stringify({ 
+          category: selectedCategory,
+          seeds: seedingMode ? seedMap : undefined
+        }),
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`Bracket generated! ${data.totalMatches} matches created for ${selectedCategory} (${data.participants} participants, ${data.totalRounds} rounds).`);
+        // alert(`Bracket generated! ...`);
+        await fetchMatches();
+        setSeedingMode(false);
+        setActiveTab('matches');
       } else {
         const err = await res.json();
         alert(`Error: ${err.error}`);
@@ -183,6 +207,27 @@ export default function AdminDashboard() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const startSeeding = () => {
+    const flatRegs = players.flatMap(p => p.registrations);
+    if (flatRegs.length < 2) {
+       alert('Not enough players/teams to seed.');
+       return;
+    }
+
+    // Map to Seed format
+    const mapped = flatRegs.map((r, index) => ({
+      id: r.id,
+      name: r.category.includes('D') ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
+      currentSeed: r.seed || (index + 1)
+    }));
+    
+    // Try to preserve existing seeds if they form a sequence, otherwise default to index 
+    // Actually simpler to just take existing seeds if present, else index
+    
+    setCurrentSeeds(mapped);
+    setSeedingMode(true);
   };
 
   const CATEGORIES: { id: Category; name: string }[] = [
@@ -460,25 +505,66 @@ export default function AdminDashboard() {
 
             {activeTab === 'registrations' ? (
               <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                {seedingMode ? (
+                    <div className="p-6">
+                       <div className="flex justify-between items-center mb-6">
+                         <div>
+                           <h2 className="text-lg font-bold text-slate-800">Seeding Matchups</h2>
+                           <p className="text-sm text-slate-500">Drag players to adjust seeds and set first-round matchups.</p>
+                         </div>
+                         <div className="flex gap-3">
+                           <button 
+                             onClick={() => setSeedingMode(false)}
+                             className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                           >
+                             Cancel
+                           </button>
+                           <button 
+                             onClick={handleGenerateFixtures}
+                             disabled={generating}
+                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+                           >
+                             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                             Generate Bracket
+                           </button>
+                         </div>
+                       </div>
+                       
+                       <SeedingVisualizer 
+                         participants={currentSeeds} 
+                         categoryName={CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory}
+                         onSeedsChange={setCurrentSeeds}
+                       />
+                    </div>
+                ) : (
+                <>
                 <div className="p-6 border-b border-slate-100 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-slate-800">
                       Registered Players — <span className="text-blue-600">{CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
                     </h2>
-                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-                      {(() => {
-                        const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
-                        if (!isD) return `${players.length} Players`;
-                        // Deduplicate pairs
-                        const seen = new Set<string>();
-                        for (const p of players) {
-                          const reg = p.registrations[0];
-                          const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
-                          seen.add(pairKey);
-                        }
-                        return `${seen.size} Teams`;
-                      })()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+                        {(() => {
+                            const isD = ['MD', 'WD', 'XD'].includes(selectedCategory);
+                            if (!isD) return `${players.length} Players`;
+                            const seen = new Set<string>();
+                            for (const p of players) {
+                            const reg = p.registrations[0];
+                            const pairKey = [p.id, reg?.partnerId || ''].sort().join('|||');
+                            seen.add(pairKey);
+                            }
+                            return `${seen.size} Teams`;
+                        })()}
+                        </span>
+                        <button 
+                          onClick={startSeeding}
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 ml-4"
+                        >
+                          <ArrowRight className="w-3 h-3" />
+                          Seed & Generate
+                        </button>
+                    </div>
                   </div>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -640,6 +726,8 @@ export default function AdminDashboard() {
                   </div>
                   );
                 })()}
+                </>
+                )}
               </section>
             ) : (
                 /* MATCHES SECTION */
