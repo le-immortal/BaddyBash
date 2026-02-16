@@ -45,6 +45,7 @@ export default function SeedingVisualizer({ participants, onSeedsChange, categor
     
     const newMatchups = [];
     for (let i = 0; i < order.length; i += 2) {
+      if (i + 1 >= order.length) break;
       const s1 = order[i];
       const s2 = order[i+1];
       
@@ -163,21 +164,25 @@ function PlayerSlot({
 }: { 
   player: Participant | null, 
   seed: number, 
-  isBye: boolean,
+  isBye: boolean, 
   onDragStart: (e: React.DragEvent, id: string) => void,
   onDragOver: (e: React.DragEvent) => void,
   onDrop: (e: React.DragEvent, seed: number) => void
 }) {
   return (
     <div 
-      className={p-3 transition-all duration-200 border-l-4 }
+      className={`p-3 transition-all duration-200 border-l-4 ${
+        isBye ? 'bg-slate-50 border-slate-200' : 'bg-white border-blue-500 hover:bg-slate-50 cursor-grab active:cursor-grabbing'
+      }`}
       draggable={!isBye}
       onDragStart={(e) => player && onDragStart(e, player.id)}
       onDragOver={!isBye ? onDragOver : undefined}
       onDrop={!isBye ? (e) => onDrop(e, seed) : undefined}
     >
       <div className="flex items-center gap-3">
-        <span className={lex items-center justify-center w-6 h-6 rounded text-xs font-bold shadow-sm }>
+        <span className={`flex items-center justify-center w-6 h-6 rounded text-xs font-bold shadow-sm ${
+           isBye ? 'bg-slate-100 text-slate-400' : 'bg-blue-100 text-blue-700'
+        }`}>
           {seed}
         </span>
         
