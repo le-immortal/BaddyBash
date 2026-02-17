@@ -18,6 +18,7 @@ interface AdminRegistration {
   seed?: number;
   partnerId?: string;
   partnerName?: string;
+  partnerPhone?: string;
 }
 
 interface AdminPlayer {
@@ -234,15 +235,22 @@ export default function AdminDashboard() {
 
     const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
 
+    // Build a lookup map for partner alias by userId
+    const playerMap = new Map(filtered.map(p => [p.id, p]));
+
     const sheetData = isDoubles
       ? rows.map((p, i) => {
           const reg = p.registrations[0];
+          const partner = reg.partnerId ? playerMap.get(reg.partnerId) : undefined;
           return {
             '#': i + 1,
             'Seed': reg.seed || '',
             'Player 1': p.name,
             'Alias 1': p.alias || '',
+            'Phone 1': p.phoneNumber || '',
             'Player 2': reg.partnerName || 'TBD',
+            'Alias 2': partner?.alias || '',
+            'Phone 2': reg.partnerPhone || partner?.phoneNumber || '',
             'Category': selectedCategory,
           };
         })

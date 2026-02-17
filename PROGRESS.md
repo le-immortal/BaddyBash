@@ -177,6 +177,8 @@ Focus: Real-time updates, Scoring.
     - [x] Export bracket / draw to `.xlsx` (match numbers, rounds, seeds, scores, winners)
     - [x] Dropdown menu: "Players List" or "Bracket / Draw"
     - [x] Auto-sized columns, proper naming (`BaddyBash_Players_MS_2026-02-12.xlsx`)
+    - [x] Singles export includes: Name, Alias, Phone
+    - [x] Doubles export includes: Player 1 Name/Alias/Phone, Player 2 Name/Alias/Phone
 
 2. **Phase B: Admin Flow & Role-Based Display** ✅ COMPLETE
     - [x] `isAdmin` field on `UserDocument` (set via Cosmos DB)
