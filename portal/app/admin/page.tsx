@@ -192,8 +192,7 @@ export default function AdminDashboard() {
         }),
       });
       if (res.ok) {
-        const data = await res.json();
-        // alert(`Bracket generated! ...`);
+        await res.json();
         await fetchMatches();
         setSeedingMode(false);
         setActiveTab('matches');

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Category, MatchDocument, formatSetScores, CATEGORIES } from '../lib/models';
+import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
 const SLOT_H = 64;         // Every match slot is this tall (uniform for tree alignment)
@@ -27,7 +27,6 @@ function MatchCard({ match }: { match: MatchDocument }) {
   const isBye = match.status === 'bye';
   const isLive = match.status === 'in_progress';
   const isComplete = match.status === 'completed';
-  const scoreStr = formatSetScores(match.sets ?? []);
   const p1Win = match.winnerId && match.winnerId === match.player1Id;
   const p2Win = match.winnerId && match.winnerId === match.player2Id;
 
@@ -82,12 +81,6 @@ function MatchCard({ match }: { match: MatchDocument }) {
         {isComplete && p2Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
       </div>
 
-      {/* Score */}
-      {scoreStr && (
-        <div className="border-t border-slate-700/40 px-2 py-0.5 text-center font-mono text-blue-400 text-[10px]">
-          {scoreStr}
-        </div>
-      )}
     </div>
   );
 }
