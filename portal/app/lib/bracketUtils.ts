@@ -19,18 +19,17 @@ export function generateSeedOrder(bracketSize: number): number[] {
 }
 
 /**
- * Calculate the next power of 2 for bracket size.
+ * Calculate the next power of 2 >= n for bracket size.
+ * Minimum bracket size is 2.
  */
 export function nextPowerOf2(n: number): number {
-  if (n <= 1) return 2; // Minimum bracket size
-  let count = 0;
-  // Check if n is already a power of 2
-  if (n && !(n & (n - 1))) return n;
-  
-  while (n > 0) {
-    n >>= 1;
-    count++;
+  if (n <= 2) return 2;
+  // If already a power of 2, return as-is
+  if ((n & (n - 1)) === 0) return n;
+  // Find the next power of 2 by counting bit shifts
+  let power = 1;
+  while (power < n) {
+    power <<= 1;
   }
-  if (n === 0) return 2;
-  return 1 << count;
+  return power;
 }
