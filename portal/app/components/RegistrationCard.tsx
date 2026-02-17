@@ -92,7 +92,7 @@ export default function RegistrationCard({
               <label className="text-xs font-medium text-slate-500 uppercase">Partner Phone</label>
               <input 
                 type="tel" 
-                placeholder="9876543210"
+                placeholder="e.g., 9876543210"
                 className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white placeholder-slate-400"
                 value={partnerPhone || ''}
                 onChange={(e) => onPhoneChange?.(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}

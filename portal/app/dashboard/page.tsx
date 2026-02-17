@@ -345,7 +345,7 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Phone Number <span className="text-red-500">*</span></label>
                 <input
                   type="tel"
-                  placeholder="9876543210"
+                  placeholder="e.g., 9876543210"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
                   maxLength={10}
