@@ -6,7 +6,7 @@ import {
   isDoubles,
 } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
-import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
+import { generateSeedOrder } from "@/app/lib/bracketUtils";
 
 interface BracketParticipant {
   id: string;
