@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'react';
 import Navbar from '../components/Navbar';
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Trophy, Lock, Search, X } from 'lucide-react';
-import { Category, MatchDocument, formatSetScores, CATEGORIES } from '../lib/models';
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X } from 'lucide-react';
+import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
