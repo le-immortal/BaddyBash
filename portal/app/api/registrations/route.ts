@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument, isDoubles, Category } from "@/app/lib/models";
 import { getGlobalSettings } from "@/app/lib/settings";
+import { auth } from "@/auth";
 
 const MAX_CATEGORIES = 2;
 
@@ -61,6 +62,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
 
+    // 0.5. Verify User Identity (Anti-Spoofing)
+    const session = await auth();
+    if (!session || !session.user || !session.user.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { email } = session.user;
+    const cleanUserId = String(userId).trim().toLowerCase();
+    
+    // Admins can register on behalf of anyone (if needed for support)
+    if (!session.user.isAdmin) { 
+        const usersContainer = getUsersContainer();
+        const { resources: [userDoc] } = await usersContainer.items
+          .query<UserDocument>({
+            query: "SELECT * FROM c WHERE c.email = @email",
+            parameters: [{ name: "@email", value: email }]
+          })
+          .fetchAll();
+
+        // If the logged-in user's ID (alias) doesn't match the requested userId, block it.
+        if (!userDoc || userDoc.id !== cleanUserId) {
+            return NextResponse.json(
+              { error: "Unauthorized: You can only register for yourself." },
+              { status: 403 }
+            );
+        }
+    }
+
     if (!userId || !userName || !category) {
       return NextResponse.json(
         { error: "userId, userName, and category are required" },
@@ -70,7 +99,8 @@ export async function POST(request: NextRequest) {
 
     // Trim and lowercase userId (alias) for consistency
     // Type assertion safe because we validate above
-    const cleanUserId = String(userId).trim().toLowerCase();
+    
+    // cleanUserId is already defined above in step 0.5
     const cleanPartnerId = partnerId ? String(partnerId).trim().toLowerCase() : undefined;
 
     // Validate doubles have a partner
