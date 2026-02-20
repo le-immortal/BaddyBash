@@ -146,20 +146,21 @@ Focus: Admin capabilities, Seeding, Brackets.
 ---
 
 ## 🎮 Phase 3: Game Day Live (Week 6)
-Focus: Real-time updates, Scoring.
+Focus: Real-time updates, Winner Advancement.
 
-- [ ] **Live Scoring (FR-09, FR-10)** ⬅️ NEXT
-    - [x] Backend: `PATCH /api/matches` — accepts `SetScore[]`, validates, auto-advances winner
+- [ ] **Match Management (FR-09)** ⬅️ NEXT
+    - [x] Backend: `PATCH /api/matches` — updates winner, auto-advances to next round
     - [x] Backend: Status transitions (scheduled → in_progress → completed)
-    - [ ] **UI: Score Input Modal** (Admin clicks match → enters set scores)
-    - [ ] UI: Score input form (Set 1, Set 2, Set 3) with badminton validation
-    - [ ] Backend: Real-time updates (Polling / SSE)
+    - [ ] **UI: Winner Selection Modal** 
+        - [ ] Admin clicks match → Selects Winner (Player A / Player B)
+        - [ ] Confirmation dialog to prevent accidental clicks
+        - [ ] Auto-refresh bracket to show advancement
 
 - [ ] **Public Views**
     - [x] Landing Page with Event Info
     - [x] Bracket View (pulls live data from API)
     - [x] Player search in bracket (search by name, highlights matches, auto-navigates to round)
-    - [ ] **Leaderboard / Results page**
+    - [ ] **Leaderboard / Results page** (Optional)
 
 ---
 
