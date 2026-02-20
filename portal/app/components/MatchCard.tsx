@@ -45,10 +45,9 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
       </div>
 
       {/* Schedule Info */}
-      {(match.scheduledTime || match.court) && !isBye && (
+      {(match.scheduledTime) && !isBye && (
         <div className="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
             <span className="truncate">{match.scheduledTime || 'TBD'}</span>
-            <span className="truncate ml-2 text-slate-400 font-bold">{match.court || ''}</span>
         </div>
       )}
 

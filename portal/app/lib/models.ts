@@ -103,7 +103,6 @@ export interface MatchDocument {
   nextMatchSlot?: 1 | 2;  // which slot (player1 or player2) in the next match
 
   // Scheduling
-  court?: string;         // assigned court (e.g., "Court 2")
   scheduledTime?: string; // Flexible time string (e.g., "10:30 AM" or "After M5")
 
   createdAt: string;

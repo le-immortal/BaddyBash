@@ -63,7 +63,7 @@ The purpose of the **Baddy Bash Portal** is to centralize and automate the manag
 #### Tournament Management
 6.  **FR-06 Seeding:** The Admin interface shall allow manual Seeding (Rank 1-N) for confirmed players/teams.
 7.  **FR-07 Bracket Generation:** The system shall generate a Single Elimination Knockout Bracket logic, placing seeds at opposite poles and automatically assigning "Byes" if the player count is not a power of 2 ($2^n$).
-8.  **FR-08 Scheduling:** The system shall allow Admins to drag-and-drop matches to specific courts/time slots.
+8.  **FR-08 Scheduling:** The system shall allow Admins to assign time slots to matches.
 9.  **FR-09 Live Scoring:** The system shall provide a Live Score Input form for Admins to enter set scores (e.g., 21-19, 21-15).
 10. **FR-10 Advancement:** Upon match completion, the system shall automatically advance the winner to the next node in the bracket.
 
