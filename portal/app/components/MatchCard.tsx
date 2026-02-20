@@ -44,6 +44,14 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
         </span>
       </div>
 
+      {/* Schedule Info */}
+      {(match.scheduledTime || match.court) && !isBye && (
+        <div className="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
+            <span className="truncate">{match.scheduledTime || 'TBD'}</span>
+            <span className="truncate ml-2 text-slate-400 font-bold">{match.court || ''}</span>
+        </div>
+      )}
+
       {/* Player 1 */}
       <div className={`flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 ${p1Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
         <span className="truncate flex-1 flex items-center gap-1">
