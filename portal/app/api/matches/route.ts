@@ -403,13 +403,12 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const { matchId, category, winnerId, winnerName, scheduledTime, court } = (await request.json()) as {
+    const { matchId, category, winnerId, winnerName, scheduledTime } = (await request.json()) as {
       matchId: string;
       category: Category;
       winnerId?: string;
       winnerName?: string;
       scheduledTime?: string;
-      court?: string;
     };
 
     if (!matchId || !category) {
@@ -437,10 +436,6 @@ export async function PATCH(request: NextRequest) {
     // Handle Schedule Updates
     if (scheduledTime !== undefined) {
         match.scheduledTime = scheduledTime;
-        updated = true;
-    }
-    if (court !== undefined) {
-        match.court = court;
         updated = true;
     }
 

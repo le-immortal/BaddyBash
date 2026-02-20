@@ -14,7 +14,6 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
   // Initialize with existing winner or undefined
   const [winnerId, setWinnerId] = useState<string | undefined>(match.winnerId);
   const [scheduledTime, setScheduledTime] = useState<string>(match.scheduledTime || '');
-  const [court, setCourt] = useState<string>(match.court || '');
   const [saving, setSaving] = useState(false);
 
   const p1 = { id: match.player1Id, name: match.player1Name };
@@ -24,7 +23,7 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
 
   const handleSave = async () => {
     // If not locked (completed), allow winner selection or schedule update
-    const isUpdatingScheduleOnly = !winnerId && (scheduledTime !== match.scheduledTime || court !== match.court);
+    const isUpdatingScheduleOnly = !winnerId && (scheduledTime !== match.scheduledTime);
 
     if (!winnerId && !isUpdatingScheduleOnly) {
       alert('Please select a winner or update schedule');
@@ -39,12 +38,10 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
         winnerId?: string;
         winnerName?: string;
         scheduledTime?: string;
-        court?: string;
       } = {
         matchId: match.id,
         category: match.category,
         scheduledTime,
-        court,
       };
 
       if (winnerId) {
@@ -130,29 +127,16 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
           <div className="border-t border-slate-700/50 my-2"></div>
           
           {/* Scheduling inputs */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs uppercase text-slate-400 mb-1">Scheduled Time</label>
-              <input 
-                type="text" 
-                value={scheduledTime}
-                onChange={e => setScheduledTime(e.target.value)}
-                placeholder="e.g. 10:30 AM"
-                disabled={isLocked}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase text-slate-400 mb-1">Court</label>
-              <input 
-                type="text" 
-                value={court}
-                onChange={e => setCourt(e.target.value)}
-                placeholder="e.g. Court 3"
-                disabled={isLocked}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
-              />
-            </div>
+          <div>
+            <label className="block text-xs uppercase text-slate-400 mb-1">Scheduled Time</label>
+            <input 
+              type="text" 
+              value={scheduledTime}
+              onChange={e => setScheduledTime(e.target.value)}
+              placeholder="e.g. 10:30 AM"
+              disabled={isLocked}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            />
           </div>
           
           <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3 flex gap-3 text-amber-200/80 text-xs">
@@ -179,7 +163,7 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || (!winnerId && scheduledTime === (match.scheduledTime||'') && court===(match.court||''))}
+            disabled={saving || (!winnerId && scheduledTime === (match.scheduledTime||''))}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Changes'}
