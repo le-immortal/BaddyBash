@@ -107,6 +107,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { registrationId, userId, seed } = body;
 
+    // IMPORTANT: Allow seed to be null (unsetting a seed).
     if (!registrationId || !userId || seed === undefined) {
       return NextResponse.json(
         { error: "registrationId, userId, and seed are required" },
@@ -148,6 +149,12 @@ export async function PATCH(request: NextRequest) {
         );
       }
     }
+
+    // If this is a doubles registration, validation becomes tricky because the partner might also have a seed.
+    // However, our bracket generation logic only picks the first seed it finds for the team.
+    // So updating one partner's registration is sufficient.
+    // But ideally, we should update both? No, that requires another read and write.
+    // Let's stick to updating the single registration for now.
 
     const updated: RegistrationDocument = {
       ...existing,

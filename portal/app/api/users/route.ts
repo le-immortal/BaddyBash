@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
       alias: cleanAlias || existing?.alias || cleanId,
       // phoneNumber is required in the model, use empty string if not provided
       phoneNumber: body.phoneNumber ? String(body.phoneNumber).trim() : (existing?.phoneNumber || ''),
+      tShirtSize: body.tShirtSize || existing?.tShirtSize || undefined,
       avatar: body.avatar || existing?.avatar || undefined,
       isAdmin: body.isAdmin ?? existing?.isAdmin ?? false,
       createdAt: existing?.createdAt || now,
@@ -172,6 +173,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (cleanUpdates.phoneNumber) {
       cleanUpdates.phoneNumber = String(cleanUpdates.phoneNumber).trim();
+    }
+    if (cleanUpdates.tShirtSize) {
+      cleanUpdates.tShirtSize = String(cleanUpdates.tShirtSize).trim();
     }
 
     // Security Check: Prevent hijacking of existing accounts

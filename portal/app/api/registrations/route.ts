@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
-import { getUsersContainer } from "@/app/lib/cosmosClient";
-import { RegistrationDocument, UserDocument, isDoubles } from "@/app/lib/models";
+import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
+import { RegistrationDocument, UserDocument, isDoubles, Category } from "@/app/lib/models";
+import { getGlobalSettings } from "@/app/lib/settings";
 
 const MAX_CATEGORIES = 2;
 
@@ -39,13 +39,27 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/registrations
  * Create a new registration. Enforces Max-2 rule server-side.
+ * Also enforces the Global Registration Open/Close setting.
  *
  * Body: { userId, userName, category, partnerId?, partnerName?, partnerPhone? }
  */
 export async function POST(request: NextRequest) {
   try {
+    // 0. Check Global Settings
+    try {
+      const settings = await getGlobalSettings();
+      if (settings.registrationOpen === false) {
+          return NextResponse.json(
+            { error: "Registrations are currently closed." },
+            { status: 403 }
+          );
+      }
+    } catch {
+       // If config doc doesn't exist, assume open
+    }
+
     const body = await request.json();
-    const { userId, userName, category, partnerId, partnerName, partnerPhone } = body;
+    const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
 
     if (!userId || !userName || !category) {
       return NextResponse.json(
@@ -186,6 +200,7 @@ export async function POST(request: NextRequest) {
           email: '', // Placeholder, will be filled when B logs in
           alias: cleanPartnerId,
           phoneNumber: finalPartnerPhone || '',
+          tShirtSize: partnerTShirtSize || undefined,
           isAdmin: false,
           createdAt: now,
           updatedAt: now,
@@ -193,8 +208,12 @@ export async function POST(request: NextRequest) {
         // Use upsert just in case of race condition
         await usersContainer.items.upsert(partnerUser);
       } else {
-        // Partner exists: DO NOT update their profile with A's input. 
-        // We trust B's existing data (which we used for finalPartnerName above).
+        // Partner exists. If they don't have a T-Shirt size yet, use the one provided by A.
+        if (!existingPartner.tShirtSize && partnerTShirtSize) {
+           existingPartner.tShirtSize = partnerTShirtSize;
+           existingPartner.updatedAt = new Date().toISOString();
+           await usersContainer.item(existingPartner.id, existingPartner.id).replace(existingPartner);
+        }
       }
 
       // Create confirmed registration for partner
@@ -245,13 +264,79 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/registrations?id=xxx&userId=xxx
- * Cancel a registration (soft delete — sets status to cancelled).
+ * DELETE /api/registrations?userId=xxx&category=xxx
+ * Delete a registration (hard delete).
+ * Also deletes partner's registration if doubles.
  */
-export async function DELETE() {
-  // Cancellations are handled manually by DB admins only
-  return NextResponse.json(
-    { error: "Cancellations are not allowed online. Please contact the organizers." },
-    { status: 403 }
-  );
+export async function DELETE(request: NextRequest) {
+  const userId = request.nextUrl.searchParams.get("userId");
+  const category = request.nextUrl.searchParams.get("category");
+
+  if (!userId || !category) {
+    return NextResponse.json({ error: "userId and category are required" }, { status: 400 });
+  }
+
+  try {
+    const usersContainer = getUsersContainer();
+    let settings;
+    try {
+      const { resource } = await usersContainer.item("CONFIG_GLOBAL", "CONFIG_GLOBAL").read();
+      settings = resource;
+    } catch {
+       // Ignore
+    }
+
+    if (settings && settings.registrationOpen === false) {
+      return NextResponse.json(
+        { error: "Registrations are closed. You cannot withdraw at this time." },
+        { status: 403 }
+      );
+    }
+
+    const container = getRegistrationsContainer();
+    const cleanUserId = String(userId).trim().toLowerCase();
+    const regId = `${cleanUserId}_${category}`;
+
+    // 2. Fetch the registration to check for partner
+    try {
+      const { resource: reg } = await container.item(regId, cleanUserId).read<RegistrationDocument>();
+
+      if (!reg) {
+        return NextResponse.json({ error: "Registration not found" }, { status: 404 });
+      }
+
+      // 3. If doubles, delete partner's registration too
+      if (isDoubles(category as Category)) {
+        // Also check if partnerId actually exists on the registration
+        if (reg.partnerId) {
+          const cleanPartnerId = reg.partnerId;
+          const partnerRegId = `${cleanPartnerId}_${category}`;
+          try {
+            await container.item(partnerRegId, cleanPartnerId).delete();
+          } catch (e: unknown) {
+              const cosmosErr = e as { code?: number };
+              // If 404, partner might have already cancelled or not existed
+              if (cosmosErr?.code !== 404) {
+                console.error("Failed to delete partner registration:", e);
+              }
+          }
+        }
+      }
+
+      // 4. Delete user's registration
+      await container.item(regId, cleanUserId).delete();
+
+      return NextResponse.json({ message: "Registration cancelled" }, { status: 200 });
+
+    } catch (e: unknown) {
+      const cosmosErr = e as { code?: number };
+      if (cosmosErr?.code === 404) {
+         return NextResponse.json({ error: "Registration not found" }, { status: 404 });
+      }
+      throw e;
+    }
+  } catch (error) {
+    console.error("Error cancelling registration:", error);
+    return NextResponse.json({ error: "Failed to cancel registration" }, { status: 500 });
+  }
 }

@@ -6,7 +6,8 @@ import {
   isDoubles,
 } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
-import { generateSeedOrder } from "@/app/lib/bracketUtils";
+import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
+import { getGlobalSettings } from "@/app/lib/settings";
 
 interface BracketParticipant {
   id: string;
@@ -27,21 +28,24 @@ async function parallelBatch<T>(
 
 /** Fill the winner's slot in the parent match of the bracket tree. */
 function fillNextMatchSlot(
-  match: MatchDocument,
+  match: MatchDocument, // Correct type
   matchMap: Map<string, MatchDocument>
 ): void {
   if (!match.nextMatchId || !match.winnerId) return;
   const next = matchMap.get(match.nextMatchId);
   if (!next) return;
 
+  // Determine the seed of the winner
+  const winnerSeed = (match.winnerId === match.player1Id) ? match.player1Seed : match.player2Seed;
+
   if (match.nextMatchSlot === 1) {
     next.player1Id = match.winnerId;
     next.player1Name = match.winnerName;
-    next.player1Seed = match.player1Seed;
+    next.player1Seed = winnerSeed;
   } else {
     next.player2Id = match.winnerId;
     next.player2Name = match.winnerName;
-    next.player2Seed = match.player2Seed;
+    next.player2Seed = winnerSeed;
   }
 }
 
@@ -56,17 +60,34 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const container = getMatchesContainer();
-    const { resources } = await container.items
-      .query<MatchDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category",
-        parameters: [{ name: "@category", value: category }],
-      })
-      .fetchAll();
+    // 1. Check Bracket Visibility Setting
+    // Allow Admins to bypass this check
+    const session = await requireAdmin();
+    if (!session) {
+    try {
+      const settings = await getGlobalSettings();
+      if (settings.bracketsVisible === false) {
+          return NextResponse.json(
+            { error: "Brackets are not yet published." }, 
+            { status: 403 }
+          );
+      }
+    } catch {
+       // Default to open
+    }
+  }
 
-    resources.sort((a, b) => a.round - b.round || a.position - b.position);
+  const matchesContainer = getMatchesContainer();
+  const { resources: matches } = await matchesContainer.items
+    .query<MatchDocument>({
+      query: "SELECT * FROM c WHERE c.category = @category",
+      parameters: [{ name: "@category", value: category }],
+    })
+    .fetchAll();
 
-    return NextResponse.json(resources);
+  matches.sort((a, b) => a.round - b.round || a.position - b.position);
+
+  return NextResponse.json(matches);
   } catch (error) {
     console.error("Error fetching matches:", error);
     return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
@@ -188,13 +209,20 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // 3. Sort by seed
-    participants.sort((a, b) => {
-      if (a.seed && b.seed) return a.seed - b.seed;
-      if (a.seed) return -1;
-      if (b.seed) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // 3. Sort by seed (seeded first), then random for unseeded
+    const seededParticipants = participants.filter(p => p.seed);
+    const unseededParticipants = participants.filter(p => !p.seed);
+
+    // Sort seeded by seed number
+    seededParticipants.sort((a, b) => (a.seed!) - (b.seed!));
+
+    // Shuffle unseeded randomly (Fisher-Yates shuffle)
+    for (let i = unseededParticipants.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [unseededParticipants[i], unseededParticipants[j]] = [unseededParticipants[j], unseededParticipants[i]];
+    }
+
+    participants = [...seededParticipants, ...unseededParticipants];
 
     // 4. Bracket Geometry
     const bracketSize = nextPowerOf2(participants.length);
