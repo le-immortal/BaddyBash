@@ -144,6 +144,7 @@ Focus: Real-time updates, Scoring.
 - [ ] **Public Views**
     - [x] Landing Page with Event Info
     - [x] Bracket View (pulls live data from API)
+    - [x] Player search in bracket (search by name, highlights matches, auto-navigates to round)
     - [ ] **Leaderboard / Results page**
 
 ---

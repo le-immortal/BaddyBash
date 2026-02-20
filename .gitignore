@@ -42,6 +42,5 @@ next-env.d.ts
 
 # deployment artifacts
 deploy-temp/
-deploy.zip
+*.zip
 app-logs/
-app-logs.zip
