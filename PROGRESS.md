@@ -221,12 +221,40 @@ Focus: Real-time updates, Winner Advancement.
         - [x] User UI: "Brackets Coming Soon" gatekeeper page (admins bypass)
         - [x] Logic: `bracketsVisible` flag in global config
 
-4. **Phase D: Score Update**
-    - [ ] Score Input Modal (admin clicks match → enters set scores)
-    - [ ] Score input form (Set 1, Set 2, Set 3) with badminton validation
-    - [ ] Real-time bracket updates (Polling / SSE)
+4. **Phase D: Advanced Match Operations** 🟡 NEXT
+    - [x] **Sub-task 1: Match Scheduling (Hybrid Approach)** (Implemented - [PR #8](https://github.com/le-immortal/BaddyBash/pull/8))
+        - [x] Backend: Update `MatchDocument` to include `scheduledTime` (string/text).
+        - [x] Backend: Update `POST /api/matches` (generation) to initialize this as null (auto-handled).
+        - [x] Frontend: Update `MatchCard.tsx` to display schedule info.
+        - [x] Frontend: Update `EditMatchModal` to include **Time** input.
+        - [x] **Constraint**: Completed matches are locked from manual editing in this modal.
+    
+    - [ ] **Sub-task 2: Bulk Match Updates (Import/Export)**
+        - [ ] Backend: Update `Export Bracket` to include `Match ID` (hidden column), `Scheduled Time`, `Court Number`
+        - [ ] Backend/Frontend: Create `Bulk Import` feature (Admin Dashboard)
+            - [ ] Parse uploaded Excel/CSV
+            - [ ] Match rows by `Match ID`
+            - [ ] Bulk update `scheduledTime`, `courtNumber`
+            - [ ] **Constraint**: Skip rows where match is already `completed` (do not overwrite history)
+            - [ ] **Constraint**: Do not import "Winner" column (score tracking removed per Phase E)
+    
+    - [ ] **Sub-task 4: My Matches Dashboard** (New)
+        - [ ] Backend: create `GET /api/my-matches`
+            - Logic: Lookup user's registered categories -> Parallel query `matches` container for those categories filtering by `player1Id` OR `player2Id`.
+        - [ ] Frontend: "My Schedule" section on Dashboard.
+        - [ ] UI: List matches with:
+            - **Round** ("R1", "Semis")
+            - **Opponent** (Name of p1/p2)
+            - **Schedule** (Time/Court from Sub-task 1)
+            - **Status** (Upcoming / Live / Won / Lost) - **No scores displayed**
 
-5. **Phase E: Entra ID Login** 🟡 IN PROGRESS
+5. **Phase E: Score Tracking Removal** (Change Request)
+    - [ ] **Data Model**: Update `MatchDocument` to remove `sets: SetScore[]`.
+    - [ ] **API**: Update `PATCH /api/matches` to only accept `winnerId` (advancement only).
+    - [ ] **Frontend**: Remove score inputs from `EditMatchModal` (just Winner selection).
+    - [ ] **Frontend**: Remove score display from `MatchCard` and Bracket view.
+
+6. **Phase F: Entra ID Login** 🟡 IN PROGRESS
     - [x] Replace GitHub OAuth with Microsoft Entra ID (MicrosoftEntraID provider)
     - [x] @microsoft.com domain restriction in signIn callback
     - [x] Federated Identity Credential + Managed Identity approach (org blocks secrets & certs)
@@ -235,7 +263,7 @@ Focus: Real-time updates, Winner Advancement.
     - [x] OpenID discovery tenant placeholder fix replicated
     - [ ] Verify sign-in flow end-to-end (deployed, pending test)
 
-6. **Phase F: Mobile Friendly**
+7. **Phase G: Mobile Friendly**
     - [ ] Responsive design audit & fixes across all pages
     - [ ] Touch-friendly bracket navigation
     - [ ] Mobile-optimized admin dashboard

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'react';
 import Navbar from '../components/Navbar';
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Trophy, Lock, Search, X } from 'lucide-react';
-import { Category, MatchDocument, formatSetScores, CATEGORIES } from '../lib/models';
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X } from 'lucide-react';
+import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
@@ -61,10 +61,9 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
       </div>
 
       {/* Schedule Info */}
-      {(match.scheduledTime || match.court) && !isBye && (
+      {(match.scheduledTime) && !isBye && (
         <div className="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
-           <span className="truncate">{match.scheduledTime || 'TBD'}</span>
-           <span className="truncate ml-2 text-slate-400 font-bold">{match.court || ''}</span>
+           <span className="truncate">{match.scheduledTime}</span>
         </div>
       )}
 
