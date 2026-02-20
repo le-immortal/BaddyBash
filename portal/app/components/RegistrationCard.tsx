@@ -64,7 +64,7 @@ export default function RegistrationCard({
           </div>
         )}
 
-        {isDoubles && (status !== 'committed') && (status === 'selected' || !disabled) && (
+        {isDoubles && status === 'selected' && (
           <div className="space-y-2">
             <div>
               <label className="text-xs font-medium text-slate-500 uppercase">Partner Name</label>
