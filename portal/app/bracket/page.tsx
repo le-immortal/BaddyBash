@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Navbar from '../components/Navbar';
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Trophy, Lock } from 'lucide-react';
 import { Category, MatchDocument, formatSetScores, CATEGORIES } from '../lib/models';
+import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
 const SLOT_H = 64;         // Every match slot is this tall (uniform for tree alignment)
@@ -120,10 +121,22 @@ function Connectors({ colIdx, matchCount }: { colIdx: number; matchCount: number
 
 /* ── Main page ─────────────────────────────────────────────────────── */
 export default function BracketPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin === true;
+
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
   const [matches, setMatches] = useState<MatchDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [roundOffset, setRoundOffset] = useState(0);
+  const [bracketsVisible, setBracketsVisible] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+
+  // Check brackets visibility
+  useEffect(() => {
+    fetch('/api/settings').then(res => res.json()).then(data => {
+      setBracketsVisible(data.bracketsVisible === true);
+    }).catch(console.error).finally(() => setCheckingAccess(false));
+  }, []);
 
   const fetchMatches = useCallback(async () => {
     try {
@@ -150,6 +163,37 @@ export default function BracketPage() {
   const visibleRounds = sortedRounds.slice(roundOffset, roundOffset + VISIBLE_ROUNDS);
   const canLeft = roundOffset > 0;
   const canRight = roundOffset + VISIBLE_ROUNDS < sortedRounds.length;
+
+  // If check pending, show loader (or just wait)
+  if (checkingAccess) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100">
+        <Navbar />
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        </div>
+      </div>
+    );
+  }
+
+  // Gate mechanism
+  if (!bracketsVisible && !isAdmin) {
+    return (
+        <div className="min-h-screen bg-slate-900 text-slate-100">
+          <Navbar />
+          <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
+              <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
+                  <Lock className="w-12 h-12 text-blue-500" />
+              </div>
+              <h1 className="text-3xl font-bold mb-3 text-white">Brackets Coming Soon</h1>
+              <p className="text-slate-400 max-w-md text-lg leading-relaxed">
+                  The tournament fixtures are currently being finalized by the organizers. 
+                  Please check back later for the official schedule.
+              </p>
+          </div>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">

@@ -49,6 +49,7 @@ export default function AdminDashboard() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [bracketsVisible, setBracketsVisible] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -63,6 +64,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
       setRegistrationOpen(data.registrationOpen !== false);
+      setBracketsVisible(data.bracketsVisible === true);
     }).catch(console.error);
   }, []);
 
@@ -83,6 +85,25 @@ export default function AdminDashboard() {
       alert('Failed to update settings');
     }
   };
+
+  const toggleBrackets = async () => {
+    const newState = !bracketsVisible;
+    if (!confirm(newState ? 'Publish brackets? All users will be able to see them.' : 'Hide brackets? They will only be visible to admins.')) return;
+    
+    setBracketsVisible(newState);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bracketsVisible: newState }),
+      });
+    } catch (err) {
+      console.error(err);
+      setBracketsVisible(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
 
   const fetchPlayers = useCallback(async () => {
     try {
@@ -383,6 +404,18 @@ export default function AdminDashboard() {
             <p className="text-slate-600 mt-2">Manage players, seeds, and fixtures.</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleBrackets}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                bracketsVisible 
+                  ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' 
+                  : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
+              }`}
+              title={bracketsVisible ? 'Hide Brackets' : 'Publish Brackets'}
+            >
+              {bracketsVisible ? <Trophy size={16} /> : <Lock size={16} />}
+              {bracketsVisible ? 'Brackets Live' : 'Brackets Hidden'}
+            </button>
             <button
               onClick={toggleRegistration}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${

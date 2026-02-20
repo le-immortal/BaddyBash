@@ -27,10 +27,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const container = getUsersContainer();
+
+    // Read existing settings
+    const { resource: existingSettings } = await container.item(CONFIG_ID, CONFIG_ID).read();
     
-    // Upsert the settings document
+    // Upsert the settings document (merge)
     const { resource } = await container.items.upsert({
       id: CONFIG_ID,
+      ...(existingSettings || {}),
       ...body,
       updatedAt: new Date().toISOString(),
     });

@@ -52,6 +52,12 @@ Focus: User Authentication, Registration logic, Partner constraints.
     - [x] Removed "pending" status — all registrations are immediately "confirmed"
     - [x] Read-only partner details shown on committed doubles cards
     - [ ] Feature: Email/Notification to partner (deferred)
+    - [x] **Registration Refinements (Week 4)**
+        - [x] Phone number optional (Dashboard & Registration)
+        - [x] Added **T-Shirt Size** field to user profile & registration flow
+        - [x] Partner flow: capture partner's T-shirt size during registration
+        - [x] Dashboard: **Edit Profile** feature (Name, Phone, T-Shirt) — Alias remains locked
+        - [x] Logic: User B login overwrites "phantom" data from User A registration, but A never overwrites B's existing data
 
 ---
 
@@ -191,10 +197,18 @@ Focus: Real-time updates, Scoring.
 
 3. **Phase C: Registration Control** ✅ COMPLETE
     - [x] Backend: Global config settings (`CONFIG_GLOBAL` in `users` container)
-    - [x] API: `GET/POST /api/settings` for toggling `registrationOpen`
+    - [x] API: `GET/POST /api/settings` - Merged updates for `registrationOpen`, `bracketsVisible`
     - [x] Admin UI: Lock/Unlock toggle button in dashboard header
     - [x] User UI: "Registrations Closed" banner on dashboard
     - [x] User UI: Disable new selections and "Save" button when closed
+    - [x] **Withdrawal Feature**
+        - [x] API: `DELETE` registration (hard delete, cleans up partner for doubles)
+        - [x] UI: Withdraw button on registration card (only when open)
+        - [x] UI: Confirmation dialogs updated (removed "cannot be undone")
+    - [x] **Bracket Visibility**
+        - [x] Admin UI: Publish/Hide Brackets toggle
+        - [x] User UI: "Brackets Coming Soon" gatekeeper page (admins bypass)
+        - [x] Logic: `bracketsVisible` flag in global config
 
 4. **Phase D: Score Update**
     - [ ] Score Input Modal (admin clicks match → enters set scores)
