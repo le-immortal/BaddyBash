@@ -221,10 +221,25 @@ Focus: Real-time updates, Winner Advancement.
         - [x] User UI: "Brackets Coming Soon" gatekeeper page (admins bypass)
         - [x] Logic: `bracketsVisible` flag in global config
 
-4. **Phase D: Score Update**
-    - [ ] Score Input Modal (admin clicks match → enters set scores)
-    - [ ] Score input form (Set 1, Set 2, Set 3) with badminton validation
-    - [ ] Real-time bracket updates (Polling / SSE)
+4. **Phase D: Scheduling & Match Management**
+    - [ ] **Sub-task 1: Match Visibility (Dashboard)**
+        - [ ] API: `GET /api/public/matches?userId=...` or filter existing endpoint to return matches for a specific user.
+        - [ ] UI: Add "Your Schedule" section to User Dashboard.
+        - [ ] UI: Display match cards with opponent, round, time, and status.
+    - [ ] **Sub-task 2: Excel Export (Bracket Data)**
+        - [ ] API: Create `GET /api/admin/export/bracket-data` endpoint.
+        - [ ] Logic: Generate Excel file with columns: `Match ID`, `Category`, `Round`, `Match #`, `Player 1`, `Player 2`, `Scheduled Time`, `Status`, `Winner`.
+        - [ ] UI: Add "Export Bracket Data" button in Admin Dashboard.
+    - [ ] **Sub-task 3: Bulk Import Logic (Excel)**
+        - [ ] API: Create `POST /api/admin/import/bracket-data` endpoint to handle file upload.
+        - [ ] Logic - **Schedule Updates**: Update `scheduledTime` for matching IDs.
+        - [ ] Logic - **Status Updates**: Transition match status (e.g., `scheduled` → `in_progress`).
+        - [ ] Logic - **Winner Selection**: If a winner is specified in the import (by ID or exact name), complete the match and advance the winner. (Note: Scores will not be imported, just the result).
+        - [ ] Logic - **Player Swapping**: Allow swapping players between matches/slots via the import file (requires careful validation of bracket integrity).
+    - [x] **Sub-task 4: Refactor - Remove Court Field**
+        - [x] Database: Remove `court` field from `MatchDocument`.
+        - [x] Backend: Update `POST/PATCH` match APIs to ignore/remove `court`.
+        - [x] Frontend: Remove `court` input from Edit Modal and display from Match Card.
 
 5. **Phase E: Entra ID Login** 🟡 IN PROGRESS
     - [x] Replace GitHub OAuth with Microsoft Entra ID (MicrosoftEntraID provider)

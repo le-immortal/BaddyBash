@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { generateSeedOrder, nextPowerOf2 } from '../lib/bracketUtils';
 import { GripVertical } from 'lucide-react';
 
@@ -13,48 +13,42 @@ interface Participant {
 interface SeedingVisualizerProps {
   participants: Participant[];
   onSeedsChange: (updatedParticipants: Participant[]) => void;
-  categoryName: string;
 }
 
-export default function SeedingVisualizer({ participants, onSeedsChange, categoryName }: SeedingVisualizerProps) {
-  // Local state to manage list
-  const [items, setItems] = useState<Participant[]>([]);
-  const [bracketSize, setBracketSize] = useState(0);
-  const [matchups, setMatchups] = useState<Array<{ p1: Participant | null, p2: Participant | null, seed1: number, seed2: number }>>([]);
+function initItems(participants: Participant[]): Participant[] {
+  const sorted = [...participants].sort((a, b) => (a.currentSeed || 0) - (b.currentSeed || 0));
+  return sorted.map((p, i) => ({ ...p, currentSeed: i + 1 }));
+}
+
+export default function SeedingVisualizer({ participants, onSeedsChange }: SeedingVisualizerProps) {
+  // Track previous participants to detect changes and reset items
+  const [prevParticipants, setPrevParticipants] = useState(participants);
+  const [items, setItems] = useState<Participant[]>(() => initItems(participants));
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
-  // Initialize
-  useEffect(() => {
-    const size = nextPowerOf2(participants.length);
-    setBracketSize(size);
-    
-    // Sort by currentSeed to keep consistent. If no seed, fallback to index
-    const sorted = [...participants].sort((a, b) => (a.currentSeed || 0) - (b.currentSeed || 0));
-    
-    // Ensure contiguous 1..N seeds
-    const normalized = sorted.map((p, i) => ({ ...p, currentSeed: i + 1 }));
-    setItems(normalized);
-  }, [participants]);
+  // Sync items when participants prop changes (during render, per React recommendation)
+  if (participants !== prevParticipants) {
+    setPrevParticipants(participants);
+    setItems(initItems(participants));
+  }
 
-  // Calculate matchups whenever items or bracketSize change
-  useEffect(() => {
-    if (bracketSize === 0) return;
+  // Derive bracketSize and matchups from items without extra state
+  const bracketSize = useMemo(() => nextPowerOf2(items.length), [items.length]);
+
+  const matchups = useMemo(() => {
+    if (bracketSize === 0) return [];
     
     const order = generateSeedOrder(bracketSize);
-    // order is like [1, 8, 4, 5, ...] 
-    
-    const newMatchups = [];
+    const result: Array<{ p1: Participant | null, p2: Participant | null, seed1: number, seed2: number }> = [];
     for (let i = 0; i < order.length; i += 2) {
       if (i + 1 >= order.length) break;
       const s1 = order[i];
-      const s2 = order[i+1];
-      
+      const s2 = order[i + 1];
       const p1 = items.find(p => p.currentSeed === s1) || null;
       const p2 = items.find(p => p.currentSeed === s2) || null;
-      
-      newMatchups.push({ p1, p2, seed1: s1, seed2: s2 });
+      result.push({ p1, p2, seed1: s1, seed2: s2 });
     }
-    setMatchups(newMatchups);
+    return result;
   }, [items, bracketSize]);
 
   const handleDragStart = (e: React.DragEvent, id: string) => {

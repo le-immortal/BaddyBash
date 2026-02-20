@@ -14,6 +14,7 @@ const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 let cachedSettings: GlobalSettings | null = null;
 let lastFetchTime = 0;
 
+
 /**
  * Fetch global settings with in-memory caching.
  * Cache invalidates every 30 seconds.

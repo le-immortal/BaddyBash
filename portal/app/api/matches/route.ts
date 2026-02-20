@@ -403,16 +403,17 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const { matchId, category, winnerId, winnerName } = (await request.json()) as {
+    const { matchId, category, winnerId, winnerName, scheduledTime } = (await request.json()) as {
       matchId: string;
       category: Category;
-      winnerId: string;
-      winnerName: string;
+      winnerId?: string;
+      winnerName?: string;
+      scheduledTime?: string;
     };
 
-    if (!matchId || !category || !winnerId || !winnerName) {
+    if (!matchId || !category) {
       return NextResponse.json(
-        { error: "matchId, category, winnerId, and winnerName are required" },
+        { error: "matchId and category are required" },
         { status: 400 }
       );
     }
@@ -428,16 +429,32 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
 
-    // 2. Update winner fields and status
-    match.winnerId = winnerId;
-    match.winnerName = winnerName;
-    match.status = "completed";
-    match.updatedAt = new Date().toISOString();
+    // 2. Update fields
+    const now = new Date().toISOString();
+    let updated = false;
 
-    await container.item(matchId, category).replace(match);
+    // Handle Schedule Updates
+    if (scheduledTime !== undefined) {
+        match.scheduledTime = scheduledTime;
+        updated = true;
+    }
+
+    // Handle Winner / Advancement
+    if (winnerId && winnerName) {
+        // Prevent re-completing unless strict override needed (but UI locks it)
+        match.winnerId = winnerId;
+        match.winnerName = winnerName;
+        match.status = "completed";
+        updated = true;
+    }
+
+    if (updated) {
+        match.updatedAt = now;
+        await container.item(matchId, category).replace(match);
+    }
 
     // 3. Advance winner to the next match (if any)
-    if (match.nextMatchId) {
+    if (winnerId && winnerName && match.nextMatchId) {
       const { resource: nextMatch } = await container
         .item(match.nextMatchId, category)
         .read<MatchDocument>();
@@ -457,7 +474,7 @@ export async function PATCH(request: NextRequest) {
           nextMatch.player2Seed = winnerSeed;
         }
 
-        nextMatch.updatedAt = new Date().toISOString();
+        nextMatch.updatedAt = now;
         await container.item(nextMatch.id, category).replace(nextMatch);
       }
     }
