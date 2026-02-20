@@ -77,11 +77,12 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] Optimized GET `/api/admin/players?category=` — single category fetch + parallel point-reads (was 13s → fast)
     - [x] Search by name (filters players/teams, matches partner names in doubles)
     - [x] Show alias instead of email for both singles and doubles
-    - [ ] **Seeding UX refinement** (needs work)
-        - [ ] Bulk seed assignment / drag-to-reorder
-        - [ ] Visual seed ranking list (sorted view with position numbers)
-        - [ ] Clear all seeds button per category
-        - [ ] Seed validation: warn if seeded player count exceeds recommended (e.g., top 8/16)
+    - [x] **Seeding UX refinement** (Completed)
+        - [x] Bulk seed assignment direct in table 
+        - [x] Fixed "Optimistic UI" bug where seeds wouldn't save
+        - [ ] Visual seed ranking list (Deferred - Table sort sufficient)
+        - [x] Randomize Algorithm: Shuffles unseeded players to prevent alphabetical bias
+        - [ ] Seed validation: warn if seeded player count exceeds recommended (Deferred)
 
 - [x] **Bracket Redesign (FR-07) — v2** ✅ COMPLETE
     - [x] **Data model cleanup**
@@ -97,6 +98,7 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] **Proper seeding algorithm**
         - [x] Standard bracket placement: seed 1 vs N, 2 vs N-1 (recursive `generateSeedOrder()`)
         - [x] Top seeds placed at opposite poles of the draw
+        - [x] Unseeded players are randomized before placement
     - [x] **Bye cascading — fixed**
         - [x] Round-by-round cascade via `fillNextMatchSlot()` 
         - [x] R1: straightforward byes (one player, one empty)
@@ -118,6 +120,7 @@ Focus: Admin capabilities, Seeding, Brackets.
         - [x] Auto-transitions status: scheduled → in_progress → completed
         - [x] Rejects updates to bye matches
     - [x] **Bracket Tree Visualization** ✅ NEW
+        - [x] UI: Interactive tree view (rounds as columns)
         - [x] SVG connector lines between round columns (proper bracket tree shape)
         - [x] Exponential slot spacing: match blocks double in height per round
         - [x] All matches shown including byes (needed for tree alignment)
@@ -125,6 +128,11 @@ Focus: Admin capabilities, Seeding, Brackets.
         - [x] Sticky round headers above scrollable bracket body
         - [x] Round navigation (4 visible at a time, prev/next, "Final →")
         - [x] Stats bar: match count, bye count, round count
+    - [x] **Security & Caching**
+        - [x] `settings.ts`: In-memory cache for Global Config
+        - [x] Secure Registration Gate (`POST /api/registrations`)
+        - [x] Secure Delete Gate (`DELETE /api/registrations`)
+        - [x] Secure Bracket View (`GET /api/matches`)
 
 - [x] **Seed Data** ✅ COMPLETE
     - [x] Small seed: 9 users, 18 registrations (`seed.ts`)
