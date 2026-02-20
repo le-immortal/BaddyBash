@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Settings, Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight } from 'lucide-react';
+import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight } from 'lucide-react';
 import { Category, MatchDocument } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
@@ -52,6 +52,7 @@ export default function AdminDashboard() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [bracketsVisible, setBracketsVisible] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -66,6 +67,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
       setRegistrationOpen(data.registrationOpen !== false);
+      setBracketsVisible(data.bracketsVisible === true);
     }).catch(console.error);
   }, []);
 
@@ -86,6 +88,25 @@ export default function AdminDashboard() {
       alert('Failed to update settings');
     }
   };
+
+  const toggleBrackets = async () => {
+    const newState = !bracketsVisible;
+    if (!confirm(newState ? 'Publish brackets? All users will be able to see them.' : 'Hide brackets? They will only be visible to admins.')) return;
+    
+    setBracketsVisible(newState);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bracketsVisible: newState }),
+      });
+    } catch (err) {
+      console.error(err);
+      setBracketsVisible(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
 
   const fetchPlayers = useCallback(async () => {
     try {
@@ -146,10 +167,16 @@ export default function AdminDashboard() {
   }, [selectedCategory, activeTab, fetchPlayers, fetchMatches]);
 
   const handleSeedChange = async (registrationId: string, userId: string, value: string) => {
-    const prev = seedValues[registrationId] || '';
-    if (value === prev) return; // no change — skip API call
+    // Find the original seed from the players data (server state)
+    const player = players.find(p => p.registrations.some(r => r.id === registrationId));
+    const reg = player?.registrations.find(r => r.id === registrationId);
+    const serverSeed = reg?.seed ? String(reg.seed) : '';
 
-    setSeedValues(p => ({ ...p, [registrationId]: value }));
+    // Only update if the value has actually changed from what's on the server
+    if (value === serverSeed) return; 
+
+    // Optimistic update: the UI state (seedValues) is already updated by onChange.
+    // We just need to persist it.
 
     try {
       const res = await fetch('/api/admin/players', {
@@ -161,15 +188,28 @@ export default function AdminDashboard() {
           seed: value ? Number(value) : null,
         }),
       });
+      
       if (!res.ok) {
         const err = await res.json();
         alert(err.error || 'Failed to update seed');
-        // Revert to previous value
-        setSeedValues(p => ({ ...p, [registrationId]: prev }));
+        // Revert to server value on error
+        setSeedValues(p => ({ ...p, [registrationId]: serverSeed }));
+      } else {
+        // Update the local players state to reflect the new saved seed
+        // This ensures the next comparison is correct without requiring a refetch
+        setPlayers(prevPlayers => prevPlayers.map(p => ({
+            ...p,
+            registrations: p.registrations.map(r => 
+                r.id === registrationId 
+                ? { ...r, seed: value ? Number(value) : undefined }
+                : r
+            )
+        })));
       }
     } catch (err) {
       console.error('Failed to update seed:', err);
-      setSeedValues(p => ({ ...p, [registrationId]: prev }));
+      // Revert to server value on error
+      setSeedValues(p => ({ ...p, [registrationId]: serverSeed }));
     }
   };
 
@@ -428,6 +468,18 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={toggleBrackets}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                bracketsVisible 
+                  ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' 
+                  : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
+              }`}
+              title={bracketsVisible ? 'Hide Brackets' : 'Publish Brackets'}
+            >
+              {bracketsVisible ? <Trophy size={16} /> : <Lock size={16} />}
+              {bracketsVisible ? 'Brackets Live' : 'Brackets Hidden'}
+            </button>
+            <button
               onClick={toggleRegistration}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
                 registrationOpen 
@@ -465,11 +517,17 @@ export default function AdminDashboard() {
                     disabled={loading || players.length === 0}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                   >
-                    📋 Players List
+                    📋 Players (Category)
+                  </button>
+                  <button
+                    onClick={() => { setShowExportMenu(false); window.location.href = '/api/admin/export'; }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
+                  >
+                    🌍 All Players (CSV)
                   </button>
                   <button
                     onClick={handleExportBracket}
-                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🏆 Bracket / Draw
                   </button>
@@ -656,7 +714,6 @@ export default function AdminDashboard() {
                         <tr>
                           <th className="p-4">{isDoubles ? 'Team' : 'Name / ID'}</th>
                           <th className="p-4">Seed Rank</th>
-                          <th className="p-4 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -719,11 +776,6 @@ export default function AdminDashboard() {
                                   </div>
                                 );
                               })()}
-                            </td>
-                            <td className="p-4 text-right">
-                              <button className="text-slate-400 hover:text-blue-600">
-                                <Settings className="w-4 h-4" />
-                              </button>
                             </td>
                           </tr>
                           );
