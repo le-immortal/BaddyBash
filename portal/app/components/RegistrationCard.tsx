@@ -1,6 +1,6 @@
 'use client';
 import { Category } from '../lib/models';
-import { CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle, Plus } from 'lucide-react';
 import clsx from 'clsx';
 
 interface RegistrationCardProps {
