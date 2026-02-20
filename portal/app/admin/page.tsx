@@ -8,7 +8,8 @@ import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert,
 import { Category, MatchDocument } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 interface AdminRegistration {
   id: string;
@@ -278,10 +279,13 @@ export default function AdminDashboard() {
     { id: 'XD', name: "Mixed Doubles" },
   ];
 
-  const handleExport = () => {
-    const wb = XLSX.utils.book_new();
-
+  const handleExport = async () => {
+    setShowExportMenu(false);
+    
+    // Determine rows
     const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
+    const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
+
     const filtered = players
       .map(p => ({
         ...p,
@@ -289,25 +293,33 @@ export default function AdminDashboard() {
       }))
       .filter(p => p.registrations.length > 0);
 
-    let rows = filtered;
+    let rows: AdminPlayer[] = [];
     if (isDoubles) {
-      const pairMap = new Map<string, typeof filtered[number]>();
+      const pairMap = new Map<string, AdminPlayer>();
       for (const player of filtered) {
         const reg = player.registrations[0];
         const partnerId = reg.partnerId || '';
+        if (!partnerId) continue; // Skip if no partner yet? Or export as impartial
+        
+        // Key logic: sort IDs to dedup pair
         const pairKey = [player.id, partnerId].sort().join('|||');
-        const existing = pairMap.get(pairKey);
-        if (!existing) {
-          pairMap.set(pairKey, player);
+        
+        if (!pairMap.has(pairKey)) {
+             pairMap.set(pairKey, player);
         } else {
-          const existingSeed = existing.registrations[0]?.seed;
-          const thisSeed = reg.seed;
-          if (!existingSeed && thisSeed) pairMap.set(pairKey, player);
+             // Prefer the one with seed info if available (though they should be synced)
+             const existing = pairMap.get(pairKey)!;
+             if (!existing.registrations[0]?.seed && reg.seed) {
+                 pairMap.set(pairKey, player);
+             }
         }
       }
       rows = Array.from(pairMap.values());
+    } else {
+      rows = filtered;
     }
 
+    // Sort
     rows.sort((a, b) => {
       const sA = a.registrations[0]?.seed;
       const sB = b.registrations[0]?.seed;
@@ -317,53 +329,70 @@ export default function AdminDashboard() {
       return a.name.localeCompare(b.name);
     });
 
-    const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
+    // Lookup
+    const playerMap = new Map(players.map(p => [p.id, p]));
 
-    // Build a lookup map for partner alias by userId
-    const playerMap = new Map(filtered.map(p => [p.id, p]));
+    // ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(catName);
 
-    const sheetData = isDoubles
-      ? rows.map((p, i) => {
-          const reg = p.registrations[0];
-          const partner = reg.partnerId ? playerMap.get(reg.partnerId) : undefined;
-          return {
-            '#': i + 1,
-            'Seed': reg.seed || '',
-            'Player 1': p.name,
-            'Alias 1': p.alias || '',
-            'Phone 1': p.phoneNumber || '',
-            'Player 2': reg.partnerName || 'TBD',
-            'Alias 2': partner?.alias || '',
-            'Phone 2': reg.partnerPhone || partner?.phoneNumber || '',
-            'Category': selectedCategory,
-          };
-        })
-      : rows.map((p, i) => {
-          const reg = p.registrations[0];
-          return {
-            '#': i + 1,
-            'Seed': reg.seed || '',
-            'Name': p.name,
-            'Alias': p.alias || '',
-            'Phone': p.phoneNumber || '',
-            'Category': selectedCategory,
-          };
+    if (isDoubles) {
+        worksheet.columns = [
+            { header: '#', key: 'pos', width: 5 },
+            { header: 'Seed', key: 'seed', width: 8 },
+            { header: 'Team / Player 1', key: 'p1', width: 25 },
+            { header: 'Alias 1', key: 'a1', width: 15 },
+            { header: 'Phone 1', key: 'ph1', width: 15 },
+            { header: 'Player 2', key: 'p2', width: 25 },
+            { header: 'Alias 2', key: 'a2', width: 15 },
+            { header: 'Phone 2', key: 'ph2', width: 15 },
+            { header: 'Category', key: 'cat', width: 10 },
+        ];
+        
+        rows.forEach((p, i) => {
+            const reg = p.registrations[0];
+            const partner = reg.partnerId ? (playerMap.get(reg.partnerId) || null) : null;
+            worksheet.addRow({
+                pos: i + 1,
+                seed: reg.seed || '',
+                p1: p.name,
+                a1: p.alias || '',
+                ph1: p.phoneNumber || '',
+                p2: reg.partnerName || 'TBD',
+                a2: partner?.alias || '',
+                ph2: partner?.phoneNumber || '', // If user not found, fallback to reg data? user doc is better
+                cat: selectedCategory
+            });
         });
 
-    const ws = XLSX.utils.json_to_sheet(sheetData);
+    } else {
+        worksheet.columns = [
+            { header: '#', key: 'pos', width: 5 },
+            { header: 'Seed', key: 'seed', width: 8 },
+            { header: 'Name', key: 'name', width: 25 },
+            { header: 'Alias', key: 'alias', width: 15 },
+            { header: 'Phone', key: 'phone', width: 15 },
+            { header: 'Category', key: 'cat', width: 10 },
+        ];
 
-    // Auto-size columns
-    const colWidths = Object.keys(sheetData[0] || {}).map(key => {
-      const maxLen = Math.max(
-        key.length,
-        ...sheetData.map(row => String((row as Record<string, unknown>)[key] || '').length)
-      );
-      return { wch: Math.min(maxLen + 2, 40) };
-    });
-    ws['!cols'] = colWidths;
-
-    XLSX.utils.book_append_sheet(wb, ws, catName);
-    XLSX.writeFile(wb, `BaddyBash_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        rows.forEach((p, i) => {
+            const reg = p.registrations[0];
+            worksheet.addRow({
+                pos: i + 1,
+                seed: reg.seed || '',
+                name: p.name,
+                alias: p.alias || '',
+                phone: p.phoneNumber || '',
+                cat: selectedCategory
+            });
+        });
+    }
+    
+    // Style header
+    worksheet.getRow(1).font = { bold: true };
+    
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `BaddyBash_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleExportBracket = async () => {
@@ -389,33 +418,44 @@ export default function AdminDashboard() {
       // Sort by round, then position
       matches.sort((a, b) => a.round - b.round || a.position - b.position);
 
-      const wb = XLSX.utils.book_new();
       const catName = CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory;
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet(catName);
 
-      const sheetData = matches.map(m => ({
-        'Match #': m.matchNumber ? `M${m.matchNumber}` : '',
-        'Round': getRoundName(m.round),
-        'Position': m.position + 1,
-        [isDoubles ? 'Team 1' : 'Player 1']: m.player1Name || '',
-        'Seed 1': m.player1Seed || '',
-        [isDoubles ? 'Team 2' : 'Player 2']: m.player2Name || '',
-        'Seed 2': m.player2Seed || '',
-        'Status': m.status.charAt(0).toUpperCase() + m.status.slice(1).replace('_', ' '),
-        'Winner': m.winnerName || '',
-      }));
+      worksheet.columns = [
+          { header: 'Match #', key: 'matchNum', width: 10 },
+          { header: 'Round', key: 'round', width: 15 },
+          { header: 'Position', key: 'pos', width: 10 },
+          { header: isDoubles ? 'Team 1' : 'Player 1', key: 'p1', width: 25 },
+          { header: 'Seed 1', key: 's1', width: 8 },
+          { header: isDoubles ? 'Team 2' : 'Player 2', key: 'p2', width: 25 },
+          { header: 'Seed 2', key: 's2', width: 8 },
+          { header: 'Status', key: 'status', width: 15 },
+          { header: 'Winner', key: 'winner', width: 25 },
+          { header: 'Scheduled Time', key: 'time', width: 20 },
+      ];
 
-      const ws = XLSX.utils.json_to_sheet(sheetData);
-      const colWidths = Object.keys(sheetData[0] || {}).map(key => {
-        const maxLen = Math.max(
-          key.length,
-          ...sheetData.map(row => String((row as Record<string, unknown>)[key] || '').length)
-        );
-        return { wch: Math.min(maxLen + 2, 40) };
+      matches.forEach(m => {
+          worksheet.addRow({
+              matchNum: m.matchNumber ? `M${m.matchNumber}` : '',
+              round: getRoundName(m.round),
+              pos: m.position + 1,
+              p1: m.player1Name || '',
+              s1: m.player1Seed || '',
+              p2: m.player2Name || '',
+              s2: m.player2Seed || '',
+              status: m.status.charAt(0).toUpperCase() + m.status.slice(1).replace('_', ' '),
+              winner: m.winnerName || '',
+              time: m.scheduledTime || '',
+          });
       });
-      ws['!cols'] = colWidths;
 
-      XLSX.utils.book_append_sheet(wb, ws, catName);
-      XLSX.writeFile(wb, `BaddyBash_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      // Style header
+      worksheet.getRow(1).font = { bold: true };
+      
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `BaddyBash_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
     } catch (err) {
       console.error('Failed to export bracket:', err);
       alert('Failed to export bracket.');
@@ -597,7 +637,6 @@ export default function AdminDashboard() {
                        
                        <SeedingVisualizer 
                          participants={currentSeeds} 
-                         categoryName={CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory}
                          onSeedsChange={setCurrentSeeds}
                        />
                     </div>
