@@ -145,22 +145,23 @@ Focus: Admin capabilities, Seeding, Brackets.
 
 ---
 
-## 🎮 Phase 3: Game Day Live (Week 6)
+## 🎮 Phase 3: Game Day Live (Week 6) ✅ COMPLETE
+
 Focus: Real-time updates, Winner Advancement.
 
-- [ ] **Match Management (FR-09)** ⬅️ NEXT
+- [x] **Match Management (FR-09)**
     - [x] Backend: `PATCH /api/matches` — updates winner, auto-advances to next round
     - [x] Backend: Status transitions (scheduled → in_progress → completed)
-    - [ ] **UI: Winner Selection Modal** 
-        - [ ] Admin clicks match → Selects Winner (Player A / Player B)
-        - [ ] Confirmation dialog to prevent accidental clicks
-        - [ ] Auto-refresh bracket to show advancement
+    - [x] **UI: Winner Selection Modal** 
+        - [x] Admin clicks match → Selects Winner (Player A / Player B)
+        - [x] Confirmation dialog to prevent accidental clicks
+        - [x] Auto-refresh bracket to show advancement
+        - [x] NOTE: Implemented in Admin Dashboard (List View), not Bracket Visualization
 
-- [ ] **Public Views**
+- [x] **Public Views**
     - [x] Landing Page with Event Info
     - [x] Bracket View (pulls live data from API)
     - [x] Player search in bracket (search by name, highlights matches, auto-navigates to round)
-    - [ ] **Leaderboard / Results page** (Optional)
 
 ---
 
