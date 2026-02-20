@@ -306,25 +306,60 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "userId and category are required" }, { status: 400 });
   }
 
+  const cleanUserId = String(userId).trim().toLowerCase();
+
   try {
-    const usersContainer = getUsersContainer();
-    let settings;
+     // 0.5. Verify User Identity (Anti-Spoofing)
+    const session = await auth();
+    if (!session || !session.user || !session.user.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { email } = session.user;
+    
+    // Admins can delete on behalf of anyone
+    if (!session.user.isAdmin) {
+      const usersContainer = getUsersContainer();
+      try {
+        const { resources: [userDoc] } = await usersContainer.items
+          .query<UserDocument>({
+            query: "SELECT * FROM c WHERE c.email = @email",
+            parameters: [{ name: "@email", value: email }]
+          })
+          .fetchAll();
+
+        // If the logged-in user's ID (alias) doesn't match the target userId, block it.
+        if (!userDoc || userDoc.id !== cleanUserId) {
+            return NextResponse.json(
+              { error: "Unauthorized: You can only cancel your own registrations." },
+              { status: 403 }
+            );
+        }
+      } catch (e) {
+         console.error("Auth check failed", e);
+         return NextResponse.json({ error: "Authorization failed" }, { status: 403 });
+      }
+    }
+
+    // 1. Check Global Settings
     try {
-      const { resource } = await usersContainer.item("CONFIG_GLOBAL", "CONFIG_GLOBAL").read();
-      settings = resource;
+      const settings = await getGlobalSettings();
+      if (settings.registrationOpen === false) {
+          // Allow admins to delete even if closed? Maybe. But for now consistency.
+          // Actually, withdrawal after close might be allowed or disallowed policy wise.
+          // Usually strict: no changes after lock.
+          if (!session.user.isAdmin) {
+            return NextResponse.json(
+              { error: "Registrations are closed. You cannot withdraw at this time." },
+              { status: 403 }
+            );
+          }
+      }
     } catch {
        // Ignore
     }
 
-    if (settings && settings.registrationOpen === false) {
-      return NextResponse.json(
-        { error: "Registrations are closed. You cannot withdraw at this time." },
-        { status: 403 }
-      );
-    }
-
     const container = getRegistrationsContainer();
-    const cleanUserId = String(userId).trim().toLowerCase();
     const regId = `${cleanUserId}_${category}`;
 
     // 2. Fetch the registration to check for partner
