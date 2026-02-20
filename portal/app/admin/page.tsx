@@ -597,7 +597,6 @@ export default function AdminDashboard() {
                        
                        <SeedingVisualizer 
                          participants={currentSeeds} 
-                         categoryName={CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory}
                          onSeedsChange={setCurrentSeeds}
                        />
                     </div>
