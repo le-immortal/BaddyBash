@@ -1,6 +1,6 @@
 'use client';
 import { Category } from '../lib/models';
-import { CheckCircle, Plus } from 'lucide-react';
+import { CheckCircle, Plus, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface RegistrationCardProps {
@@ -9,12 +9,16 @@ interface RegistrationCardProps {
   partnerName?: string;
   partnerAlias?: string;
   partnerPhone?: string;
+  partnerTShirtSize?: string;
   onNameChange?: (val: string) => void;
   onAliasChange?: (val: string) => void;
   onPhoneChange?: (val: string) => void;
+  onTShirtSizeChange?: (val: string) => void;
   disabled: boolean;
   onSelect: (catId: Category) => void;
   onDeselect: (catId: Category) => void;
+  canWithdraw?: boolean;
+  onWithdraw?: (catId: Category) => void;
 }
 
 export default function RegistrationCard({ 
@@ -23,12 +27,16 @@ export default function RegistrationCard({
   partnerName,
   partnerAlias, 
   partnerPhone,
+  partnerTShirtSize,
   onNameChange,
   onAliasChange, 
   onPhoneChange,
+  onTShirtSizeChange,
   disabled, 
   onSelect, 
-  onDeselect 
+  onDeselect,
+  canWithdraw = false,
+  onWithdraw
 }: RegistrationCardProps) {
   const isDoubles = category.id !== 'MS' && category.id !== 'WS';
 
@@ -46,7 +54,9 @@ export default function RegistrationCard({
       <div className="flex justify-between items-start mb-3">
         <h3 className="font-semibold text-lg text-slate-800">{category.name}</h3>
         {status === 'committed' ? (
-          <CheckCircle className="w-6 h-6 text-green-600" />
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+          </div>
         ) : status === 'selected' ? (
            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">✓</div>
         ) : (
@@ -61,6 +71,7 @@ export default function RegistrationCard({
             {partnerName && <p><span className="font-medium text-slate-700">Name:</span> {partnerName}</p>}
             {partnerAlias && <p><span className="font-medium text-slate-700">Alias:</span> {partnerAlias}</p>}
             {partnerPhone && <p><span className="font-medium text-slate-700">Phone:</span> {partnerPhone}</p>}
+            {partnerTShirtSize && <p><span className="font-medium text-slate-700">Size:</span> {partnerTShirtSize}</p>}
           </div>
         )}
 
@@ -89,7 +100,7 @@ export default function RegistrationCard({
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 uppercase">Partner Phone</label>
+              <label className="text-xs font-medium text-slate-500 uppercase">Partner Phone (Optional)</label>
               <input 
                 type="tel" 
                 placeholder="e.g., 9876543210"
@@ -100,12 +111,37 @@ export default function RegistrationCard({
                 disabled={status !== 'selected'} 
               />
             </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 uppercase">Partner T-Shirt Size (Optional)</label>
+              <select
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white"
+                value={partnerTShirtSize || ''}
+                onChange={(e) => onTShirtSizeChange?.(e.target.value)}
+                disabled={status !== 'selected'} 
+              >
+                  <option value="">Select Size</option>
+                  <option value="XS">XS</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                  <option value="XXL">XXL</option>
+              </select>
+            </div>
           </div>
         )}
 
         {status === 'committed' ? (
-          <div className="text-sm text-green-700 font-medium flex items-center">
-            <CheckCircle className="w-3 h-3 mr-1" /> Confirmed
+          <div className="text-sm text-green-700 font-medium flex items-center justify-between">
+            <span className="flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Confirmed</span>
+            {canWithdraw && onWithdraw && (
+              <button
+                onClick={() => onWithdraw(category.id)}
+                className="text-xs text-red-500 hover:text-red-700 hover:underline flex items-center"
+              >
+                Withdraw
+              </button>
+            )}
           </div>
         ) : status === 'selected' ? (
            <button

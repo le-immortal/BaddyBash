@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import { Category } from '../lib/models';
-import { AlertCircle, Loader2, Lock } from 'lucide-react';
+import { AlertCircle, Loader2, Lock, Edit2 } from 'lucide-react';
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -31,10 +31,12 @@ export default function Dashboard() {
   const [playerName, setPlayerName] = useState('');
   const [alias, setAlias] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [tShirtSize, setTShirtSize] = useState('');
   const [savedName, setSavedName] = useState<string | null>(null);
   const [savedAlias, setSavedAlias] = useState<string | null>(null);
   const [savedPhone, setSavedPhone] = useState<string | null>(null);
-  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string }>>({}); 
+  const [savedTShirtSize, setSavedTShirtSize] = useState<string | null>(null);
+  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string }>>({}); 
   const [committedCategories, setCommittedCategories] = useState<Category[]>([]);
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
   const [selection, setSelection] = useState<Category[]>([]);
@@ -43,6 +45,7 @@ export default function Dashboard() {
   const [linkingAlias, setLinkingAlias] = useState(false);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Check global registration setting
   useEffect(() => {
@@ -95,9 +98,11 @@ export default function Dashboard() {
             setSavedName(user.name);
             setSavedAlias(user.alias);
             setSavedPhone(user.phoneNumber);
+            setSavedTShirtSize(user.tShirtSize || null);
             setPlayerName(user.name);
             setAlias(user.alias);
             setPhoneNumber(user.phoneNumber || '');
+            setTShirtSize(user.tShirtSize || '');
             setResolvedUserId(user.id); // id = alias
           }
         }
@@ -141,11 +146,36 @@ export default function Dashboard() {
     setSelection(selection.filter(id => id !== catId));
   };
 
-  const handlePartnerChange = (catId: string, field: 'name' | 'alias' | 'phone', value: string) => {
+  const handlePartnerChange = (catId: string, field: 'name' | 'alias' | 'phone' | 'tShirtSize', value: string) => {
     setPartners(prev => ({
       ...prev,
       [catId]: { ...prev[catId], [field]: value },
     }));
+  };
+  
+  const handleWithdraw = async (catId: Category) => {
+    if (!registrationOpen) return;
+    if (!confirm(`Are you sure you want to withdraw from ${CATEGORIES.find(c => c.id === catId)?.name}?`)) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/registrations?userId=${encodeURIComponent(userId)}&category=${catId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to withdraw');
+      }
+
+      // Success
+      await fetchRegistrations();
+    } catch (err: unknown) {
+      console.error('Withdraw failed:', err);
+      alert(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isDoubles = (c: Category) => c === 'MD' || c === 'WD' || c === 'XD';
@@ -153,7 +183,7 @@ export default function Dashboard() {
   const isSelectionValid = selection.every(catId => {
     if (!isDoubles(catId)) return true;
     const p = partners[catId];
-    return p && p.name?.trim().length > 0 && p.alias?.trim().length > 0 && p.phone?.trim().length > 0;
+    return p && p.name?.trim().length > 0 && p.alias?.trim().length > 0;
   });
 
   const handleSaveProfile = async () => {
@@ -165,10 +195,12 @@ export default function Dashboard() {
       alert('Please enter your Microsoft alias.');
       return;
     }
+    /* Phone number is optional
     if (!phoneNumber.trim()) {
       alert('Please enter your phone number.');
       return;
     }
+    */
 
     setLinkingAlias(true);
     try {
@@ -190,6 +222,7 @@ export default function Dashboard() {
             email: session?.user?.email || '',
             avatar: session?.user?.image || undefined,
             phoneNumber: phoneNumber.trim(),
+            tShirtSize: tShirtSize.trim(),
           }),
         });
         
@@ -202,6 +235,8 @@ export default function Dashboard() {
         setSavedName(playerName.trim());
         setSavedAlias(cleanAlias);
         setSavedPhone(phoneNumber.trim());
+        setSavedTShirtSize(tShirtSize.trim());
+        setIsEditingProfile(false);
         await fetchRegistrations(existingUser.id);
       } else {
         // No pre-existing user — create a new user with id = alias (lowercase)
@@ -214,6 +249,7 @@ export default function Dashboard() {
             email: session?.user?.email || '',
             alias: cleanAlias,
             phoneNumber: phoneNumber.trim(),
+            tShirtSize: tShirtSize.trim(),
             avatar: session?.user?.image || undefined,
           }),
         });
@@ -227,6 +263,8 @@ export default function Dashboard() {
         setSavedName(playerName.trim());
         setSavedAlias(cleanAlias);
         setSavedPhone(phoneNumber.trim());
+        setSavedTShirtSize(tShirtSize.trim());
+        setIsEditingProfile(false);
         await fetchRegistrations(cleanAlias);
       }
     } catch (err: unknown) {
@@ -242,7 +280,7 @@ export default function Dashboard() {
   const handleSave = async () => {
     if (!isSelectionValid) return;
 
-    if (!confirm('Are you sure you want to confirm these registrations? This action CANNOT be undone.')) return;
+    if (!confirm('Are you sure you want to confirm these registrations?')) return;
 
     setSaving(true);
     try {
@@ -258,6 +296,7 @@ export default function Dashboard() {
           body.partnerId = partners[catId]?.alias?.trim().toLowerCase() || '';
           body.partnerName = partners[catId]?.name?.trim() || '';
           body.partnerPhone = partners[catId]?.phone?.trim() || '';
+          body.partnerTShirtSize = partners[catId]?.tShirtSize?.trim() || '';
           body.userPhone = savedPhone || phoneNumber || '';
         }
         const res = await fetch('/api/registrations', {
@@ -308,15 +347,17 @@ export default function Dashboard() {
   }
 
   // Profile-first gate: if alias/name/phone not saved, show setup form
-  if (!profileSaved) {
+  if (!profileSaved || isEditingProfile) {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navbar />
         <main className="container mx-auto py-16 px-4 max-w-md">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Baddy Bash!</h1>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Welcome to Baddy Bash!'}</h1>
             <p className="text-slate-600 text-sm mb-6">
-              Please fill in your details to get started. If your partner has already registered you, enter the <strong>same alias</strong> they used and we&apos;ll link your account.
+              {isEditingProfile 
+                ? 'Update your details below. Note that your Microsoft Alias cannot be changed.' 
+                : 'Please fill in your details to get started. If your partner has already registered you, enter the same alias they used and we\'ll link your account.'}
             </p>
 
             <div className="space-y-4">
@@ -337,12 +378,17 @@ export default function Dashboard() {
                   placeholder="e.g., v-john"
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
+                  disabled={isEditingProfile} 
+                  className={`mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 placeholder-slate-400 ${
+                    isEditingProfile ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                  }`}
                 />
-                <p className="mt-1 text-xs text-slate-400">This is your unique identifier. If a partner registered you, use the alias they provided.</p>
+                {!isEditingProfile && (
+                  <p className="mt-1 text-xs text-slate-400">This is your unique identifier. If a partner registered you, use the alias they provided.</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Phone Number <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700">Phone Number <span className="text-gray-400 font-normal pl-1">(Optional)</span></label>
                 <input
                   type="tel"
                   placeholder="e.g., 9876543210"
@@ -352,17 +398,51 @@ export default function Dashboard() {
                   className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
                 />
               </div>
-              <button
-                onClick={handleSaveProfile}
-                disabled={linkingAlias || !playerName.trim() || !alias.trim() || !phoneNumber.trim()}
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {linkingAlias ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Setting up...</>
-                ) : (
-                  'Continue to Dashboard'
+              <div>
+                <label className="block text-sm font-medium text-slate-700">T-Shirt Size <span className="text-gray-400 font-normal pl-1">(Optional)</span></label>
+                <select
+                  value={tShirtSize}
+                  onChange={(e) => setTShirtSize(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white"
+                >
+                  <option value="">Select Size</option>
+                  <option value="XS">XS</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                  <option value="XXL">XXL</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={linkingAlias || !playerName.trim() || !alias.trim()}
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {linkingAlias ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                  ) : (
+                    isEditingProfile ? 'Update Profile' : 'Continue to Dashboard'
+                  )}
+                </button>
+                
+                {isEditingProfile && (
+                  <button
+                    onClick={() => {
+                       // Reset form to saved values and exit edit mode
+                       setPlayerName(savedName || '');
+                       setAlias(savedAlias || '');
+                       setPhoneNumber(savedPhone || '');
+                       setTShirtSize(savedTShirtSize || '');
+                       setIsEditingProfile(false);
+                    }}
+                    className="w-full bg-white text-slate-600 border border-slate-300 py-2.5 rounded-lg font-semibold hover:bg-slate-50 flex items-center justify-center"
+                  >
+                    Cancel
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
           </div>
         </main>
@@ -387,6 +467,21 @@ export default function Dashboard() {
               </span>
               <span className="hidden md:inline text-slate-300">·</span>
               <span className="text-slate-600">{savedPhone}</span>
+              <span className="hidden md:inline text-slate-300">·</span>
+              <span className="text-slate-600">Size: {savedTShirtSize || '-'}</span>
+              <button
+                onClick={() => {
+                  setPlayerName(savedName || '');
+                  setAlias(savedAlias || '');
+                  setPhoneNumber(savedPhone || '');
+                  setTShirtSize(savedTShirtSize || '');
+                  setIsEditingProfile(true);
+                }}
+                className="ml-2 text-slate-400 hover:text-blue-600 transition-colors"
+                title="Edit Profile"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
           {selection.length > 0 && (
@@ -457,12 +552,16 @@ export default function Dashboard() {
                     partnerName={isCommitted ? committedReg?.partnerName || '' : partners[category.id]?.name || ''}
                     partnerAlias={isCommitted ? committedReg?.partnerId || '' : partners[category.id]?.alias || ''}
                     partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
+                    partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
                     onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
                     onAliasChange={(val) => handlePartnerChange(category.id, 'alias', val)}
                     onPhoneChange={(val) => handlePartnerChange(category.id, 'phone', val)}
+                    onTShirtSizeChange={(val) => handlePartnerChange(category.id, 'tShirtSize', val)}
                     disabled={isDisabled}
                     onSelect={handleSelect}
                     onDeselect={handleDeselect}
+                    canWithdraw={registrationOpen}
+                    onWithdraw={handleWithdraw}
                   />
                 );
               })}

@@ -39,6 +39,7 @@ export interface UserDocument {
   alias: string;          // Microsoft alias (e.g., v-john)
   avatar?: string;
   phoneNumber: string;
+  tShirtSize?: string;    // S, M, L, XL, XXL
   isAdmin?: boolean;
   createdAt: string;      // ISO date
   updatedAt: string;
