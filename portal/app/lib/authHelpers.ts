@@ -9,3 +9,12 @@ export async function requireAdmin() {
   if (!session?.user?.isAdmin) return null;
   return session;
 }
+
+/**
+ * Returns true if the current user is an admin, false otherwise.
+ * Unlike requireAdmin(), this never throws and always returns a boolean.
+ */
+export async function isAdmin(): Promise<boolean> {
+  const session = await auth();
+  return !!session?.user?.isAdmin;
+}
