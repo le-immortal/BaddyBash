@@ -3,6 +3,10 @@ import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
+import { cacheGet, cacheSet, cacheDeleteByPrefix } from "@/app/lib/cache";
+
+const PLAYERS_CACHE_PREFIX = "admin-players:";
+const PLAYERS_CACHE_TTL = 30_000; // 30 seconds
 
 /**
  * GET /api/admin/players?category=MS
@@ -24,15 +28,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check cache first
+    const cacheKey = `${PLAYERS_CACHE_PREFIX}${category}`;
+    const cached = cacheGet<unknown>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const usersContainer = getUsersContainer();
     const registrationsContainer = getRegistrationsContainer();
 
-    // Single-partition query — category IS the partition key for registrations? No, userId is.
-    // But this still only scans rows matching the category, much smaller result set.
+    // Cross-partition query (registrations partitioned by userId, not category).
+    // Select only the fields we need to reduce RU cost and transfer size.
     const { resources: registrations } = await registrationsContainer.items
       .query<RegistrationDocument>({
         query:
-          "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
+          "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
         parameters: [{ name: "@cat", value: category }],
       })
       .fetchAll();
@@ -81,6 +92,9 @@ export async function GET(request: NextRequest) {
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Store in cache
+    cacheSet(cacheKey, players, PLAYERS_CACHE_TTL);
 
     return NextResponse.json(players);
   } catch (error) {
@@ -165,6 +179,9 @@ export async function PATCH(request: NextRequest) {
     const { resource } = await container
       .item(registrationId, userId)
       .replace(updated);
+
+    // Bust players cache for this category
+    cacheDeleteByPrefix(PLAYERS_CACHE_PREFIX);
 
     return NextResponse.json(resource);
   } catch (error) {

@@ -3,6 +3,7 @@ import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosCl
 import { RegistrationDocument, UserDocument, isDoubles, Category } from "@/app/lib/models";
 import { getGlobalSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
+import { cacheDeleteByPrefix } from "@/app/lib/cache";
 
 const MAX_CATEGORIES = 2;
 
@@ -279,6 +280,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Bust admin players cache (registrations changed)
+    cacheDeleteByPrefix("admin-players:");
+
     return NextResponse.json(resource, { status: 201 });
   } catch (error: unknown) {
     const cosmosError = error as { code?: number };
@@ -390,6 +394,9 @@ export async function DELETE(request: NextRequest) {
 
       // 4. Delete user's registration
       await container.item(regId, cleanUserId).delete();
+
+      // Bust admin players cache (registrations changed)
+      cacheDeleteByPrefix("admin-players:");
 
       return NextResponse.json({ message: "Registration cancelled" }, { status: 200 });
 

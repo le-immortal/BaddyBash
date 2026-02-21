@@ -7,7 +7,7 @@ import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
-const SLOT_H = 64;         // Every match slot is this tall (uniform for tree alignment)
+const SLOT_H = 90;          // Every match slot is this tall (was 64; increased to fit schedule info)
 const CONN_W = 28;         // Width of SVG connector column between rounds
 const CARD_W = 224;        // w-56 = 224px
 const VISIBLE_ROUNDS = 4;
