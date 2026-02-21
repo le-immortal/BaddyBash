@@ -75,6 +75,9 @@ Focus: Admin capabilities, Seeding, Brackets.
     - [x] Refresh button
     - [x] Duplicate seed detection: API returns 409, UI shows red border + "Duplicate" label
     - [x] Optimized GET `/api/admin/players?category=` — single category fetch + parallel point-reads (was 13s → fast)
+    - [x] In-memory cache with 30s TTL for `/api/admin/players` — eliminates repeated cross-partition queries
+    - [x] Optimized SQL: SELECT specific fields instead of `SELECT *` to reduce RU consumption
+    - [x] Cache invalidation on registration create/cancel and seed updates
     - [x] Search by name (filters players/teams, matches partner names in doubles)
     - [x] Show alias instead of email for both singles and doubles
     - [x] **Seeding UX refinement** (Completed)
@@ -126,6 +129,7 @@ Focus: Admin capabilities, Seeding, Brackets.
         - [x] All matches shown including byes (needed for tree alignment)
         - [x] BYE matches: dimmed styling, "— bye —" for empty slot, BYE badge
         - [x] Sticky round headers above scrollable bracket body
+        - [x] Fixed bracket card overlap: increased SLOT_H (64→90) for proper spacing
         - [x] Round navigation (4 visible at a time, prev/next, "Final →")
         - [x] Stats bar: match count, bye count, round count
     - [x] **Security & Caching**
@@ -152,6 +156,7 @@ Focus: Real-time updates, Winner Advancement.
 - [x] **Match Management (FR-09)**
     - [x] Backend: `PATCH /api/matches` — updates winner, auto-advances to next round
     - [x] Backend: Status transitions (scheduled → in_progress → completed)
+    - [x] Refactor: Shared `matchService.ts` — `updateMatchWithAdvancement()` + `advanceWinnerToNextMatch()` reused by PATCH and bulk import
     - [x] **UI: Winner Selection Modal** 
         - [x] Admin clicks match → Selects Winner (Player A / Player B)
         - [x] Confirmation dialog to prevent accidental clicks
@@ -226,16 +231,19 @@ Focus: Real-time updates, Winner Advancement.
         - [ ] API: `GET /api/public/matches?userId=...` or filter existing endpoint to return matches for a specific user.
         - [ ] UI: Add "Your Schedule" section to User Dashboard.
         - [ ] UI: Display match cards with opponent, round, time, and status.
-    - [ ] **Sub-task 2: Excel Export (Bracket Data)**
-        - [ ] API: Create `GET /api/admin/export/bracket-data` endpoint.
-        - [ ] Logic: Generate Excel file with columns: `Match ID`, `Category`, `Round`, `Match #`, `Player 1`, `Player 2`, `Scheduled Time`, `Status`, `Winner`.
-        - [ ] UI: Add "Export Bracket Data" button in Admin Dashboard.
-    - [ ] **Sub-task 3: Bulk Import Logic (Excel)**
-        - [ ] API: Create `POST /api/admin/import/bracket-data` endpoint to handle file upload.
-        - [ ] Logic - **Schedule Updates**: Update `scheduledTime` for matching IDs.
-        - [ ] Logic - **Status Updates**: Transition match status (e.g., `scheduled` → `in_progress`).
-        - [ ] Logic - **Winner Selection**: If a winner is specified in the import (by ID or exact name), complete the match and advance the winner. (Note: Scores will not be imported, just the result).
-        - [ ] Logic - **Player Swapping**: Allow swapping players between matches/slots via the import file (requires careful validation of bracket integrity).
+    - [x] **Sub-task 2: Enhanced Export (Bracket Data)**
+        - [x] Logic: Enhance existing `handleExportBracket` in `admin/page.tsx` (Single source of truth).
+        - [x] Logic: Add **Match ID** (hidden column) and **Category** to the existing Excel export.
+        - [x] Result: One export file serves both "Printable" and "Data Source" (for re-import) purposes.
+        - [x] Columns: `Match ID` (hidden), `Category`, `Match #`, `Round`, `Position`, `Player 1`, ...
+
+    - [x] **Sub-task 3: Bulk Import Logic (Excel)**
+        - [x] **Design Change:** Winner updates prioritized by User ID matching + Slot Reference (1/2).
+        - [x] Logic - Add ID columns (`p1Id`, `p2Id`) to export for robust re-import.
+        - [x] API: Create `POST /api/admin/import/bracket`.
+        - [x] Logic - **Winner Selection**: Checked by "1"/"2" Slot, then ID (hidden), then Name.
+        - [x] Logic - **Schedule Updates**: Update `scheduledTime`.
+        - [x] Logic - **Status Updates**: Transition match status.
     - [x] **Sub-task 4: Refactor - Remove Court Field**
         - [x] Database: Remove `court` field from `MatchDocument`.
         - [x] Backend: Update `POST/PATCH` match APIs to ignore/remove `court`.

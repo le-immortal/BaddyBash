@@ -6,7 +6,7 @@ import MatchCard from './MatchCard';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
-const SLOT_H = 64;         // Uniform height for match slots
+const SLOT_H = 130;         // Uniform height for match slots (increased to prevent overlap)
 const CONN_W = 28;         // Width of SVG connectors
 const VISIBLE_ROUNDS = 4;
 
@@ -135,7 +135,7 @@ export default function BracketVisualizer({ matches, onMatchClick }: BracketVisu
                     {roundMatches.map((match) => (
                       <div 
                         key={match.id} 
-                        style={{ height: bh }} 
+                        style={{ height: bh, flexShrink: 0 }} 
                         className="flex items-center justify-center py-2" // py-2 adds vertical spacing within the slot
                       >
                          <MatchCard match={match} onClick={onMatchClick} />
@@ -147,11 +147,7 @@ export default function BracketVisualizer({ matches, onMatchClick }: BracketVisu
                 {/* Connector Column (not after final round) */}
                 {roundNum < totalRounds && (
                    <div className="flex flex-col pt-[42px]"> 
-                     {/* 42px offset is approx header(20) + mb(8) + half-slot(32)? No, needs tuning. 
-                         Actually, SVG handles relative positioning. We just need to align top.
-                         The headers are height ~30px. 
-                     */}
-                      <div className="h-[30px]" /> {/* Spacer for header alignment */}
+                      {/* Align with header height (~42px) */}
                       <Connectors 
                         colIdx={absoluteColIdx} 
                         matchCount={roundMatches.length} 

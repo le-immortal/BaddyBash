@@ -8,6 +8,7 @@ import {
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
 import { getGlobalSettings } from "@/app/lib/settings";
+import { updateMatchWithAdvancement } from "@/app/lib/matchService";
 
 interface BracketParticipant {
   id: string;
@@ -430,7 +431,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     // 2. Update fields
-    const now = new Date().toISOString();
     let updated = false;
 
     // Handle Schedule Updates
@@ -449,34 +449,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (updated) {
-        match.updatedAt = now;
-        await container.item(matchId, category).replace(match);
-    }
-
-    // 3. Advance winner to the next match (if any)
-    if (winnerId && winnerName && match.nextMatchId) {
-      const { resource: nextMatch } = await container
-        .item(match.nextMatchId, category)
-        .read<MatchDocument>();
-
-      if (nextMatch) {
-        // Determine which seed to carry forward
-        const winnerSeed =
-          winnerId === match.player1Id ? match.player1Seed : match.player2Seed;
-
-        if (match.nextMatchSlot === 1) {
-          nextMatch.player1Id = winnerId;
-          nextMatch.player1Name = winnerName;
-          nextMatch.player1Seed = winnerSeed;
-        } else {
-          nextMatch.player2Id = winnerId;
-          nextMatch.player2Name = winnerName;
-          nextMatch.player2Seed = winnerSeed;
-        }
-
-        nextMatch.updatedAt = now;
-        await container.item(nextMatch.id, category).replace(nextMatch);
-      }
+      await updateMatchWithAdvancement(match, {});
     }
 
     return NextResponse.json({ message: "Match updated successfully" });
