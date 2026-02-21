@@ -1,4 +1,4 @@
-import { MatchDocument, formatSetScores } from '../lib/models';
+import { MatchDocument } from '../lib/models';
 import { Clock, Trophy, Swords, CircleDot } from 'lucide-react';
 
 interface ScheduleMatchCardProps {
@@ -34,7 +34,6 @@ export default function ScheduleMatchCard({ match, userId, totalRounds }: Schedu
   const opponentName = isPlayer1 ? match.player2Name : match.player1Name;
   // For doubles, winnerId is pipe-separated (e.g. "m79|m80"), so check with split
   const userWon = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
-  const scoreStr = formatSetScores(match.sets);
 
   return (
     <div
@@ -80,13 +79,8 @@ export default function ScheduleMatchCard({ match, userId, totalRounds }: Schedu
         </span>
       </div>
 
-      {/* Bottom row: score + status badge */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-slate-500">
-          {isComplete && scoreStr && (
-            <span className="font-mono">{scoreStr}</span>
-          )}
-        </div>
+      {/* Bottom row: status badge */}
+      <div className="flex items-center justify-end">
         <span
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
             isLive

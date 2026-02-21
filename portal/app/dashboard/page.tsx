@@ -633,15 +633,31 @@ export default function Dashboard() {
                   {completedMatches.length === 0 ? (
                     <p className="text-center text-slate-400 py-6">No completed matches yet. Your results will appear here.</p>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {completedMatches.map(match => (
-                        <ScheduleMatchCard
-                          key={match.id}
-                          match={match}
-                          userId={userId}
-                          totalRounds={totalRoundsMap[match.category] || match.round}
-                        />
-                      ))}
+                    <div className="divide-y divide-slate-100">
+                      {completedMatches.map(match => {
+                        const isP1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
+                        const opponent = isP1 ? match.player2Name : match.player1Name;
+                        const won = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
+                        const totalR = totalRoundsMap[match.category] || match.round;
+                        const roundLabel = match.round === totalR ? 'Final' : match.round === totalR - 1 ? 'Semi' : match.round === totalR - 2 ? 'QF' : `R${match.round}`;
+
+                        return (
+                          <div key={match.id} className="flex items-center gap-3 py-2.5 px-1 text-sm">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
+                              { MS: 'bg-blue-100 text-blue-700', WS: 'bg-pink-100 text-pink-700', MD: 'bg-indigo-100 text-indigo-700', WD: 'bg-purple-100 text-purple-700', XD: 'bg-teal-100 text-teal-700' }[match.category] || 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {match.category}
+                            </span>
+                            <span className="text-slate-400 text-xs w-10 shrink-0">{roundLabel}</span>
+                            <span className="text-slate-700 truncate flex-1">
+                              vs <span className="font-medium">{opponent || 'TBD'}</span>
+                            </span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${won ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {won ? 'W' : 'L'}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
