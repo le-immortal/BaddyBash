@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
-import { Category } from '../lib/models';
-import { AlertCircle, Loader2, Lock, Edit2 } from 'lucide-react';
+import ScheduleMatchCard from '../components/ScheduleMatchCard';
+import { Category, MatchDocument } from '../lib/models';
+import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw } from 'lucide-react';
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -46,11 +47,16 @@ export default function Dashboard() {
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [userMatches, setUserMatches] = useState<MatchDocument[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [bracketsVisible, setBracketsVisible] = useState<boolean | null>(null); // null = unknown yet
+  const [totalRoundsMap, setTotalRoundsMap] = useState<Record<string, number>>({});
 
-  // Check global registration setting
+  // Check global settings (registration open + brackets visible)
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
       setRegistrationOpen(data.registrationOpen !== false);
+      setBracketsVisible(data.bracketsVisible !== false);
     }).catch(console.error);
   }, []);
 
@@ -121,6 +127,65 @@ export default function Dashboard() {
       fetchRegistrations();
     }
   }, [sessionStatus, profileSaved, fetchRegistrations]);
+
+  // Fetch matches for all categories the user is registered in
+  const fetchUserMatches = useCallback(async () => {
+    if (!userId || committedCategories.length === 0 || bracketsVisible === false) return;
+    setMatchesLoading(true);
+    try {
+      const results = await Promise.all(
+        committedCategories.map(cat =>
+          fetch(`/api/matches?category=${cat}`, { cache: 'no-store' })
+            .then(res => res.ok ? res.json() as Promise<MatchDocument[]> : [])
+            .catch(() => [] as MatchDocument[])
+        )
+      );
+
+      // Compute total rounds per category for round labels
+      const roundsMap: Record<string, number> = {};
+      const allUserMatches: MatchDocument[] = [];
+
+      results.forEach((matches, idx) => {
+        const cat = committedCategories[idx];
+        const maxRound = matches.reduce((max, m) => Math.max(max, m.round), 0);
+        roundsMap[cat] = maxRound;
+
+        const userMs = matches.filter(
+          m => m.status !== 'bye' && (
+            m.player1Id === userId || m.player2Id === userId ||
+            m.player1Id?.split('|').includes(userId) || m.player2Id?.split('|').includes(userId)
+          )
+        );
+        allUserMatches.push(...userMs);
+      });
+
+      // Sort: live first, then scheduled, then completed
+      const statusOrder: Record<string, number> = { in_progress: 0, scheduled: 1, completed: 2 };
+      allUserMatches.sort((a, b) => {
+        const sa = statusOrder[a.status] ?? 1;
+        const sb = statusOrder[b.status] ?? 1;
+        if (sa !== sb) return sa - sb;
+        return (a.matchNumber ?? 0) - (b.matchNumber ?? 0);
+      });
+
+      setTotalRoundsMap(roundsMap);
+      setUserMatches(allUserMatches);
+    } catch (err) {
+      console.error('Failed to fetch user matches:', err);
+    } finally {
+      setMatchesLoading(false);
+    }
+  }, [userId, committedCategories, bracketsVisible]);
+
+  useEffect(() => {
+    if (profileSaved && committedCategories.length > 0 && bracketsVisible !== null) {
+      fetchUserMatches();
+    }
+  }, [profileSaved, committedCategories, bracketsVisible, fetchUserMatches]);
+
+  // Derived match lists — avoids re-filtering on every render
+  const upcomingMatches = useMemo(() => userMatches.filter(m => m.status !== 'completed'), [userMatches]);
+  const completedMatches = useMemo(() => userMatches.filter(m => m.status === 'completed'), [userMatches]);
 
   const maxSelections = 2;
   const totalCount = committedCategories.length + selection.length;
@@ -502,6 +567,88 @@ export default function Dashboard() {
             </button>
           )}
         </header>
+
+        {/* Your Matches Section — only shown when brackets are published */}
+        {committedCategories.length > 0 && bracketsVisible === true && (
+          <>
+            {/* Upcoming / Live Matches */}
+            <section className="mb-8">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <CalendarDays className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-xl font-semibold text-slate-800">Your Matches</h2>
+                  <button
+                    onClick={fetchUserMatches}
+                    disabled={matchesLoading}
+                    className="ml-1 p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                    title="Refresh matches"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${matchesLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  {upcomingMatches.length > 0 && (
+                    <span className="ml-auto text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                      {upcomingMatches.length} upcoming
+                    </span>
+                  )}
+                </div>
+
+                {matchesLoading ? (
+                  <div className="flex items-center justify-center py-8 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading matches...
+                  </div>
+                ) : upcomingMatches.length === 0 ? (
+                  <p className="text-center text-slate-500 py-6">
+                    {userMatches.length === 0
+                      ? 'No matches found yet. The draw may not have been generated.'
+                      : 'All your matches are completed! Check your history below.'}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {upcomingMatches.map(match => (
+                      <ScheduleMatchCard
+                        key={match.id}
+                        match={match}
+                        userId={userId}
+                        totalRounds={totalRoundsMap[match.category] || match.round}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Match History */}
+            {!matchesLoading && (
+              <section className="mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <History className="w-5 h-5 text-slate-500" />
+                    <h2 className="text-xl font-semibold text-slate-800">Match History</h2>
+                    {completedMatches.length > 0 && (
+                      <span className="ml-auto text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                        {completedMatches.length} played
+                      </span>
+                    )}
+                  </div>
+                  {completedMatches.length === 0 ? (
+                    <p className="text-center text-slate-400 py-6">No completed matches yet. Your results will appear here.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {completedMatches.map(match => (
+                        <ScheduleMatchCard
+                          key={match.id}
+                          match={match}
+                          userId={userId}
+                          totalRounds={totalRoundsMap[match.category] || match.round}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </>
+        )}
 
         <section className="mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">

@@ -227,10 +227,19 @@ Focus: Real-time updates, Winner Advancement.
         - [x] Logic: `bracketsVisible` flag in global config
 
 4. **Phase D: Scheduling & Match Management**
-    - [ ] **Sub-task 1: Match Visibility (Dashboard)**
-        - [ ] API: `GET /api/public/matches?userId=...` or filter existing endpoint to return matches for a specific user.
-        - [ ] UI: Add "Your Schedule" section to User Dashboard.
-        - [ ] UI: Display match cards with opponent, round, time, and status.
+    - [x] **Sub-task 1: Match Visibility (Dashboard)** ✅ COMPLETE
+        - [x] New component: `ScheduleMatchCard.tsx` — dashboard-optimized match card
+        - [x] UI: "Your Matches" section (upcoming/live) + "Match History" section (completed)
+        - [x] UI: Match cards show category badge, round label, opponent, score, Win/Lost status
+        - [x] Logic: Doubles-safe ID handling — pipe-separated IDs use `.split('|').includes(userId)`
+        - [x] Logic: Sections only visible when brackets are published (`bracketsVisible === true`)
+        - [x] Cache: Server-side `Cache-Control: no-store` on matches API for fresh data
+        - [x] Cache: Client-side `cache: 'no-store'` on fetch for Next.js data cache bypass
+        - [x] UX: Manual refresh button (`RefreshCw`) for on-demand data refresh
+        - [x] UX: `useMemo` for derived match lists (upcoming/completed) — avoids re-filtering on render
+        - [x] UX: Matches section ordered first, registrations second on dashboard
+        - [x] Security: Added `isAdmin()` boolean helper in `authHelpers.ts` — cleaner admin gate in matches API
+        - [x] Cleanup: Removed `Pragma: no-cache` (HTTP/1.0 relic), removed `visibilitychange` listener (overengineering)
     - [x] **Sub-task 2: Enhanced Export (Bracket Data)**
         - [x] Logic: Enhance existing `handleExportBracket` in `admin/page.tsx` (Single source of truth).
         - [x] Logic: Add **Match ID** (hidden column) and **Category** to the existing Excel export.
