@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight } from 'lucide-react';
-import { Category, MatchDocument } from '../lib/models';
+import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload } from 'lucide-react';
+import { Category, MatchDocument, MatchStatus } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
 import ExcelJS from 'exceljs';
@@ -52,9 +52,22 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+type ImportPreviewItem = {
+    id: string; // matchId
+    matchNum: string;
+    changes: { field: string; oldVal: string; newVal: string }[];
+    originalMatch: MatchDocument;
+    updated: MatchDocument; // The full proposed new state
+};
+
+// ... inside component ...
+const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(null);
+
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [bracketsVisible, setBracketsVisible] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -395,6 +408,215 @@ export default function AdminDashboard() {
     saveAs(new Blob([buffer]), `BaddyBash_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportPreview(null); // Clear previous
+
+    try {
+      // 1. Fetch current matches to compare against
+      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      if (!res.ok) throw new Error("Failed to fetch current matches");
+      const currentMatches: MatchDocument[] = await res.json();
+      const matchMap = new Map(currentMatches.map(m => [m.id, m]));
+
+      // 2. Parse Excel
+      const buffer = await file.arrayBuffer();
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      const worksheet = workbook.getWorksheet(1); // Assume sheet 1
+
+      if (!worksheet) throw new Error("No worksheet found in file");
+
+      const pendingChanges: ImportPreviewItem[] = [];
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header
+
+        // Columns based on Export function indices (1-based):
+        // 1: ID, 2: Cat, 3: Num, 4: Round, 5: Pos, 
+        // 6: P1 Name, 7: P1 ID, 8: S1
+        // 9: P2 Name, 10: P2 ID, 11: S2
+        // 12: Status, 13: Winner, 14: Time
+
+        const matchId = row.getCell(1).text; 
+        if (!matchId || !matchMap.has(matchId)) return; // Skip invalid rows
+        
+        const originalMatch = matchMap.get(matchId)!;
+        const updatedMatch = { ...originalMatch }; // Clone for updates
+        
+        // Extract values
+        const importedStatusRaw = row.getCell(12).text?.trim() || "";
+        const importedWinnerName = row.getCell(13).text?.trim() || "";
+        const importedTime = row.getCell(14).text?.trim() || "";
+        
+        // Potential ID overrides (if user moved players manually)
+        const importedP1Id = row.getCell(7).text?.trim();
+        const importedP2Id = row.getCell(10).text?.trim();
+        
+        const changes: { field: string; oldVal: string; newVal: string }[] = [];
+
+        // 1. Time
+        const oldTime = originalMatch.scheduledTime || "";
+        if (importedTime !== oldTime) {
+             changes.push({ field: "Scheduled Time", oldVal: oldTime, newVal: importedTime });
+             updatedMatch.scheduledTime = importedTime;
+        }
+
+        // 2. Status
+        // Normalize: "In Progress" -> "in_progress"
+        const statusMap: Record<string, string> = {
+            'scheduled': 'scheduled',
+            'in progress': 'in_progress',
+            'completed': 'completed',
+            'bye': 'bye'
+        };
+        const normStatusKey = importedStatusRaw.toLowerCase().replace('_', ' '); // standardize input
+        const normStatus = Object.entries(statusMap).find(([k, v]) => k === normStatusKey)?.[1] || originalMatch.status;
+
+        if (normStatus !== originalMatch.status) {
+             if (Object.values(statusMap).includes(normStatus)) {
+                 changes.push({ field: "Status", oldVal: originalMatch.status, newVal: normStatus });
+                 updatedMatch.status = normStatus as MatchStatus;
+             }
+        }
+
+        // 3. Players (Advanced: if IDs changed in hidden columns, update match)
+        // This allows fixing incorrect advancement manually
+        if (importedP1Id && importedP1Id !== originalMatch.player1Id) {
+            changes.push({ field: "Player 1", oldVal: originalMatch.player1Name || 'TBD', newVal: row.getCell(6).text || 'Unknown' });
+            updatedMatch.player1Id = importedP1Id;
+            updatedMatch.player1Name = row.getCell(6).text;
+            updatedMatch.player1Seed = parseInt(row.getCell(8).text) || undefined;
+        }
+        if (importedP2Id && importedP2Id !== originalMatch.player2Id) {
+            changes.push({ field: "Player 2", oldVal: originalMatch.player2Name || 'TBD', newVal: row.getCell(9).text || 'Unknown' });
+            updatedMatch.player2Id = importedP2Id;
+            updatedMatch.player2Name = row.getCell(9).text;
+            updatedMatch.player2Seed = parseInt(row.getCell(11).text) || undefined; // Corrected index for S2
+        }
+
+        // 4. Winner Resolution
+        // Logic: 
+        // - If status is completed, verify winner matches P1 or P2.
+        // - Priority: 
+        //   A. Exact ID Match (not in basic export, but if we had it)
+        //   B. Name Match (P1 or P2)
+        //   C. "1" or "2" (explicit slot winner)
+        
+        const oldWinnerName = originalMatch.winnerName || "";
+        
+        if (normStatus === 'completed') {
+            let newWinnerId = updatedMatch.winnerId;
+            let newWinnerName = updatedMatch.winnerName;
+
+            // If winner name changed or status just became completed
+            if (importedWinnerName !== oldWinnerName || originalMatch.status !== 'completed') {
+                if (importedWinnerName === '1' || importedWinnerName === updatedMatch.player1Name) {
+                    newWinnerId = updatedMatch.player1Id!;
+                    newWinnerName = updatedMatch.player1Name!;
+                } else if (importedWinnerName === '2' || importedWinnerName === updatedMatch.player2Name) {
+                    newWinnerId = updatedMatch.player2Id!;
+                    newWinnerName = updatedMatch.player2Name!;
+                } else {
+                     // Try to match partial names? For now strict exact match to avoid errors.
+                     // Or check if importedWinnerName is actually an ID (if valid UUID/format)
+                     // Fallback: don't update winner if ambiguous.
+                }
+
+                if (newWinnerId !== originalMatch.winnerId) {
+                    changes.push({ field: "Winner", oldVal: oldWinnerName, newVal: newWinnerName || importedWinnerName });
+                    updatedMatch.winnerId = newWinnerId;
+                    updatedMatch.winnerName = newWinnerName;
+                }
+            }
+        } 
+        else if (normStatus !== 'completed' && originalMatch.status === 'completed') {
+             // Reverting from completed -> scheduled
+             changes.push({ field: "Winner", oldVal: oldWinnerName, newVal: "(Cleared)" });
+             updatedMatch.winnerId = undefined;
+             updatedMatch.winnerName = undefined;
+        }
+
+        if (changes.length > 0) {
+            pendingChanges.push({
+                id: matchId,
+                matchNum: originalMatch.matchNumber ? `M${originalMatch.matchNumber}` : '??',
+                changes,
+                originalMatch: originalMatch,
+                updated: updatedMatch
+            });
+        }
+      });
+
+      setImportPreview(pendingChanges);
+      if (pendingChanges.length === 0) {
+        alert("No changes detected in the file.");
+        setImporting(false);
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert("Failed to parse file: " + (err as Error).message);
+      setImporting(false);
+    } finally {
+        if (fileInputRef.current) fileInputRef.current.value = ""; // Reset input
+    }
+  };
+
+  const executeImport = async () => {
+      if (!importPreview || importPreview.length === 0) return;
+      
+      try {
+        const updates = importPreview.map(item => {
+           // Create a clean update object with all relevant fields from the 'updated' version
+           const u = item.updated;
+           return {
+             id: u.id,
+             category: u.category,
+             status: u.status,
+             winnerId: u.winnerId,
+             winnerName: u.winnerName,
+             // sets: u.sets, // Scores not currently supported in import
+             scheduledTime: u.scheduledTime,
+             // Include player details in case of swaps/overrides
+             player1Id: u.player1Id, 
+             player1Name: u.player1Name,
+             player1Seed: u.player1Seed,
+             player2Id: u.player2Id,
+             player2Name: u.player2Name,
+             player2Seed: u.player2Seed,
+           };
+        });
+
+        const res = await fetch('/api/admin/import/bracket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert(`Import failed: ${err.error || 'Unknown error'}`);
+          return;
+        }
+
+        const result = await res.json();
+        alert(`Successfully updated ${result.processed} matches.`);
+        
+        // Refresh and close
+        setImportPreview(null);
+        setImporting(false);
+        fetchMatches(); // Reload grid
+
+      } catch (error) {
+        console.error(error);
+        alert("Failed to execute import.");
+      }
+  };
+
   const handleExportBracket = async () => {
     setShowExportMenu(false);
     setExporting(true);
@@ -423,12 +645,16 @@ export default function AdminDashboard() {
       const worksheet = workbook.addWorksheet(catName);
 
       worksheet.columns = [
+          { header: 'Match ID', key: 'id', width: 0, hidden: true }, // Hidden ID for re-import
+          { header: 'Category', key: 'category', width: 10 },
           { header: 'Match #', key: 'matchNum', width: 10 },
           { header: 'Round', key: 'round', width: 15 },
           { header: 'Position', key: 'pos', width: 10 },
           { header: isDoubles ? 'Team 1' : 'Player 1', key: 'p1', width: 25 },
+          { header: 'Player 1 ID', key: 'p1Id', width: 0, hidden: true }, // Hidden ID
           { header: 'Seed 1', key: 's1', width: 8 },
           { header: isDoubles ? 'Team 2' : 'Player 2', key: 'p2', width: 25 },
+          { header: 'Player 2 ID', key: 'p2Id', width: 0, hidden: true }, // Hidden ID
           { header: 'Seed 2', key: 's2', width: 8 },
           { header: 'Status', key: 'status', width: 15 },
           { header: 'Winner', key: 'winner', width: 25 },
@@ -437,12 +663,16 @@ export default function AdminDashboard() {
 
       matches.forEach(m => {
           worksheet.addRow({
+              id: m.id,
+              category: m.category,
               matchNum: m.matchNumber ? `M${m.matchNumber}` : '',
               round: getRoundName(m.round),
               pos: m.position + 1,
               p1: m.player1Name || '',
+              p1Id: m.player1Id || '',
               s1: m.player1Seed || '',
               p2: m.player2Name || '',
+              p2Id: m.player2Id || '',
               s2: m.player2Seed || '',
               status: m.status.charAt(0).toUpperCase() + m.status.slice(1).replace('_', ' '),
               winner: m.winnerName || '',
@@ -574,8 +804,97 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+
+            {/* Import Button & Hidden Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".xlsx"
+              onChange={handleImportFile}
+              disabled={importing}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-200 border border-slate-300 disabled:opacity-50"
+              title="Import Bracket Data"
+            >
+              <Upload size={16} />
+              Import
+            </button>
           </div>
         </header>
+
+        {/* Import Preview Modal */}
+        {importPreview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  Review Changes
+                </h2>
+                <div className="text-sm text-slate-500">
+                  {importPreview.length} matches to update
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {importPreview.length === 0 ? (
+                  <p className="text-center text-slate-500">No changes detected.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Match</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Field</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Old Value</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">New Value</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {importPreview.map((item, idx) => (
+                        <React.Fragment key={item.id + idx}>
+                          {item.changes.map((change, cIdx) => (
+                            <tr key={`${item.id}-${cIdx}`} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 font-mono text-slate-600 align-top">
+                                {cIdx === 0 ? item.matchNum : ''}
+                              </td>
+                              <td className="px-3 py-2 font-medium text-slate-700">
+                                {change.field}
+                              </td>
+                              <td className="px-3 py-2 text-red-500 line-through decoration-red-300">
+                                {change.oldVal || <span className="text-slate-300 italic">Empty</span>}
+                              </td>
+                              <td className="px-3 py-2 text-green-600 font-medium">
+                                {change.newVal || <span className="text-slate-300 italic">Empty</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-xl">
+                <button
+                  onClick={() => { setImportPreview(null); setImporting(false); }}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeImport}
+                  className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 shadow-sm"
+                >
+                  Commit {importPreview.length} Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
            <div className="flex justify-center items-center py-12">

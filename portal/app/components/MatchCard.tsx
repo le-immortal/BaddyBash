@@ -15,7 +15,7 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
   return (
     <div
       onClick={() => !isBye && onClick?.(match)}
-      className={`w-56 rounded border text-xs leading-tight shrink-0 transition-colors ${
+      className={`w-56 rounded border text-xs leading-tight shrink-0 transition-colors bg-white overflow-hidden ${
         isBye
           ? 'bg-slate-800/30 border-slate-700/40 cursor-default'
           : onClick
