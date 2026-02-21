@@ -5,7 +5,7 @@ import {
   MatchDocument, RegistrationDocument, UserDocument, Category,
   isDoubles,
 } from "@/app/lib/models";
-import { requireAdmin } from "@/app/lib/authHelpers";
+import { requireAdmin, isAdmin } from "@/app/lib/authHelpers";
 import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
 import { getGlobalSettings } from "@/app/lib/settings";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
@@ -61,22 +61,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Check Bracket Visibility Setting
-    // Allow Admins to bypass this check
-    const session = await requireAdmin();
-    if (!session) {
-    try {
-      const settings = await getGlobalSettings();
-      if (settings.bracketsVisible === false) {
+    // 1. Check Bracket Visibility Setting — admins bypass
+    const adminUser = await isAdmin();
+    if (!adminUser) {
+      try {
+        const settings = await getGlobalSettings();
+        if (settings.bracketsVisible === false) {
           return NextResponse.json(
-            { error: "Brackets are not yet published." }, 
+            { error: "Brackets are not yet published." },
             { status: 403 }
           );
+        }
+      } catch {
+        // Default to open
       }
-    } catch {
-       // Default to open
     }
-  }
 
   const matchesContainer = getMatchesContainer();
   const { resources: matches } = await matchesContainer.items
@@ -88,7 +87,11 @@ export async function GET(request: NextRequest) {
 
   matches.sort((a, b) => a.round - b.round || a.position - b.position);
 
-  return NextResponse.json(matches);
+  return NextResponse.json(matches, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
   } catch (error) {
     console.error("Error fetching matches:", error);
     return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
