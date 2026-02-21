@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bracket Visualizer Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Add any custom styles here if needed, but we aim for Tailwind logic */
+        body {
+            background-color: #0f172a; /* slate-900 */
+            color: white;
+            font-family: sans-serif;
+        }
+    </style>
+</head>
+<body class="p-8">
+
+    <h1 class="text-xl mb-4 text-slate-300">Bracket Visualizer Simulation</h1>
+    <p class="mb-4 text-slate-400">Verifying if MatchCard content exceeds 120px height constraint.</p>
+
+    <!-- Bracket Visualizer Container immitation -->
+    <div class="flex-1 overflow-auto bg-slate-900/40 rounded border border-slate-700/50 p-6">
+        <div class="flex items-stretch min-h-min">
+            
+            <!-- Round Column -->
+            <div class="flex flex-col w-56">
+                <!-- Header -->
+                <div class="text-center pb-3 text-sm font-bold text-slate-400 border-b border-transparent mb-2">
+                   Round 1
+                </div>
+
+                <!-- Matches Stack -->
+                <div class="flex flex-col" style="gap: 0;">
+                    
+                    <!-- Match Slot 1: Normal Match -->
+                    <!-- height: 120px from SLOT_H -->
+                    <div style="height: 120px;" class="flex items-center justify-center py-2 border-b border-dashed border-slate-600/30">
+                        <!-- MatchCard -->
+                        <div class="w-56 rounded border text-xs leading-tight shrink-0 transition-colors bg-slate-800 border-slate-700">
+                             <!-- Header -->
+                             <div class="flex items-center justify-between px-1.5 pt-0.5">
+                                <span class="text-[9px] font-mono text-slate-500">M1</span>
+                                <span class="text-[8px] font-bold uppercase tracking-wider px-1 rounded bg-slate-700 text-slate-400">
+                                  Upcoming
+                                </span>
+                             </div>
+
+                             <!-- Schedule Info -->
+                             <div class="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
+                                <span class="truncate">10:00 AM Court 1</span>
+                             </div>
+
+                             <!-- Player 1 -->
+                             <div class="flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[1]</span>
+                                    John Doe
+                                </span>
+                             </div>
+
+                             <!-- Player 2 -->
+                             <div class="flex items-center justify-between px-2 py-0.5 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[2]</span>
+                                    Jane Smith
+                                </span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Match Slot 2: Long Content Match -->
+                    <div style="height: 120px;" class="flex items-center justify-center py-2 border-b border-dashed border-red-600/50">
+                        <!-- MatchCard with Long Names -->
+                        <div class="w-56 rounded border text-xs leading-tight shrink-0 transition-colors bg-slate-800 border-slate-700">
+                             <!-- Header -->
+                             <div class="flex items-center justify-between px-1.5 pt-0.5">
+                                <span class="text-[9px] font-mono text-slate-500">M2</span>
+                                <span class="text-[8px] font-bold uppercase tracking-wider px-1 rounded bg-amber-900/60 text-amber-400">
+                                  Live
+                                </span>
+                             </div>
+
+                             <!-- Schedule Info -->
+                             <div class="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
+                                <span class="truncate">Today 12:30 PM Court Central (TV)</span>
+                             </div>
+
+                             <!-- Player 1 -->
+                             <div class="flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[12]</span>
+                                    Christopher Alexandra-Hamilton The Third
+                                </span>
+                             </div>
+
+                             <!-- Player 2 -->
+                             <div class="flex items-center justify-between px-2 py-0.5 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[14]</span>
+                                    Sebastian Montgomery-Smythe Jr.
+                                </span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Match Slot 3: VERY Long Content + Extra Status -->
+                    <div style="height: 120px;" class="flex items-center justify-center py-2 border-b border-dashed border-red-600/50">
+                        <!-- MatchCard -->
+                         <!-- Using bg-white in class string but overridden logic simulated by bg-slate-800 manually -->
+                        <div class="w-56 rounded border text-xs leading-tight shrink-0 transition-colors bg-slate-800 border-slate-700">
+                             <!-- Header -->
+                             <div class="flex items-center justify-between px-1.5 pt-0.5">
+                                <span class="text-[9px] font-mono text-slate-500">M345</span>
+                                <!-- Long Status -->
+                                <span class="text-[8px] font-bold uppercase tracking-wider px-1 rounded bg-green-900/60 text-green-400">
+                                  Winner
+                                </span>
+                             </div>
+
+                             <!-- Schedule Info - Long -->
+                             <div class="px-2 py-0.5 mt-0.5 mb-0.5 text-[10px] bg-slate-700/30 border-y border-slate-700/30 flex items-center justify-between text-amber-200/90 font-mono">
+                                <span class="truncate">Sat, Aug 12th @ 3:00 PM - Arena B</span>
+                             </div>
+
+                             <!-- Player 1 - Long Name, Winner info -->
+                             <div class="flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 text-green-400 font-semibold">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[1]</span>
+                                    Dr. Jonathan "The Smasher" Livington-Seagull
+                                </span>
+                                <span class="text-green-500 ml-1 shrink-0 text-[10px]">W</span>
+                             </div>
+
+                             <!-- Player 2 - Long Name -->
+                             <div class="flex items-center justify-between px-2 py-0.5 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">
+                                    <span class="text-[9px] font-bold text-amber-500/80 shrink-0">[2]</span>
+                                    Maximilian "Max" Power-Housen
+                                </span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Match Slot 4: Minimal Content (for comparison) -->
+                    <div style="height: 120px;" class="flex items-center justify-center py-2">
+                        <div class="w-56 rounded border text-xs leading-tight shrink-0 transition-colors bg-slate-800 border-slate-700">
+                             <div class="flex items-center justify-between px-1.5 pt-0.5">
+                                <span class="text-[9px] font-mono text-slate-500">M4</span>
+                                <span class="text-[8px] font-bold uppercase tracking-wider px-1 rounded bg-slate-700 text-slate-400">
+                                  Upcoming
+                                </span>
+                             </div>
+                             <!-- No schedule -->
+                             <div class="flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">P1</span>
+                             </div>
+                             <div class="flex items-center justify-between px-2 py-0.5 text-slate-300">
+                                <span class="truncate flex-1 flex items-center gap-1">P2</span>
+                             </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 text-sm text-slate-400">
+        <h2 class="font-bold mb-2">Analysis</h2>
+        <p>The container for each match is fixed at <code>height: 120px</code>.</p>
+        <p>Inside, there is `py-2` (8px padding top/bottom) on the wrapper.</p>
+        <p>This leaves 120 - 16 = 104px for the card itself.</p>
+        <p>Let's check the card height:</p>
+        <ul class="list-disc ml-6 mt-2">
+            <li>Header: ~20px (depending on font/padding)</li>
+            <li>Schedule: ~20px (if present)</li>
+            <li>Player 1 Row: ~24px</li>
+            <li>Player 2 Row: ~24px</li>
+            <li>Borders/Margins: ~2-4px</li>
+        </ul>
+        <p class="mt-2">Total estimated height with Schedule: ~90px. <br>
+           Total estimated height without Schedule: ~70px.</p>
+        <p class="mt-2 text-green-400">Conclusion: It fits comfortably within 104px, leaving ~14px buffer even with schedule info.</p>
+        <p class="text-amber-400">However, if names wrap, it might break. The `truncate` class is used, so names should not wrap.</p>
+    </div>
+
+</body>
+</html>
