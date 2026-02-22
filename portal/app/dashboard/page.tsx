@@ -534,19 +534,21 @@ export default function Dashboard() {
               <span className="text-slate-600">{savedPhone}</span>
               <span className="hidden md:inline text-slate-300">·</span>
               <span className="text-slate-600">Size: {savedTShirtSize || '-'}</span>
-              <button
-                onClick={() => {
-                  setPlayerName(savedName || '');
-                  setAlias(savedAlias || '');
-                  setPhoneNumber(savedPhone || '');
-                  setTShirtSize(savedTShirtSize || '');
-                  setIsEditingProfile(true);
-                }}
-                className="ml-2 text-slate-400 hover:text-blue-600 transition-colors"
-                title="Edit Profile"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
+              {registrationOpen && (
+                <button
+                  onClick={() => {
+                    setPlayerName(savedName || '');
+                    setAlias(savedAlias || '');
+                    setPhoneNumber(savedPhone || '');
+                    setTShirtSize(savedTShirtSize || '');
+                    setIsEditingProfile(true);
+                  }}
+                  className="ml-2 text-slate-400 hover:text-blue-600 transition-colors"
+                  title="Edit Profile"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
           {selection.length > 0 && (
