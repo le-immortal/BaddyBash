@@ -270,15 +270,16 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
        return;
     }
 
-    // Map to Seed format
-    const mapped = flatRegs.map((r, index) => ({
-      id: r.id,
-      name: r.category.includes('D') ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
-      currentSeed: r.seed || (index + 1)
-    }));
-    
-    // Try to preserve existing seeds if they form a sequence, otherwise default to index 
-    // Actually simpler to just take existing seeds if present, else index
+    // Map to Seed format — use seedValues (input state) as primary source since
+    // the DB save from onBlur may still be in-flight when user clicks "Seed & Generate"
+    const mapped = flatRegs.map((r, index) => {
+      const inputSeed = seedValues[r.id] ? Number(seedValues[r.id]) : undefined;
+      return {
+        id: r.id,
+        name: r.category.includes('D') ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
+        currentSeed: inputSeed || r.seed || (index + 1),
+      };
+    });
     
     setCurrentSeeds(mapped);
     setSeedingMode(true);
