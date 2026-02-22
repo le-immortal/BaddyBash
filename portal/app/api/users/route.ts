@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { UserDocument } from "@/app/lib/models";
+import { getGlobalSettings } from "@/app/lib/settings";
 
 /**
  * GET /api/users?id=xxx  OR  /api/users?alias=xxx  OR  /api/users?email=xxx
@@ -104,6 +105,17 @@ export async function POST(request: NextRequest) {
       // User doesn't exist yet — that's fine
     }
 
+    // If registration is closed and user already exists, block profile field updates
+    const settings = await getGlobalSettings();
+    if (!settings.registrationOpen && existing) {
+      // Preserve existing name/phone/tShirtSize — registration is closed
+      return NextResponse.json(
+        { error: "Registration is closed. Profile updates are not allowed." },
+        { status: 403 }
+      );
+    }
+    // Allow through: new user creation (first-time setup) OR registration is open
+
     // Security Check: If user exists and has an email, do not allow overwriting it with a different email
     if (existing && existing.email && cleanEmail && existing.email !== cleanEmail) {
       return NextResponse.json(
@@ -186,6 +198,14 @@ export async function PATCH(request: NextRequest) {
         { error: "Cannot change email of an already active account" },
         { status: 403 }
       );
+    }
+
+    // If registration is closed, strip profile fields (name, phoneNumber, tShirtSize)
+    const settings = await getGlobalSettings();
+    if (!settings.registrationOpen) {
+      delete cleanUpdates.name;
+      delete cleanUpdates.phoneNumber;
+      delete cleanUpdates.tShirtSize;
     }
 
     const updated: UserDocument = {
