@@ -188,8 +188,8 @@ export async function POST(request: NextRequest) {
         const p1Name = getName(p1Id, reg.userName);
         const p2Name = getName(p2Id, reg.partnerName);
         
-        // Use provided seeds or fallback to DB
-        const seedVal = seeds?.[reg.id] || reg.seed;
+        // Use provided seeds: check pairKey first (from visualizer), then reg.id, then DB
+        const seedVal = seeds?.[pairKey] || seeds?.[reg.id] || reg.seed;
 
         teams.push({
           id: pairKey,

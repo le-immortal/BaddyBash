@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
-import { RegistrationDocument, UserDocument } from "@/app/lib/models";
+import { RegistrationDocument, UserDocument, isDoubles } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { cacheGet, cacheSet, cacheDeleteByPrefix } from "@/app/lib/cache";
 
@@ -164,21 +164,37 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // If this is a doubles registration, validation becomes tricky because the partner might also have a seed.
-    // However, our bracket generation logic only picks the first seed it finds for the team.
-    // So updating one partner's registration is sufficient.
-    // But ideally, we should update both? No, that requires another read and write.
-    // Let's stick to updating the single registration for now.
+    const newSeedVal = seed ? Number(seed) : undefined;
+    const now = new Date().toISOString();
 
     const updated: RegistrationDocument = {
       ...existing,
-      seed: seed ? Number(seed) : undefined,
-      updatedAt: new Date().toISOString(),
+      seed: newSeedVal,
+      updatedAt: now,
     };
 
     const { resource } = await container
       .item(registrationId, userId)
       .replace(updated);
+
+    // For doubles, sync seed to partner's registration so both sides match
+    if (isDoubles(existing.category) && existing.partnerId) {
+      const partnerRegId = `${existing.partnerId}_${existing.category}`;
+      try {
+        const { resource: partnerReg } = await container
+          .item(partnerRegId, existing.partnerId)
+          .read<RegistrationDocument>();
+        if (partnerReg && partnerReg.seed !== newSeedVal) {
+          await container.item(partnerRegId, existing.partnerId).replace({
+            ...partnerReg,
+            seed: newSeedVal,
+            updatedAt: now,
+          });
+        }
+      } catch {
+        // Partner registration may not exist — non-critical
+      }
+    }
 
     // Bust players cache for this category
     cacheDeleteByPrefix(PLAYERS_CACHE_PREFIX);
@@ -188,6 +204,121 @@ export async function PATCH(request: NextRequest) {
     console.error("Error updating seed:", error);
     return NextResponse.json(
       { error: "Failed to update seed" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PUT /api/admin/players
+ * Batch update seeds for an entire category in one call.
+ * Body: { category, seeds: Record<registrationId, number | null> }
+ * 
+ * Fetches all registrations for the category once, applies seed updates,
+ * and writes them back in parallel batches. Much cheaper than N individual PATCHes.
+ */
+export async function PUT(request: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json();
+    const { category, seeds } = body as {
+      category: string;
+      seeds: Record<string, number | null>;
+    };
+
+    if (!category || !seeds || typeof seeds !== 'object') {
+      return NextResponse.json(
+        { error: "category and seeds map are required" },
+        { status: 400 }
+      );
+    }
+
+    const container = getRegistrationsContainer();
+
+    // 1. Fetch all registrations for this category in one query
+    const { resources: registrations } = await container.items
+      .query<RegistrationDocument>({
+        query: "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
+        parameters: [{ name: "@cat", value: category }],
+      })
+      .fetchAll();
+
+    // 2. Build update list — for doubles, propagate seed to BOTH partners
+    const now = new Date().toISOString();
+    const toUpdate: RegistrationDocument[] = [];
+    const isDoublesCategory = ['MD', 'WD', 'XD'].includes(category);
+
+    // Build a map of registrations by ID for quick partner lookup
+    const regById = new Map(registrations.map(r => [r.id, r]));
+
+    // Track which registrations we've already queued to avoid duplicates
+    const queued = new Set<string>();
+
+    for (const reg of registrations) {
+      if (!(reg.id in seeds)) continue; // Not in the seed map, skip
+      const newSeed = seeds[reg.id];
+      const currentSeed = reg.seed || null;
+
+      // Queue this registration if seed changed
+      if (newSeed !== currentSeed && !queued.has(reg.id)) {
+        toUpdate.push({
+          ...reg,
+          seed: newSeed ? Number(newSeed) : undefined,
+          updatedAt: now,
+        });
+        queued.add(reg.id);
+      }
+
+      // For doubles, also sync seed to partner's registration
+      if (isDoublesCategory && reg.partnerId) {
+        const partnerRegId = `${reg.partnerId}_${category}`;
+        const partnerReg = regById.get(partnerRegId);
+        if (partnerReg && !queued.has(partnerRegId)) {
+          const partnerCurrentSeed = partnerReg.seed || null;
+          if (newSeed !== partnerCurrentSeed) {
+            toUpdate.push({
+              ...partnerReg,
+              seed: newSeed ? Number(newSeed) : undefined,
+              updatedAt: now,
+            });
+            queued.add(partnerRegId);
+          }
+        }
+      }
+    }
+
+    // 3. Write updates in sequential batches of 20 (avoids Cosmos throttling)
+    const BATCH = 20;
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < toUpdate.length; i += BATCH) {
+      const chunk = toUpdate.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        chunk.map(doc =>
+          container.item(doc.id, doc.userId).replace(doc)
+        )
+      );
+      succeeded += results.filter(r => r.status === 'fulfilled').length;
+      failed += results.filter(r => r.status === 'rejected').length;
+    }
+
+    // 4. Bust cache
+    cacheDeleteByPrefix(PLAYERS_CACHE_PREFIX);
+
+    return NextResponse.json({
+      updated: succeeded,
+      failed,
+      total: toUpdate.length,
+    });
+  } catch (error) {
+    console.error("Error batch updating seeds:", error);
+    return NextResponse.json(
+      { error: "Failed to batch update seeds" },
       { status: 500 }
     );
   }

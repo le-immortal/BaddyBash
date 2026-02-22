@@ -47,6 +47,7 @@ export default function AdminDashboard() {
   const [generating, setGenerating] = useState(false);
   const [seedValues, setSeedValues] = useState<Record<string, string>>({});
   const [seedingMode, setSeedingMode] = useState(false);
+  const [savingSeeds, setSavingSeeds] = useState(false);
   const [currentSeeds, setCurrentSeeds] = useState<{ id: string, name: string, currentSeed: number }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category>('MS');
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,13 +228,79 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     }
   };
 
+  const handleSaveSeeds = async (source: 'visualizer' | 'list' = 'visualizer') => {
+    // Build a single seed map: registrationId -> seed number
+    let seedMap: Record<string, number | null>;
+
+    if (source === 'visualizer') {
+      seedMap = {};
+      currentSeeds.forEach(s => { seedMap[s.id] = s.currentSeed; });
+    } else {
+      // From list view seedValues
+      seedMap = {};
+      Object.entries(seedValues).forEach(([regId, val]) => {
+        seedMap[regId] = val ? Number(val) : null;
+      });
+    }
+
+    if (Object.keys(seedMap).length === 0) return;
+
+    setSavingSeeds(true);
+    try {
+      const res = await fetch('/api/admin/players', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: selectedCategory,
+          seeds: seedMap,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to save seeds.');
+      } else {
+        const result = await res.json();
+        if (result.failed > 0) {
+          alert(`${result.failed} of ${result.total} seed(s) failed to save.`);
+        }
+      }
+
+      // Refresh players to get fresh data from DB
+      await fetchPlayers();
+    } catch (err) {
+      console.error('Failed to save seeds:', err);
+      alert('Failed to save seeds.');
+    } finally {
+      setSavingSeeds(false);
+    }
+  };
+
   const handleGenerateFixtures = async () => {
     if (!seedingMode && !confirm(`Generate bracket for ${selectedCategory}? This will replace any existing bracket.`)) return;
     
     // Build seed map from visualizer state if active
+    // For doubles, key by pairKey (deterministic sorted "userId|partnerId")
+    // so the API can look up seeds regardless of which partner's registration it encounters first
     const seedMap: Record<string, number> = {};
+    const isDoublesCategory = ['MD', 'WD', 'XD'].includes(selectedCategory);
     if (seedingMode) {
-       currentSeeds.forEach(s => seedMap[s.id] = s.currentSeed);
+       if (isDoublesCategory) {
+         // Map registration IDs back to pairKeys
+         const flatRegs = players.flatMap(p => p.registrations);
+         const regToPairKey = new Map<string, string>();
+         for (const r of flatRegs) {
+           const pk = [r.userId, r.partnerId || ''].sort().join('|');
+           regToPairKey.set(r.id, pk);
+         }
+         currentSeeds.forEach(s => {
+           const pk = regToPairKey.get(s.id);
+           if (pk) seedMap[pk] = s.currentSeed;
+           seedMap[s.id] = s.currentSeed; // Also send reg.id as fallback
+         });
+       } else {
+         currentSeeds.forEach(s => seedMap[s.id] = s.currentSeed);
+       }
     }
 
     setGenerating(true);
@@ -270,14 +337,31 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
        return;
     }
 
+    const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
+
+    // For doubles, deduplicate by pair key so each team appears once
+    let entries: typeof flatRegs;
+    if (isDoubles) {
+      const seen = new Set<string>();
+      entries = [];
+      for (const r of flatRegs) {
+        const pairKey = [r.userId, r.partnerId || ''].sort().join('|');
+        if (seen.has(pairKey)) continue;
+        seen.add(pairKey);
+        entries.push(r);
+      }
+    } else {
+      entries = flatRegs;
+    }
+
     // Map to Seed format — use seedValues (input state) as primary source since
     // the DB save from onBlur may still be in-flight when user clicks "Seed & Generate"
-    const mapped = flatRegs.map((r, index) => {
+    const mapped = entries.map((r) => {
       const inputSeed = seedValues[r.id] ? Number(seedValues[r.id]) : undefined;
       return {
         id: r.id,
-        name: r.category.includes('D') ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
-        currentSeed: inputSeed || r.seed || (index + 1),
+        name: isDoubles ? (r.userName + (r.partnerName ? ' & ' + r.partnerName : '')) : r.userName,
+        currentSeed: inputSeed || r.seed || 999,
       };
     });
     
@@ -475,7 +559,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             'bye': 'bye'
         };
         const normStatusKey = importedStatusRaw.toLowerCase().replace('_', ' '); // standardize input
-        const normStatus = Object.entries(statusMap).find(([k, v]) => k === normStatusKey)?.[1] || originalMatch.status;
+        const normStatus = Object.entries(statusMap).find(([k]) => k === normStatusKey)?.[1] || originalMatch.status;
 
         if (normStatus !== originalMatch.status) {
              if (Object.values(statusMap).includes(normStatus)) {
@@ -945,6 +1029,14 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                              Cancel
                            </button>
                            <button 
+                             onClick={() => handleSaveSeeds('visualizer')}
+                             disabled={savingSeeds}
+                             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2"
+                           >
+                             {savingSeeds ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                             Save Seeds
+                           </button>
+                           <button 
                              onClick={handleGenerateFixtures}
                              disabled={generating}
                              className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
@@ -982,8 +1074,16 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         })()}
                         </span>
                         <button 
+                          onClick={() => handleSaveSeeds('list')}
+                          disabled={savingSeeds || Object.keys(seedValues).length === 0}
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1 ml-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingSeeds ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          Save Seeds
+                        </button>
+                        <button 
                           onClick={startSeeding}
-                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 ml-4"
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1"
                         >
                           <ArrowRight className="w-3 h-3" />
                           Seed & Generate
