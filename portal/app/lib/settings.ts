@@ -9,21 +9,19 @@ export interface GlobalSettings {
 }
 
 const CONFIG_ID = "CONFIG_GLOBAL";
-const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+// Infinite in-memory cache — only invalidated on write via updateGlobalSettings().
+// Safe for single-instance App Service; settings change at most once or twice per event.
 let cachedSettings: GlobalSettings | null = null;
-let lastFetchTime = 0;
 
 
 /**
  * Fetch global settings with in-memory caching.
- * Cache invalidates every 30 seconds.
+ * Cache lives forever until explicitly invalidated by updateGlobalSettings().
  */
 export async function getGlobalSettings(): Promise<GlobalSettings> {
-  const now = Date.now();
-
-  // Return cached version if valid
-  if (cachedSettings && (now - lastFetchTime < CACHE_TTL_MS)) {
+  // Return cached version if available (infinite TTL)
+  if (cachedSettings) {
     return cachedSettings;
   }
 
@@ -38,7 +36,6 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
       bracketsVisible: false, // Default hidden
     };
 
-    lastFetchTime = now;
     return cachedSettings;
   } catch (error) {
     console.error("Failed to fetch global settings:", error);
@@ -82,7 +79,6 @@ export async function updateGlobalSettings(newSettings: Partial<GlobalSettings>)
   
   if (resource) {
     cachedSettings = resource;
-    lastFetchTime = Date.now();
     return resource;
   }
 
