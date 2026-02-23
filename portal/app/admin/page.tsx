@@ -816,15 +816,15 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     <div className="min-h-screen bg-slate-50">
       <Navbar />
       <main className="container mx-auto py-8 px-4">
-        <header className="mb-8 flex justify-between items-center">
+        <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Tournament Administration</h1>
-            <p className="text-slate-600 mt-2">Manage players, seeds, and fixtures.</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Tournament Administration</h1>
+            <p className="text-slate-600 mt-1 md:mt-2 text-sm md:text-base">Manage players, seeds, and fixtures.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3">
             <button
               onClick={toggleBrackets}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border min-h-[44px] ${
                 bracketsVisible 
                   ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' 
                   : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
@@ -832,11 +832,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               title={bracketsVisible ? 'Hide Brackets' : 'Publish Brackets'}
             >
               {bracketsVisible ? <Trophy size={16} /> : <Lock size={16} />}
-              {bracketsVisible ? 'Brackets Live' : 'Brackets Hidden'}
+              <span className="hidden sm:inline">{bracketsVisible ? 'Brackets Live' : 'Brackets Hidden'}</span>
             </button>
             <button
               onClick={toggleRegistration}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border min-h-[44px] ${
                 registrationOpen 
                   ? 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100' 
                   : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
@@ -844,12 +844,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               title={registrationOpen ? 'Close Registrations' : 'Re-open Registrations'}
             >
               {registrationOpen ? <Lock size={16} /> : <Unlock size={16} />}
-              {registrationOpen ? 'Close Reg' : 'Open Reg'}
+              <span className="hidden sm:inline">{registrationOpen ? 'Close Reg' : 'Open Reg'}</span>
             </button>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as Category)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
             >
               {CATEGORIES.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -859,10 +859,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               <button
                 onClick={() => setShowExportMenu(v => !v)}
                 disabled={exporting}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50"
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-50 min-h-[44px]"
               >
                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Export
+                <span className="hidden sm:inline">Export</span>
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showExportMenu && (
@@ -902,11 +902,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-200 border border-slate-300 disabled:opacity-50"
+              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 min-h-[44px]"
               title="Import Bracket Data"
             >
               <Upload size={16} />
-              Import
+              <span className="hidden sm:inline">Import</span>
             </button>
           </div>
         </header>
