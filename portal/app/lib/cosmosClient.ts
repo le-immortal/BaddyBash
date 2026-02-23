@@ -57,15 +57,41 @@ export async function initializeDatabase(): Promise<void> {
   });
 
   // Users container — partitioned by id (each user is their own partition)
+  // Custom index: exclude rarely-queried large fields; add composite for email lookup.
   await db.containers.createIfNotExists({
     id: "users",
     partitionKey: { paths: ["/id"] },
+    indexingPolicy: {
+      automatic: true,
+      indexingMode: "consistent",
+      includedPaths: [{ path: "/*" }],
+      excludedPaths: [
+        { path: "/avatar/?" },      // URL/base64 string, never used in WHERE clauses
+      ],
+      compositeIndexes: [
+        [{ path: "/email", order: "ascending" }],  // WHERE c.email = @email
+        [{ path: "/name", order: "ascending" }],   // ORDER BY c.name
+      ],
+    },
   });
 
   // Registrations container — partitioned by userId for efficient per-user queries
+  // Composite index on (category, status) covers the cross-partition bracket-gen query.
   await db.containers.createIfNotExists({
     id: "registrations",
     partitionKey: { paths: ["/userId"] },
+    indexingPolicy: {
+      automatic: true,
+      indexingMode: "consistent",
+      includedPaths: [{ path: "/*" }],
+      excludedPaths: [],
+      compositeIndexes: [
+        [
+          { path: "/category", order: "ascending" },
+          { path: "/status", order: "ascending" },
+        ],
+      ],
+    },
   });
 
   // Matches container — partitioned by category for easy bracket queries

@@ -374,26 +374,37 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "Registration not found" }, { status: 404 });
       }
 
-      // 3. If doubles, delete partner's registration too
+      // 3. If doubles, soft-delete partner's registration too
       if (isDoubles(category as Category)) {
-        // Also check if partnerId actually exists on the registration
         if (reg.partnerId) {
           const cleanPartnerId = reg.partnerId;
           const partnerRegId = `${cleanPartnerId}_${category}`;
           try {
-            await container.item(partnerRegId, cleanPartnerId).delete();
+            const { resource: partnerReg } = await container
+              .item(partnerRegId, cleanPartnerId)
+              .read<RegistrationDocument>();
+            if (partnerReg && partnerReg.status === "confirmed") {
+              await container.item(partnerRegId, cleanPartnerId).replace({
+                ...partnerReg,
+                status: "cancelled",
+                updatedAt: new Date().toISOString(),
+              });
+            }
           } catch (e: unknown) {
               const cosmosErr = e as { code?: number };
-              // If 404, partner might have already cancelled or not existed
               if (cosmosErr?.code !== 404) {
-                console.error("Failed to delete partner registration:", e);
+                console.error("Failed to cancel partner registration:", e);
               }
           }
         }
       }
 
-      // 4. Delete user's registration
-      await container.item(regId, cleanUserId).delete();
+      // 4. Soft-delete user's registration (preserve audit trail)
+      await container.item(regId, cleanUserId).replace({
+        ...reg,
+        status: "cancelled",
+        updatedAt: new Date().toISOString(),
+      });
 
       // Bust admin players cache (registrations changed)
       cacheDeleteByPrefix("admin-players:");

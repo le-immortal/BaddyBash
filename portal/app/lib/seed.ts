@@ -29,10 +29,32 @@ async function seed() {
   await database.containers.createIfNotExists({
     id: "users",
     partitionKey: { paths: ["/id"] },
+    indexingPolicy: {
+      automatic: true,
+      indexingMode: "consistent",
+      includedPaths: [{ path: "/*" }],
+      excludedPaths: [{ path: "/avatar/?" }],  // URL/base64 string, never used in WHERE clauses
+      compositeIndexes: [
+        [{ path: "/email", order: "ascending" }],
+        [{ path: "/name", order: "ascending" }],
+      ],
+    },
   });
   await database.containers.createIfNotExists({
     id: "registrations",
     partitionKey: { paths: ["/userId"] },
+    indexingPolicy: {
+      automatic: true,
+      indexingMode: "consistent",
+      includedPaths: [{ path: "/*" }],
+      excludedPaths: [],
+      compositeIndexes: [
+        [
+          { path: "/category", order: "ascending" },
+          { path: "/status", order: "ascending" },
+        ],
+      ],
+    },
   });
   await database.containers.createIfNotExists({
     id: "matches",
