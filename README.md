@@ -1,52 +1,102 @@
 # Baddy Bash Portal 🏸
 
-The official internal badminton tournament portal for Microsoft employees. Built with Next.js 16, Azure Cosmos DB, and Tailwind CSS.
+The official internal badminton tournament portal for Microsoft employees. Register, track your matches, and follow the live bracket — all in one place.
 
-## 🚀 Key Features
+Built with Next.js 16, Azure Cosmos DB, and Tailwind CSS.
 
-### for Players
-- **Seamless Registration**: Sign in with your Microsoft account using Entra ID. Register for up to 2 categories (Singles/Doubles).
-- **Find Your Partner**: For doubles, simply enter your partner's alias. The system automatically links your registration.
-- **Manage Profile**: Update your T-shirt size and contact details.
-- **Tournament Status**: View your confirmed matches and withdraw if necessary (while registration is open).
-- **Withdrawals**: Easily withdraw from categories if your plans change. Doubles partners are automatically unlinked.
-- **Bracket View**: See the live tournament draw and follow your path to victory (when published by admins).
+---
 
-### for Admins
-- **Interactive Dashboard**: View all player registrations and stats in real-time.
-- **Registration Control**: Open/Close tournament registration with a single click.
-- **Bracket Management**:
-  - Automatically generate single-elimination brackets based on seeds (1 vs N, 2 vs N-1).
-  - Publish brackets to the public or keep them hidden during setup.
-  - Handle byes and player seeding.
-- **Live Scoring**: Update match scores in real-time as the tournament progresses.
-- **Export Data**: Download player lists and brackets to Excel.
+## How It Works
 
-## 🛠 Tech Stack
+### Getting Started (Players)
 
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
-- **Database**: [Azure Cosmos DB](https://azure.microsoft.com/en-us/services/cosmos-db/) (NoSQL API)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **Auth**: [Auth.js (NextAuth v5)](https://authjs.dev/) with Microsoft Entra ID
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Deployment**: Azure App Service (Linux/Node.js)
+1. **Sign in** with your Microsoft account (Entra ID SSO — no new account needed).
+2. **Set up your profile** — enter your name, Microsoft alias, phone number, and T-shirt size.
+3. **Register for categories** — pick up to **2 categories** from Men's Singles, Women's Singles, Men's Doubles, Women's Doubles, and Mixed Doubles.
+4. **For doubles**, enter your partner's Microsoft alias and name. The system automatically creates their account and links your registration as a team.
+5. **Confirm** your selections — you're in!
 
-## 📦 Project Structure
+### During the Tournament
+
+- **Your Matches** appear on the Player Dashboard once brackets are published — see upcoming matches, scheduled times, and completed results.
+- **Live Bracket** page shows the full tournament draw with real-time progression. Search for any player by name and navigate between multiple results.
+- **Match History** shows your W/L record with round labels (QF, Semi, Final).
+
+### Withdrawing
+
+While registration is open, you can withdraw from any category. For doubles, withdrawing automatically unlinks your partner from that category.
+
+---
+
+## Features
+
+### For Players
+- **Microsoft SSO** — one-click sign-in, no separate credentials
+- **Smart Registration** — max 2 categories enforced, gender-based conflict detection (can't register for both Men's and Women's events)
+- **Partner Linking** — enter your doubles partner's alias; the system auto-creates their profile and links registrations
+- **Profile Management** — update name, phone, and T-shirt size at any time (while registration is open)
+- **Live Bracket View** — interactive tournament tree with round navigation, search with prev/next cycling, and schedule times
+- **Match Dashboard** — upcoming matches sorted by status (live → scheduled → completed), with round labels and W/L badges
+- **Withdrawals** — one-click withdrawal with automatic partner unlinking
+
+### For Admins
+- **Registration Control** — open/close registration with one click
+- **Bracket Publishing** — toggle bracket visibility (hide during setup, publish when ready)
+- **Player Seeding** — assign seed numbers to players/teams, with duplicate detection and batch save
+- **Visual Seeding** — drag-and-drop seeding interface showing real-time matchup previews
+- **Bracket Generation** — single-elimination knockout brackets with proper seed placement (1 vs N, 2 vs N-1) and automatic byes
+- **Match Management** — update winners, schedule times; winners auto-advance through the bracket
+- **Import/Export** — import brackets from Excel (.xlsx), export player lists and bracket data
+- **Category Filtering** — switch between all 5 categories with one click
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | [Next.js 16](https://nextjs.org/) (App Router, React 19) |
+| Database | [Azure Cosmos DB](https://azure.microsoft.com/en-us/services/cosmos-db/) (NoSQL API, Serverless) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com/) |
+| Auth | [Auth.js (NextAuth v5)](https://authjs.dev/) with Microsoft Entra ID |
+| Icons | [Lucide React](https://lucide.dev/) |
+| Deployment | Azure App Service (Linux / Node.js) |
+
+## Project Structure
 
 ```
 portal/
 ├── app/
-│   ├── api/            # API Routes (Users, Registrations, Matches, Settings)
-│   ├── admin/          # Admin Dashboard (Protected Route)
-│   ├── bracket/        # Public Bracket Visualization
-│   ├── dashboard/      # Player Dashboard
-│   ├── lib/            # Shared Utilities (Cosmos Client, Models, Auth)
-│   └── components/     # Reusable UI Components
-├── public/             # Static Assets
-└── types/              # TypeScript Definitions
+│   ├── api/            # REST API routes
+│   │   ├── admin/      #   Admin endpoints (players, export)
+│   │   ├── auth/       #   NextAuth handlers
+│   │   ├── matches/    #   Match CRUD + bracket generation
+│   │   ├── registrations/ # Registration CRUD
+│   │   ├── settings/   #   Global settings (reg open, brackets visible)
+│   │   ├── setup/      #   Database initialization
+│   │   └── users/      #   User profile CRUD
+│   ├── admin/          # Admin dashboard (seeding, matches, import/export)
+│   ├── bracket/        # Public bracket visualization + search
+│   ├── dashboard/      # Player dashboard (registrations, matches)
+│   ├── auth/           # Auth error page
+│   ├── components/     # Shared UI (Navbar, MatchCard, SeedingVisualizer, etc.)
+│   └── lib/            # Utilities (Cosmos client, models, bracket math, settings cache)
+├── public/             # Static assets
+└── types/              # TypeScript declaration files
 ```
 
-## 🔧 Local Development
+## Data Model
+
+| Container | Partition Key | Purpose |
+|-----------|--------------|---------|
+| `users` | `/id` | Player profiles (id = lowercase alias) |
+| `registrations` | `/userId` | Category registrations (id = `userId_category`) |
+| `matches` | `/category` | Tournament matches with bracket structure |
+| `settings` | `/id` | Global config (registration open, brackets visible) |
+
+---
+
+## Local Development
 
 1. **Clone the repository**
    ```bash
@@ -59,46 +109,44 @@ portal/
    npm install
    ```
 
-3. **Configure Environment Variables**
-   Create a `.env.local` file in the `portal` directory:
+3. **Configure environment variables** — create `.env.local` in `portal/`:
    ```env
-   # Database
+   # Azure Cosmos DB
    COSMOS_ENDPOINT=https://your-cosmos-account.documents.azure.com:443/
    COSMOS_KEY=your_primary_key
    COSMOS_DATABASE=baddybashdb
 
-   # Authentication (NextAuth.js)
+   # NextAuth.js
    AUTH_SECRET=your_generated_secret
    AUTH_URL=http://localhost:3000
 
-   # Microsoft Entra ID (Auth Provider)
+   # Microsoft Entra ID
    AUTH_MICROSOFT_ENTRA_ID_ID=your_client_id
    AUTH_MICROSOFT_ENTRA_ID_SECRET=your_client_secret
    AUTH_MICROSOFT_ENTRA_ID_TENANT_ID=your_tenant_id
    ```
 
-4. **Run the development server**
+4. **Run the dev server**
    ```bash
    npm run dev
    ```
 
-5. **Open the app**
-   Navigate to [http://localhost:3000](http://localhost:3000).
+5. **Open** [http://localhost:3000](http://localhost:3000)
 
-## 🧪 Database Seeding
-
-To populate the database with test data (Players, Registrations, Matches):
+### Database Seeding
 
 ```bash
-# Seed small dataset (9 users)
+# Small dataset (9 users)
 npx tsx app/lib/seed.ts
 
-# Seed bulk dataset (1500+ users for stress testing)
+# Bulk dataset (1500+ users for stress testing)
 npx tsx app/lib/seed-bulk.ts
 ```
 
-> **Warning**: Seeding scripts will wipe existing data in the target database.
+> **Warning**: Seeding scripts wipe existing data in the target database.
 
-## 📝 License
+---
+
+## License
 
 This project is internal to Microsoft.
