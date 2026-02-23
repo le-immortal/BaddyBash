@@ -125,6 +125,7 @@ export default function BracketPage() {
   const [loading, setLoading] = useState(true);
   const [roundOffset, setRoundOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchIndex, setSearchIndex] = useState(0);
   const bracketRef = useRef<HTMLDivElement>(null);
   const matchRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [bracketsVisible, setBracketsVisible] = useState(false);
@@ -160,39 +161,48 @@ export default function BracketPage() {
   }, [matches]);
 
   // Search: find matches where player name contains the query
-  const { highlightedIds, searchResultCount } = useMemo(() => {
+  const { highlightedIds, searchResultList, searchResultCount } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return { highlightedIds: new Set<string>(), searchResultCount: 0 };
+    if (!q) return { highlightedIds: new Set<string>(), searchResultList: [] as string[], searchResultCount: 0 };
     const ids = new Set<string>();
+    const list: string[] = [];
     matches.forEach(m => {
       if (
         (m.player1Name && m.player1Name.toLowerCase().includes(q)) ||
         (m.player2Name && m.player2Name.toLowerCase().includes(q))
       ) {
         ids.add(m.id);
+        list.push(m.id);
       }
     });
-    return { highlightedIds: ids, searchResultCount: ids.size };
+    return { highlightedIds: ids, searchResultList: list, searchResultCount: ids.size };
   }, [searchQuery, matches]);
 
-  // Auto-navigate to the round containing the first highlighted match
-  useEffect(() => {
-    if (highlightedIds.size === 0) return;
-    const firstMatch = matches.find(m => highlightedIds.has(m.id));
-    if (!firstMatch) return;
-    // Find what sortedRounds index this round is at
-    const roundIdx = sortedRounds.findIndex(([r]) => r === firstMatch.round);
+  // Reset search index when query changes
+  useEffect(() => { setSearchIndex(0); }, [searchQuery]);
+
+  // Navigate to the current search result (by searchIndex)
+  const scrollToResult = useCallback((idx: number) => {
+    if (searchResultList.length === 0) return;
+    const targetId = searchResultList[idx];
+    const targetMatch = matches.find(m => m.id === targetId);
+    if (!targetMatch) return;
+    const roundIdx = sortedRounds.findIndex(([r]) => r === targetMatch.round);
     if (roundIdx >= 0 && (roundIdx < roundOffset || roundIdx >= roundOffset + VISIBLE_ROUNDS)) {
       setRoundOffset(Math.min(roundIdx, Math.max(0, sortedRounds.length - VISIBLE_ROUNDS)));
     }
-    // Scroll to the match card after a short delay for render
     setTimeout(() => {
-      const el = matchRefs.current.get(firstMatch.id);
+      const el = matchRefs.current.get(targetId);
       if (el && bracketRef.current) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       }
     }, 100);
-  }, [highlightedIds, sortedRounds, matches, roundOffset]);
+  }, [searchResultList, matches, sortedRounds, roundOffset]);
+
+  // Auto-scroll when search results change or index changes
+  useEffect(() => {
+    if (searchResultList.length > 0) scrollToResult(searchIndex);
+  }, [searchIndex, searchResultList, scrollToResult]);
 
   const visibleRounds = sortedRounds.slice(roundOffset, roundOffset + VISIBLE_ROUNDS);
   const canLeft = roundOffset > 0;
@@ -274,10 +284,36 @@ export default function BracketPage() {
                 <X className="w-4 h-4" />
               </button>
             )}
-            {searchQuery.trim() && (
-              <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                {searchResultCount} match{searchResultCount !== 1 ? 'es' : ''}
+            {searchQuery.trim() && searchResultCount > 0 && (
+              <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchResultCount > 1 && (
+                  <>
+                    <button
+                      onClick={() => setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount)}
+                      className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                      title="Previous result"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-xs text-slate-500 tabular-nums min-w-[3ch] text-center">
+                      {searchIndex + 1}/{searchResultCount}
+                    </span>
+                    <button
+                      onClick={() => setSearchIndex(i => (i + 1) % searchResultCount)}
+                      className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                      title="Next result"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+                {searchResultCount <= 1 && (
+                  <span className="text-xs text-slate-500">{searchResultCount} match</span>
+                )}
               </div>
+            )}
+            {searchQuery.trim() && searchResultCount === 0 && (
+              <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-red-400">No results</div>
             )}
           </div>
         )}
