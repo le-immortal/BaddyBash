@@ -1,5 +1,5 @@
 import { MatchDocument } from '../lib/models';
-import { Clock, Trophy, Swords, CircleDot } from 'lucide-react';
+import { Trophy, CircleDot } from 'lucide-react';
 
 interface ScheduleMatchCardProps {
   match: MatchDocument;
@@ -7,7 +7,6 @@ interface ScheduleMatchCardProps {
   totalRounds: number;
 }
 
-/** Convert round number to a human-readable label. */
 function getRoundLabel(round: number, totalRounds: number): string {
   if (round === totalRounds) return 'Final';
   if (round === totalRounds - 1) return 'Semi-Final';
@@ -15,12 +14,12 @@ function getRoundLabel(round: number, totalRounds: number): string {
   return `Round ${round}`;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  MS: 'bg-blue-100 text-blue-700',
-  WS: 'bg-pink-100 text-pink-700',
-  MD: 'bg-indigo-100 text-indigo-700',
-  WD: 'bg-purple-100 text-purple-700',
-  XD: 'bg-teal-100 text-teal-700',
+const CAT_COLOR: Record<string, { dot: string; circle: string }> = {
+  MS: { dot: 'bg-blue-500', circle: 'bg-blue-400' },
+  WS: { dot: 'bg-pink-500', circle: 'bg-pink-400' },
+  MD: { dot: 'bg-indigo-500', circle: 'bg-indigo-400' },
+  WD: { dot: 'bg-purple-500', circle: 'bg-purple-400' },
+  XD: { dot: 'bg-teal-500', circle: 'bg-teal-400' },
 };
 
 export default function ScheduleMatchCard({ match, userId, totalRounds }: ScheduleMatchCardProps) {
@@ -28,74 +27,81 @@ export default function ScheduleMatchCard({ match, userId, totalRounds }: Schedu
   const isComplete = match.status === 'completed';
   const isScheduled = match.status === 'scheduled';
 
-  // Determine if this user is player 1 or player 2
-  // For doubles, player IDs are pipe-separated (e.g., "alice|bob"), so check with split
   const isPlayer1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
   const opponentName = isPlayer1 ? match.player2Name : match.player1Name;
-  // For doubles, winnerId is pipe-separated (e.g. "m79|m80"), so check with split
   const userWon = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
+
+  const cat = CAT_COLOR[match.category] || CAT_COLOR.MS;
 
   return (
     <div
-      className={`rounded-xl border p-4 transition-all ${
+      className={`relative rounded-xl border overflow-hidden transition-all ${
         isLive
-          ? 'bg-amber-50 border-amber-300 ring-1 ring-amber-200'
+          ? 'bg-white border-amber-200 shadow-md ring-1 ring-amber-100'
           : isComplete
             ? userWon
-              ? 'bg-green-50 border-green-200'
-              : 'bg-slate-50 border-slate-200'
-            : 'bg-white border-slate-200 hover:border-blue-200'
+              ? 'bg-white border-green-200 shadow-sm'
+              : 'bg-white border-slate-200 shadow-sm opacity-70'
+            : 'bg-white border-slate-200 shadow-sm hover:shadow-md'
       }`}
     >
-      {/* Top row: category badge, round, match number, time */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-xs">
-          <span className={`px-2 py-0.5 rounded-full font-bold ${CATEGORY_COLORS[match.category] || 'bg-slate-100 text-slate-700'}`}>
-            {match.category}
-          </span>
-          <span className="text-slate-500">
-            {getRoundLabel(match.round, totalRounds)}
-          </span>
-          {match.matchNumber && (
-            <span className="text-slate-400 font-mono">M{match.matchNumber}</span>
+      {/* Decorative oversized circle — category accent */}
+      <div className={`absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-[0.07] ${cat.circle}`} />
+
+      <div className="relative p-5">
+        {/* Time — hero element in display font */}
+        {match.scheduledTime ? (
+          <div className={`mb-3 ${isLive ? 'text-amber-600' : 'text-slate-900'}`}>
+            <span className="font-[family-name:var(--font-bebas)] text-3xl tracking-wider leading-none">
+              {match.scheduledTime}
+            </span>
+          </div>
+        ) : (
+          <div className="mb-3">
+            <span className="font-[family-name:var(--font-bebas)] text-3xl tracking-wider text-slate-300 leading-none">
+              {match.matchNumber ? `MATCH ${match.matchNumber}` : 'TBD'}
+            </span>
+          </div>
+        )}
+
+        {/* Category dot + round + match number */}
+        <div className="flex items-center gap-2 text-xs mb-3">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${cat.dot}`} />
+          <span className="font-bold text-slate-600">{match.category}</span>
+          <span className="text-slate-300">·</span>
+          <span className="text-slate-400">{getRoundLabel(match.round, totalRounds)}</span>
+          {match.matchNumber && match.scheduledTime && (
+            <>
+              <span className="text-slate-300">·</span>
+              <span className="text-slate-300 font-mono">M{match.matchNumber}</span>
+            </>
           )}
         </div>
-        {match.scheduledTime && (
-          <span className="flex items-center gap-1 text-xs text-slate-500">
-            <Clock className="w-3 h-3" />
-            {match.scheduledTime}
-          </span>
-        )}
-      </div>
 
-      {/* Opponent row */}
-      <div className="flex items-center gap-2 mb-2">
-        <Swords className="w-4 h-4 text-slate-400 shrink-0" />
-        <span className="text-sm text-slate-800 font-medium">
-          You vs{' '}
-          <span className="font-semibold">
-            {opponentName || <span className="text-slate-400 italic">TBD</span>}
+        {/* Opponent + status */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-600 truncate min-w-0">
+            vs{' '}
+            <span className="font-semibold text-slate-800">
+              {opponentName || <span className="text-slate-400 italic font-normal">TBD</span>}
+            </span>
+          </p>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0 ${
+              isLive
+                ? 'bg-amber-50 text-amber-600'
+                : isComplete
+                  ? userWon
+                    ? 'bg-green-50 text-green-600'
+                    : 'bg-slate-50 text-slate-400'
+                  : 'bg-slate-50 text-slate-400'
+            }`}
+          >
+            {isLive && <><CircleDot className="w-3 h-3 animate-pulse" /> Live</>}
+            {isComplete && (userWon ? <><Trophy className="w-3 h-3" /> Won</> : 'Lost')}
+            {isScheduled && 'Upcoming'}
           </span>
-        </span>
-      </div>
-
-      {/* Bottom row: status badge */}
-      <div className="flex items-center justify-end">
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-            isLive
-              ? 'bg-amber-100 text-amber-700'
-              : isComplete
-                ? userWon
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-700'
-                : 'bg-slate-100 text-slate-600'
-          }`}
-        >
-          {isLive && <><CircleDot className="w-3 h-3 animate-pulse" /> Live</>}
-          {isComplete && (userWon ? <><Trophy className="w-3 h-3" /> Won</> : 'Lost')}
-          {isScheduled && 'Upcoming'}
-        </span>
+        </div>
       </div>
     </div>
   );
