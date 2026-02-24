@@ -10,8 +10,14 @@ const MAX_CATEGORIES = 2;
 /**
  * GET /api/registrations?userId=xxx
  * Returns all registrations for a user.
+ * Requires authentication.
  */
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const userId = request.nextUrl.searchParams.get("userId");
 
   if (!userId) {

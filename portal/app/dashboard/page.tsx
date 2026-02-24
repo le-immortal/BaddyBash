@@ -7,6 +7,7 @@ import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw } from 'lucide-react';
+import ErrorScreen from '../components/ErrorScreen';
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -51,13 +52,19 @@ export default function Dashboard() {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [bracketsVisible, setBracketsVisible] = useState<boolean | null>(null); // null = unknown yet
   const [totalRoundsMap, setTotalRoundsMap] = useState<Record<string, number>>({});
+  const [apiError, setApiError] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Check global settings (registration open + brackets visible)
   useEffect(() => {
-    fetch('/api/settings').then(res => res.json()).then(data => {
+    fetch('/api/settings').then(res => {
+      if (!res.ok) { setApiError(true); return null; }
+      return res.json();
+    }).then(data => {
+      if (!data) return;
       setRegistrationOpen(data.registrationOpen !== false);
       setBracketsVisible(data.bracketsVisible !== false);
-    }).catch(console.error);
+    }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
   }, []);
 
   // Determine if profile is fully set up.
@@ -111,10 +118,15 @@ export default function Dashboard() {
             setTShirtSize(user.tShirtSize || '');
             setResolvedUserId(user.id); // id = alias
           }
+        } else if (res.status !== 404) {
+          // 500/403/401 — service is down or auth broken
+          console.error('Users API error:', res.status);
+          setApiError(true);
         }
         // If 404, user hasn't set up profile yet — that's fine, show the setup form
       } catch (err) {
         console.error('Failed to init user:', err);
+        setApiError(true);
       } finally {
         setLoading(false);
       }
@@ -388,7 +400,7 @@ export default function Dashboard() {
     }
   };
 
-  if (sessionStatus === 'loading' || loading) {
+  if (sessionStatus === 'loading' || loading || !settingsLoaded) {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navbar />
@@ -409,6 +421,10 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  if (apiError) {
+    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
   }
 
   // Profile-first gate: if alias/name/phone not saved, show setup form

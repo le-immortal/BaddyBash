@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { initializeDatabase } from "@/app/lib/cosmosClient";
+import { requireAdmin } from "@/app/lib/authHelpers";
 
 /**
  * POST /api/setup
  * Initialize the Cosmos DB database and containers.
- * Call this once when first setting up the application.
+ * Requires admin authentication.
  */
 export async function POST() {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+  }
+
   try {
     await initializeDatabase();
     return NextResponse.json({

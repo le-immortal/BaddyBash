@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X } from 'lucide-react';
+import ErrorScreen from '../components/ErrorScreen';
 import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
@@ -130,21 +131,27 @@ export default function BracketPage() {
   const matchRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [bracketsVisible, setBracketsVisible] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [apiError, setApiError] = useState(false);
 
   // Check brackets visibility
   useEffect(() => {
-    fetch('/api/settings').then(res => res.json()).then(data => {
+    fetch('/api/settings').then(res => {
+      if (!res.ok) { setApiError(true); return null; }
+      return res.json();
+    }).then(data => {
+      if (!data) return;
       setBracketsVisible(data.bracketsVisible === true);
-    }).catch(console.error).finally(() => setCheckingAccess(false));
+    }).catch(() => setApiError(true)).finally(() => setCheckingAccess(false));
   }, []);
 
   const fetchMatches = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/matches?category=${selectedCategory}`);
-      if (res.ok) setMatches(await res.json());
-      else setMatches([]);
-    } catch { setMatches([]); }
+      if (res.ok) { setMatches(await res.json()); }
+      else if (res.status >= 500) { setApiError(true); }
+      else { setMatches([]); }
+    } catch { setApiError(true); }
     finally { setLoading(false); }
   }, [selectedCategory]);
 
@@ -218,6 +225,10 @@ export default function BracketPage() {
         </div>
       </div>
     );
+  }
+
+  if (apiError) {
+    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
   }
 
   // Gate mechanism
