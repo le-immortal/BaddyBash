@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { UserDocument } from "@/app/lib/models";
 import { getGlobalSettings } from "@/app/lib/settings";
+import { auth } from "@/auth";
 
 /**
  * GET /api/users?id=xxx  OR  /api/users?alias=xxx  OR  /api/users?email=xxx
  * Returns a single user by ID, alias, or email, or all users if no params.
+ * Requires authentication.
  */
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const userId = request.nextUrl.searchParams.get("id");
   const aliasParam = request.nextUrl.searchParams.get("alias");
   const emailParam = request.nextUrl.searchParams.get("email");
@@ -74,8 +80,14 @@ export async function GET(request: NextRequest) {
  * POST /api/users
  * Create or update (upsert) a user.
  * Body: { id, name, email, alias?, phoneNumber? }
+ * Requires authentication.
  */
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { id, name, email } = body;
@@ -134,7 +146,7 @@ export async function POST(request: NextRequest) {
       phoneNumber: body.phoneNumber ? String(body.phoneNumber).trim() : (existing?.phoneNumber || ''),
       tShirtSize: body.tShirtSize || existing?.tShirtSize || undefined,
       avatar: body.avatar || existing?.avatar || undefined,
-      isAdmin: body.isAdmin ?? existing?.isAdmin ?? false,
+      isAdmin: existing?.isAdmin ?? false,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
@@ -151,8 +163,14 @@ export async function POST(request: NextRequest) {
  * PATCH /api/users
  * Partial update a user (e.g., update phone number).
  * Body: { id, ...fieldsToUpdate }
+ * Requires authentication.
  */
 export async function PATCH(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { id, ...updates } = body;
@@ -199,6 +217,9 @@ export async function PATCH(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    // Strip isAdmin from updates — only settable via direct DB access
+    delete cleanUpdates.isAdmin;
 
     // If registration is closed, strip profile fields (name, phoneNumber, tShirtSize)
     const settings = await getGlobalSettings();

@@ -8,6 +8,7 @@ import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert,
 import { Category, MatchDocument, MatchStatus } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
+import ErrorScreen from '../components/ErrorScreen';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -67,6 +68,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [bracketsVisible, setBracketsVisible] = useState(false);
+  const [apiError, setApiError] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,10 +83,14 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   }, []);
 
   useEffect(() => {
-    fetch('/api/settings').then(res => res.json()).then(data => {
+    fetch('/api/settings').then(res => {
+      if (!res.ok) { setApiError(true); return null; }
+      return res.json();
+    }).then(data => {
+      if (!data) return;
       setRegistrationOpen(data.registrationOpen !== false);
       setBracketsVisible(data.bracketsVisible === true);
-    }).catch(console.error);
+    }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
   }, []);
 
   const toggleRegistration = async () => {
@@ -147,9 +154,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           });
         });
         setSeedValues(seeds);
+      } else if (res.status === 401 || res.status === 403 || res.status === 500) {
+        setApiError(true);
       }
     } catch (err) {
       console.error('Failed to fetch players:', err);
+      setApiError(true);
     } finally {
       setLoading(false);
     }
@@ -779,8 +789,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     }
   };
 
-  // Auth loading
-  if (sessionStatus === 'loading') {
+  // Auth loading or settings not yet loaded
+  if (sessionStatus === 'loading' || !settingsLoaded) {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navbar />
@@ -790,6 +800,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         </div>
       </div>
     );
+  }
+
+  if (apiError) {
+    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
   }
 
   // Non-admin gate
