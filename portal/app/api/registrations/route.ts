@@ -3,6 +3,7 @@ import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosCl
 import { RegistrationDocument, UserDocument, isDoubles, Category } from "@/app/lib/models";
 import { getGlobalSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
+import { requireOwnerOrAdmin } from "@/app/lib/authHelpers";
 import { cacheDeleteByPrefix } from "@/app/lib/cache";
 
 const MAX_CATEGORIES = 2;
@@ -22,6 +23,15 @@ export async function GET(request: NextRequest) {
 
   if (!userId) {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
+  }
+
+  // Ownership check: users can only view their own registrations (admins can view anyone's)
+  const { authorized } = await requireOwnerOrAdmin(userId);
+  if (!authorized) {
+    return NextResponse.json(
+      { error: "Forbidden: you can only view your own registrations" },
+      { status: 403 }
+    );
   }
 
   try {
