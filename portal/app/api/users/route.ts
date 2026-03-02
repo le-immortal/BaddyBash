@@ -3,6 +3,7 @@ import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { UserDocument } from "@/app/lib/models";
 import { getGlobalSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
+import { requireOwnerOrAdmin } from "@/app/lib/authHelpers";
 
 /**
  * GET /api/users?id=xxx  OR  /api/users?alias=xxx  OR  /api/users?email=xxx
@@ -22,6 +23,12 @@ export async function GET(request: NextRequest) {
     const container = getUsersContainer();
 
     if (userId) {
+      // Ownership check: users can only look up their own profile (admins can look up anyone)
+      const { authorized } = await requireOwnerOrAdmin(userId);
+      if (!authorized) {
+        return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
+      }
+
       // Point read — O(1) since id is the partition key
       // Trim and lowercase for case-insensitive matching
       const cleanUserId = String(userId).trim().toLowerCase();
@@ -33,6 +40,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (aliasParam) {
+      // Ownership check: users can only look up their own profile (admins can look up anyone)
+      const { authorized } = await requireOwnerOrAdmin(aliasParam);
+      if (!authorized) {
+        return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
+      }
+
       // Query by alias - trim and lowercase for case-insensitive matching
       const cleanAlias = String(aliasParam).trim().toLowerCase();
       const { resources } = await container.items
@@ -49,6 +62,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (emailParam) {
+      // Ownership check: users can only look up their own profile (admins can look up anyone)
+      // For email lookup, check if the requested email matches the session email
+      if (!session.user.isAdmin && session.user.email !== emailParam.trim().toLowerCase()) {
+        return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
+      }
+
       // Query by email - trim and lowercase for case-insensitive matching
       const cleanEmail = String(emailParam).trim().toLowerCase();
       const { resources } = await container.items
