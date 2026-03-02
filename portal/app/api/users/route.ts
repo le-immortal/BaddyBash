@@ -64,7 +64,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(resources[0]);
     }
 
-    // List all users
+    // List all users — admin only (prevents bulk data exposure)
+    if (!session.user.isAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: admin access required to list all users" },
+        { status: 403 }
+      );
+    }
+
     const { resources } = await container.items
       .query<UserDocument>("SELECT * FROM c ORDER BY c.name")
       .fetchAll();

@@ -52,6 +52,12 @@ export async function GET(request: NextRequest) {
  * Body: { userId, userName, category, partnerId?, partnerName?, partnerPhone? }
  */
 export async function POST(request: NextRequest) {
+  // Auth gate — reject unauthenticated requests first
+  const session = await auth();
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     // 0. Check Global Settings
     try {
@@ -68,12 +74,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
-
-    // 0.5. Verify User Identity (Anti-Spoofing)
-    const session = await auth();
-    if (!session || !session.user || !session.user.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const { email } = session.user;
     const cleanUserId = String(userId).trim().toLowerCase();

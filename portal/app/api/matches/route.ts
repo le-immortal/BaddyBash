@@ -6,6 +6,7 @@ import {
   isDoubles,
 } from "@/app/lib/models";
 import { requireAdmin, isAdmin } from "@/app/lib/authHelpers";
+import { auth } from "@/auth";
 import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
 import { getGlobalSettings } from "@/app/lib/settings";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
@@ -52,8 +53,15 @@ function fillNextMatchSlot(
 
 /**
  * GET /api/matches?category=MS
+ * Requires authentication.
  */
 export async function GET(request: NextRequest) {
+  // Auth gate — reject unauthenticated requests
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const category = request.nextUrl.searchParams.get("category") as Category | null;
 
   if (!category) {
