@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGlobalSettings, updateGlobalSettings } from "@/app/lib/settings";
 import { requireAdmin } from "@/app/lib/authHelpers";
+import { auth } from "@/auth";
 
 export async function GET() {
+  // Auth gate — reject unauthenticated requests
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const settings = await getGlobalSettings();
     return NextResponse.json(settings);
