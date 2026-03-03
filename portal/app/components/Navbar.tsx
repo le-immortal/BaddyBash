@@ -5,10 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Trophy, User, Menu, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
 import { signInAction, signOutAction } from '@/app/lib/actions';
 
 export default function Navbar() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const isAdmin = session?.user?.isAdmin === true;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -20,7 +22,9 @@ export default function Navbar() {
             <Trophy className="w-6 h-6 text-yellow-500" />
             <span>Baddy Bash 2026</span>
           </Link>
-          <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} className="hidden md:block" />
+          {pathname === '/' && (
+            <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} className="hidden md:block" />
+          )}
 
           {/* Mobile Menu Button */}
           <button 
