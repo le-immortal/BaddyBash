@@ -465,7 +465,7 @@ export default function Dashboard() {
                   }`}
                 />
                 {!isEditingProfile && (
-                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your alias is "janedoe@microsoft.com", please enter "janedoe" If a partner registered you, use the alias they provided.</p>
+                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your alias is &quot;janedoe@microsoft.com&quot;, please enter &quot;janedoe&quot;. If a partner registered you, use the alias they provided.</p>
                 )}
               </div>
               <div>
