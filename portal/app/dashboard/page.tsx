@@ -281,8 +281,8 @@ export default function Dashboard() {
 
     setLinkingAlias(true);
     try {
-      // Trim and lowercase alias for consistency
-      const cleanAlias = alias.trim().toLowerCase();
+      // Trim, lowercase, and strip @domain suffix from alias for consistency
+      const cleanAlias = alias.trim().toLowerCase().replace(/@.*$/, '');
       
       // Check if a user with this alias already exists (pre-created by a partner)
       const aliasRes = await fetch(`/api/users?alias=${encodeURIComponent(cleanAlias)}`);
@@ -456,16 +456,16 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Microsoft Alias <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g., janedoe"
+                  placeholder="e.g., janedoe (without @microsoft.com)"
                   value={alias}
-                  onChange={(e) => setAlias(e.target.value)}
+                  onChange={(e) => setAlias(e.target.value.replace(/@.*$/, ''))}
                   disabled={isEditingProfile} 
                   className={`mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 placeholder-slate-400 ${
                     isEditingProfile ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
                   }`}
                 />
                 {!isEditingProfile && (
-                  <p className="mt-1 text-xs text-slate-400">This is your unique identifier. If a partner registered you, use the alias they provided.</p>
+                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your alias is "janedoe@microsoft.com", please enter "janedoe" If a partner registered you, use the alias they provided.</p>
                 )}
               </div>
               <div>
