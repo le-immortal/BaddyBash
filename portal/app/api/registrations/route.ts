@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const container = getRegistrationsContainer();
     
     // Trim and lowercase userId for consistency
-    const cleanUserId = String(userId).trim().toLowerCase();
+    const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
     
     const { resources } = await container.items
       .query<RegistrationDocument>({
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
 
     const { email } = session.user;
-    const cleanUserId = String(userId).trim().toLowerCase();
+    const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
     
     // Admins can register on behalf of anyone (if needed for support)
     if (!session.user.isAdmin) { 
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     // Type assertion safe because we validate above
     
     // cleanUserId is already defined above in step 0.5
-    const cleanPartnerId = partnerId ? String(partnerId).trim().toLowerCase() : undefined;
+    const cleanPartnerId = partnerId ? String(partnerId).trim().toLowerCase().replace(/@.*$/, '') : undefined;
 
     // Validate doubles have a partner
     if (isDoubles(category) && !cleanPartnerId) {
@@ -326,7 +326,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "userId and category are required" }, { status: 400 });
   }
 
-  const cleanUserId = String(userId).trim().toLowerCase();
+  const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
 
   try {
      // 0.5. Verify User Identity (Anti-Spoofing)

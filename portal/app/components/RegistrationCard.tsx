@@ -92,10 +92,10 @@ export default function RegistrationCard({
               <label className="text-xs font-medium text-slate-500 uppercase">Partner Alias</label>
               <input 
                 type="text" 
-                placeholder="e.g., janedoe"
+                placeholder="e.g., janedoe (without @microsoft.com)"
                 className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500 text-slate-900 bg-white placeholder-slate-400"
                 value={partnerAlias || ''}
-                onChange={(e) => onAliasChange?.(e.target.value)}
+                onChange={(e) => onAliasChange?.(e.target.value.replace(/@.*$/, ''))}
                 disabled={status !== 'selected'} 
               />
             </div>

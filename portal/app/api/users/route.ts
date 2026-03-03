@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
       }
 
-      // Query by alias - trim and lowercase for case-insensitive matching
-      const cleanAlias = String(aliasParam).trim().toLowerCase();
+      // Query by alias - trim, lowercase, and strip @domain suffix
+      const cleanAlias = String(aliasParam).trim().toLowerCase().replace(/@.*$/, '');
       const { resources } = await container.items
         .query<UserDocument>({
           query: "SELECT * FROM c WHERE c.alias = @alias",
@@ -130,9 +130,9 @@ export async function POST(request: NextRequest) {
 
     // Trim and lowercase id (alias) and email for consistency
     // Type assertion safe because we validate above
-    const cleanId = String(id).trim().toLowerCase();
+    const cleanId = String(id).trim().toLowerCase().replace(/@.*$/, '');
     const cleanEmail = String(email).trim().toLowerCase();
-    const cleanAlias = body.alias ? String(body.alias).trim().toLowerCase() : undefined;
+    const cleanAlias = body.alias ? String(body.alias).trim().toLowerCase().replace(/@.*$/, '') : undefined;
 
     // Check if user already exists — preserve saved fields
     let existing: UserDocument | undefined;
