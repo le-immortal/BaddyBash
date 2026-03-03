@@ -22,7 +22,7 @@ export default function Navbar() {
             <Trophy className="w-6 h-6 text-yellow-500" />
             <span>Baddy Bash 2026</span>
           </Link>
-          {!pathname?.startsWith('/dashboard') && (
+          {pathname === '/' && (
             <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} className="hidden md:block" />
           )}
 
