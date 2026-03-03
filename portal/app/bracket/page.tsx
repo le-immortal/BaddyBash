@@ -240,7 +240,7 @@ export default function BracketPage() {
               <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
                   <Lock className="w-12 h-12 text-blue-500" />
               </div>
-              <h1 className="text-3xl font-bold mb-3 text-white">Brackets Coming Soon</h1>
+              <h1 className="text-3xl font-bold mb-3 text-white">Fixtures Coming Soon</h1>
               <p className="text-slate-400 max-w-md text-lg leading-relaxed">
                   The tournament fixtures are currently being finalized by the organizers. 
                   Please check back later for the official schedule.
@@ -255,7 +255,7 @@ export default function BracketPage() {
       <Navbar />
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Tournament Brackets</h1>
+          <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
           <button onClick={fetchMatches} className="text-slate-400 hover:text-white p-2" title="Refresh">
             <RefreshCw className="w-5 h-5" />
           </button>

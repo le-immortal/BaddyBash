@@ -113,7 +113,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
   const toggleBrackets = async () => {
     const newState = !bracketsVisible;
-    if (!confirm(newState ? 'Publish brackets? All users will be able to see them.' : 'Hide brackets? They will only be visible to admins.')) return;
+    if (!confirm(newState ? 'Publish fixtures? All users will be able to see them.' : 'Hide fixtures? They will only be visible to admins.')) return;
     
     setBracketsVisible(newState);
     try {
@@ -843,10 +843,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                   ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' 
                   : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
               }`}
-              title={bracketsVisible ? 'Hide Brackets' : 'Publish Brackets'}
+              title={bracketsVisible ? 'Hide Fixtures' : 'Publish Fixtures'}
             >
               {bracketsVisible ? <Trophy size={16} /> : <Lock size={16} />}
-              <span className="hidden sm:inline">{bracketsVisible ? 'Brackets Live' : 'Brackets Hidden'}</span>
+              <span className="hidden sm:inline">{bracketsVisible ? 'Fixtures Live' : 'Fixtures Hidden'}</span>
             </button>
             <button
               onClick={toggleRegistration}

@@ -20,6 +20,7 @@ export default function Navbar() {
             <Trophy className="w-6 h-6 text-yellow-500" />
             <span>Baddy Bash 2026</span>
           </Link>
+          <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} className="hidden md:block" />
 
           {/* Mobile Menu Button */}
           <button 
@@ -35,7 +36,7 @@ export default function Navbar() {
               <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
             )}
             {session?.user && (
-              <Link href="/bracket" className="hover:text-gray-300">Brackets</Link>
+              <Link href="/bracket" className="hover:text-gray-300">Fixtures</Link>
             )}
             {isAdmin && (
               <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
@@ -83,7 +84,7 @@ export default function Navbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="block py-2 px-4 rounded hover:bg-slate-800 transition"
               >
-                Brackets
+                Fixtures
               </Link>
             )}
             {isAdmin && (
