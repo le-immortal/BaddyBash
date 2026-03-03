@@ -71,7 +71,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="baddybash_players_${new Date().toISOString().split('T')[0]}.csv"`,
+        "Content-Disposition": `attachment; filename="baddybash_2026_players_${new Date().toISOString().split('T')[0]}.csv"`,
       },
     });
 

@@ -18,7 +18,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center">
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
             <Trophy className="w-6 h-6 text-yellow-500" />
-            <span>Baddy Bash</span>
+            <span>Baddy Bash 2026</span>
           </Link>
 
           {/* Mobile Menu Button */}

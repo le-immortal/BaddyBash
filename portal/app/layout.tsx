@@ -20,7 +20,7 @@ const bebasNeue = Bebas_Neue({
 });
 
 export const metadata: Metadata = {
-  title: "Baddy Bash Portal",
+  title: "Baddy Bash 2026 Portal",
   description: "Microsoft Internal Badminton Tournament Portal",
 };
 

@@ -16,7 +16,7 @@ function ErrorContent() {
         <h1 className="text-3xl font-bold mb-4">Access Denied</h1>
         {error === 'AccessDenied' ? (
           <p className="text-slate-300 mb-8">
-            Only users with a <strong>@microsoft.com</strong> email on their GitHub account can access Baddy Bash Portal.
+            Only users with a <strong>@microsoft.com</strong> email on their GitHub account can access Baddy Bash 2026 Portal.
             Please make sure your Microsoft email is set as your primary (or public) email on GitHub.
           </p>
         ) : (
