@@ -434,7 +434,7 @@ export default function Dashboard() {
         <Navbar />
         <main className="container mx-auto py-16 px-4 max-w-md">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Welcome to Baddy Bash!'}</h1>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Welcome to Baddy Bash 2026!'}</h1>
             <p className="text-slate-600 text-sm mb-6">
               {isEditingProfile 
                 ? 'Update your details below. Note that your Microsoft Alias cannot be changed.' 

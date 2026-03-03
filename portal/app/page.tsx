@@ -47,22 +47,22 @@ export default async function Home() {
                 <div className="flex items-start gap-4">
                   <Calendar className="w-6 h-6 text-slate-400" />
                   <div>
-                    <p className="font-semibold">March 15-16, 2026</p>
+                    <p className="font-semibold">March 21-22, 2026</p>
                     <p className="text-sm text-slate-400">9:00 AM - 6:00 PM</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
                   <MapPin className="w-6 h-6 text-slate-400" />
                   <div>
-                    <p className="font-semibold">Building 99 Atrium</p>
-                    <p className="text-sm text-slate-400">Microsoft Campus</p>
+                    <p className="font-semibold">Pullela Gopichand Badminton Academy</p>
+                    <p className="text-sm text-slate-400">Hyderabad</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
                   <Shield className="w-6 h-6 text-slate-400" />
                   <div>
                     <p className="font-semibold">Eligibility</p>
-                    <p className="text-sm text-slate-400">FTEs & Interns Only</p>
+                    <p className="text-sm text-slate-400">FTEs Only</p>
                   </div>
                 </div>
               </div>

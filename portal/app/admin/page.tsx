@@ -500,7 +500,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     worksheet.getRow(1).font = { bold: true };
     
     const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `BaddyBash_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    saveAs(new Blob([buffer]), `BaddyBash_2026_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -779,7 +779,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       worksheet.getRow(1).font = { bold: true };
       
       const buffer = await workbook.xlsx.writeBuffer();
-      saveAs(new Blob([buffer]), `BaddyBash_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      saveAs(new Blob([buffer]), `BaddyBash_2026_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
     } catch (err) {
       console.error('Failed to export bracket:', err);
