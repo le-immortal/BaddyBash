@@ -36,7 +36,7 @@ export interface UserDocument {
   id: string;             // unique userId (e.g., GitHub username or alias)
   name: string;
   email: string;
-  alias: string;          // Microsoft alias (e.g., v-john)
+  alias: string;          // Microsoft alias (e.g., johndoe)
   avatar?: string;
   phoneNumber: string;
   tShirtSize?: string;    // S, M, L, XL, XXL
