@@ -456,7 +456,7 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Microsoft Alias <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g., v-john"
+                  placeholder="e.g., johndoe"
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
                   disabled={isEditingProfile} 
