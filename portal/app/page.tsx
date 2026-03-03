@@ -2,6 +2,7 @@ import { Calendar, MapPin, Shield } from 'lucide-react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { SignInButton, LoginLink } from './components/SignInButton';
+import Image from 'next/image';
 
 export default async function Home() {
   const session = await auth();
@@ -18,7 +19,10 @@ export default async function Home() {
           <div className="font-bold text-2xl flex items-center gap-2">
             🏆 Baddy Bash 2026
           </div>
-          <LoginLink />
+          <div className="flex items-center gap-4">
+            <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
+            <LoginLink />
+          </div>
         </div>
       </header>
 
@@ -43,6 +47,10 @@ export default async function Home() {
           <div className="md:w-1/2 flex justify-center">
             <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 max-w-sm w-full shadow-2xl">
               <h3 className="text-xl font-bold mb-6 text-blue-400 uppercase tracking-widest text-sm">Event Details</h3>
+              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-700">
+                <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} />
+                <span className="text-sm text-slate-300 font-medium">A Microsoft Employee Event</span>
+              </div>
               <div className="space-y-6">
                 <div className="flex items-start gap-4">
                   <Calendar className="w-6 h-6 text-slate-400" />
