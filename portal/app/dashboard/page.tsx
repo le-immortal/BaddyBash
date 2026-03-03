@@ -446,7 +446,7 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g., John Doe"
+                  placeholder="e.g., Jane Doe"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
@@ -456,7 +456,7 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Microsoft Alias <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g., johndoe"
+                  placeholder="e.g., janedoe"
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
                   disabled={isEditingProfile} 
