@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Category } from '../lib/models';
-import { CheckCircle, Plus } from 'lucide-react';
+import { CheckCircle, ChevronDown, Plus } from 'lucide-react';
 import clsx from 'clsx';
 
 interface RegistrationCardProps {
@@ -41,6 +41,7 @@ export default function RegistrationCard({
 }: RegistrationCardProps) {
   const isDoubles = category.id !== 'MS' && category.id !== 'WS';
   const [partnerAliasWarning, setPartnerAliasWarning] = useState(false);
+  const [partnerAliasGuideOpen, setPartnerAliasGuideOpen] = useState(false);
 
   const handleSelect = () => {
     onSelect(category.id);
@@ -94,26 +95,87 @@ export default function RegistrationCard({
               <label className="text-xs font-medium text-slate-500 uppercase">Partner Alias</label>
               <input 
                 type="text" 
-                placeholder="e.g., janedoe (without @microsoft.com)"
+                placeholder="e.g., janedoe (from Teams profile)"
                 className={`w-full mt-1 border rounded px-2 py-1 text-sm focus:outline-none text-slate-900 bg-white placeholder-slate-400 ${
                   partnerAliasWarning ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
                 }`}
                 value={partnerAlias || ''}
                 onChange={(e) => {
                   const raw = e.target.value;
-                  if (raw.includes('@')) {
-                    onAliasChange?.(raw.replace(/@.*$/, ''));
+                  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+                  if (raw !== cleaned) {
                     setPartnerAliasWarning(true);
                     setTimeout(() => setPartnerAliasWarning(false), 4000);
-                  } else {
-                    onAliasChange?.(raw);
                   }
+                  onAliasChange?.(cleaned);
                 }}
                 disabled={status !== 'selected'} 
               />
               {partnerAliasWarning && (
-                <p className="mt-0.5 text-[10px] text-red-500 font-medium">Heads up! Enter only the alias (e.g., janedoe), not the full email.</p>
+                <p className="mt-0.5 text-[10px] text-red-500 font-medium">Only alphabets allowed. Use the short alias from your partner&apos;s Teams profile.</p>
               )}
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setPartnerAliasGuideOpen(prev => !prev)}
+                  className="text-[10px] text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                >
+                  <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${partnerAliasGuideOpen ? 'rotate-180' : ''}`} />
+                  {partnerAliasGuideOpen ? 'Hide guide' : 'Not sure which alias to use?'}
+                </button>
+
+                {partnerAliasGuideOpen && (
+                  <div className="mt-1.5 p-2.5 bg-slate-800 rounded-lg text-white text-[10px] space-y-2">
+                    <p className="text-slate-300">Open <span className="font-semibold text-white">Microsoft Teams</span> &rarr; Click your partner&rsquo;s profile &rarr; <span className="font-semibold text-white">Contact</span> tab &rarr; Look for &ldquo;Alias&rdquo;</p>
+
+                    {/* Mini Teams Contact Mockup */}
+                    <div className="bg-slate-900 rounded-md p-2.5 border border-slate-700">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0">JD</div>
+                        <div>
+                          <p className="font-semibold text-xs text-white">Jane Doe</p>
+                          <p className="text-[9px] text-slate-400">Software Engineer II</p>
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-700 pt-1.5">
+                        <p className="text-[9px] text-slate-400 mb-1 font-semibold">Contact information</p>
+                        <div className="grid grid-cols-3 gap-1.5 text-[9px]">
+                          <div className="min-w-0">
+                            <p className="text-slate-500">Email</p>
+                            <p className="text-blue-400 break-all">Jane.Doe@microsoft.com</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-slate-500">Chat</p>
+                            <p className="text-blue-400 break-all">janedoe@microsoft.com</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Location</p>
+                            <p className="text-slate-300">HYD</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 text-[9px] mt-1.5">
+                          <div>
+                            <p className="text-slate-500">Company</p>
+                            <p className="text-slate-300">MIRPL-HYD</p>
+                          </div>
+                          <div className="bg-amber-500/20 border border-amber-500/50 rounded px-1 py-0.5">
+                            <p className="text-slate-500">Alias</p>
+                            <p className="text-amber-300 font-bold">janedoe</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Department</p>
+                            <p className="text-slate-300">ENG...</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-900/40 border border-blue-500/30 rounded p-1.5 text-[10px] text-blue-200">
+                      <span className="font-semibold">Tip:</span> Email might be <span className="text-blue-300">Jane.Doe@microsoft.com</span> but alias could be <span className="text-amber-300 font-bold">janedoe</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 uppercase">Partner Phone (Optional)</label>

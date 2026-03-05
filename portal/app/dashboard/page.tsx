@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [apiError, setApiError] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [aliasWarning, setAliasWarning] = useState(false);
+  const [aliasGuideOpen, setAliasGuideOpen] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(true);
 
   // Check global settings (registration open + brackets visible)
@@ -458,17 +459,17 @@ export default function Dashboard() {
                 <label className="block text-sm font-medium text-slate-700">Microsoft Alias <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g., janedoe (without @microsoft.com)"
+                  placeholder="e.g., janedoe (from your Teams profile)"
                   value={alias}
                   onChange={(e) => {
                     const raw = e.target.value;
-                    if (raw.includes('@')) {
-                      setAlias(raw.replace(/@.*$/, ''));
+                    // Only allow lowercase alphabets
+                    const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+                    if (raw !== cleaned) {
                       setAliasWarning(true);
                       setTimeout(() => setAliasWarning(false), 4000);
-                    } else {
-                      setAlias(raw);
                     }
+                    setAlias(cleaned);
                   }}
                   disabled={isEditingProfile} 
                   className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none sm:text-sm text-slate-900 placeholder-slate-400 ${
@@ -476,10 +477,88 @@ export default function Dashboard() {
                   }`}
                 />
                 {!isEditingProfile && aliasWarning && (
-                  <p className="mt-1 text-xs text-red-500 font-medium">Heads up! Enter only your alias (e.g., janedoe), not the full email.</p>
+                  <p className="mt-1 text-xs text-red-500 font-medium">Only alphabets allowed. Use the short alias from your Teams profile (e.g., janedoe).</p>
                 )}
                 {!isEditingProfile && !aliasWarning && (
-                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your email is &quot;janedoe@microsoft.com&quot;, please enter &quot;janedoe&quot;.</p>
+                  <p className="mt-1 text-xs text-slate-400">Use the short alias from your Teams profile, not your full email prefix.</p>
+                )}
+                {!isEditingProfile && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAliasGuideOpen(prev => !prev)}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${aliasGuideOpen ? 'rotate-180' : ''}`} />
+                      {aliasGuideOpen ? 'Hide guide' : 'Not sure which alias to use?'}
+                    </button>
+
+                    {aliasGuideOpen && (
+                      <div className="mt-2 p-3 bg-slate-800 rounded-lg text-white text-xs space-y-3">
+                        <p className="text-slate-300 text-[11px]">Open <span className="font-semibold text-white">Microsoft Teams</span> &rarr; Click any person&rsquo;s profile &rarr; Go to <span className="font-semibold text-white">Contact</span> tab &rarr; Look for &ldquo;Alias&rdquo;</p>
+
+                        {/* Mini Teams Contact Mockup */}
+                        <div className="bg-slate-900 rounded-md p-3 border border-slate-700">
+                          <div className="flex items-center gap-2.5 mb-2.5">
+                            <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white text-xs font-bold shrink-0">JD</div>
+                            <div>
+                              <p className="font-semibold text-sm text-white">Jane Doe</p>
+                              <p className="text-[10px] text-slate-400">Software Engineer II &bull; ENGINEERING</p>
+                            </div>
+                          </div>
+                          <div className="border-t border-slate-700 pt-2">
+                            <p className="text-[10px] text-slate-400 mb-1.5 font-semibold">Contact information</p>
+                            <div className="grid grid-cols-3 gap-2 text-[10px]">
+                              <div className="min-w-0">
+                                <p className="text-slate-500">Email</p>
+                                <p className="text-blue-400 break-all">Jane.Doe@microsoft.com</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-slate-500">Chat</p>
+                                <p className="text-blue-400 break-all">janedoe@microsoft.com</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500">Work location</p>
+                                <p className="text-slate-300">HYD - Campus</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-[10px] mt-2">
+                              <div>
+                                <p className="text-slate-500">Company</p>
+                                <p className="text-slate-300">MIRPL-HYD</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500">Job title</p>
+                                <p className="text-slate-300">Software Engineer II</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500">Department</p>
+                                <p className="text-slate-300">ENGINEERING...</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-[10px] mt-2">
+                              <div>
+                                <p className="text-slate-500">Business address</p>
+                                <p className="text-slate-300">Hyderabad</p>
+                              </div>
+                              <div className="bg-amber-500/20 border border-amber-500/50 rounded px-1.5 py-1">
+                                <p className="text-slate-500">Alias</p>
+                                <p className="text-amber-300 font-bold">janedoe</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500">Cost center</p>
+                                <p className="text-slate-300">XXXXXXX</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-900/40 border border-blue-500/30 rounded p-2 text-[11px] text-blue-200">
+                          <span className="font-semibold">Tip:</span> Your email might be <span className="text-blue-300">Jane.Doe@microsoft.com</span> but your alias could be <span className="text-amber-300 font-bold">janedoe</span>. Always use the alias shown in the Contact tab.
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
