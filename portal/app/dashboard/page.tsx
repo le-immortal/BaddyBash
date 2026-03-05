@@ -684,7 +684,7 @@ export default function Dashboard() {
         )}
 
         {/* Tournament Info — ambient banner, collapsible */}
-        <div className="mb-6 -mx-4 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400">
+        <div className="mb-6 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400 rounded-r-lg">
             <button
               onClick={() => setNotesExpanded(prev => !prev)}
               className="w-full flex items-center gap-2 text-left group"
