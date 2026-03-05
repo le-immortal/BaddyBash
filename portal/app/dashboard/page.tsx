@@ -480,7 +480,7 @@ export default function Dashboard() {
                   <p className="mt-1 text-xs text-red-500 font-medium">Only alphabets allowed. Use the short alias from your Teams profile (e.g., janedoe).</p>
                 )}
                 {!isEditingProfile && !aliasWarning && (
-                  <p className="mt-1 text-xs text-slate-400">Use the short alias from your Teams profile, not your full email prefix.</p>
+                  <p className="mt-1 text-xs text-slate-400">Please use your correct alias — it will be used to link your doubles registrations. Use the short alias from your Teams profile, not your full email prefix. No <span className="line-through text-slate-400">@microsoft.com</span> needed (e.g., <span className="font-medium text-slate-500">janedoe</span> not <span className="line-through text-slate-400">jane.doe@microsoft.com</span>).</p>
                 )}
                 {!isEditingProfile && (
                   <div className="mt-2">
