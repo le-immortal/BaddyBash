@@ -187,7 +187,9 @@ export default function BracketPage() {
     matches.forEach(m => {
       if (
         (m.player1Name && m.player1Name.toLowerCase().includes(q)) ||
-        (m.player2Name && m.player2Name.toLowerCase().includes(q))
+        (m.player2Name && m.player2Name.toLowerCase().includes(q)) ||
+        (m.player1Id && m.player1Id.toLowerCase().includes(q)) ||
+        (m.player2Id && m.player2Id.toLowerCase().includes(q))
       ) {
         ids.add(m.id);
         list.push(m.id);
@@ -293,9 +295,19 @@ export default function BracketPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Search player name..."
+              placeholder="Search player name or alias..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchResultCount > 0) {
+                  e.preventDefault();
+                  if (e.shiftKey) {
+                    setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount);
+                  } else {
+                    setSearchIndex(i => (i + 1) % searchResultCount);
+                  }
+                }
+              }}
               className="w-full pl-9 pr-9 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {searchQuery && (

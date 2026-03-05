@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [totalRoundsMap, setTotalRoundsMap] = useState<Record<string, number>>({});
   const [apiError, setApiError] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [aliasWarning, setAliasWarning] = useState(false);
 
   // Check global settings (registration open + brackets visible)
   useEffect(() => {
@@ -458,14 +459,26 @@ export default function Dashboard() {
                   type="text"
                   placeholder="e.g., janedoe (without @microsoft.com)"
                   value={alias}
-                  onChange={(e) => setAlias(e.target.value.replace(/@.*$/, ''))}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw.includes('@')) {
+                      setAlias(raw.replace(/@.*$/, ''));
+                      setAliasWarning(true);
+                      setTimeout(() => setAliasWarning(false), 4000);
+                    } else {
+                      setAlias(raw);
+                    }
+                  }}
                   disabled={isEditingProfile} 
-                  className={`mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 placeholder-slate-400 ${
-                    isEditingProfile ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none sm:text-sm text-slate-900 placeholder-slate-400 ${
+                    isEditingProfile ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : aliasWarning ? 'bg-white border-red-400 focus:ring-red-500 focus:border-red-500' : 'bg-white border-slate-300 focus:ring-blue-500 focus:border-blue-500'
                   }`}
                 />
-                {!isEditingProfile && (
-                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your email is &quot;janedoe@microsoft.com&quot;, please enter &quot;janedoe&quot;. If a partner registered you, use the alias they provided.</p>
+                {!isEditingProfile && aliasWarning && (
+                  <p className="mt-1 text-xs text-red-500 font-medium">Heads up! Enter only your alias (e.g., janedoe), not the full email.</p>
+                )}
+                {!isEditingProfile && !aliasWarning && (
+                  <p className="mt-1 text-xs text-slate-400">Enter just your alias, not your full email. For e.g: If your email is &quot;janedoe@microsoft.com&quot;, please enter &quot;janedoe&quot;.</p>
                 )}
               </div>
               <div>
