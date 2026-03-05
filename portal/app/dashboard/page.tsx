@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument } from '../lib/models';
-import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw } from 'lucide-react';
+import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 
 const CATEGORIES: { id: Category; name: string }[] = [
@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [apiError, setApiError] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [aliasWarning, setAliasWarning] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(true);
 
   // Check global settings (registration open + brackets visible)
   useEffect(() => {
@@ -580,23 +581,6 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-          {selection.length > 0 && (
-            <button
-              onClick={handleSave}
-              disabled={!isSelectionValid || saving || !registrationOpen}
-              className={`w-full md:w-auto font-bold py-3 px-6 rounded-lg shadow-md transition-all ${
-                isSelectionValid && !saving && registrationOpen
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {saving ? (
-                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
-              ) : (
-                `Save Changes (${selection.length} Selected)`
-              )}
-            </button>
-          )}
         </header>
 
         {/* Your Matches Section — only shown when brackets are published */}
@@ -699,13 +683,93 @@ export default function Dashboard() {
           </>
         )}
 
+        {/* Tournament Info — ambient banner, collapsible */}
+        <div className="mb-6 -mx-4 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400">
+            <button
+              onClick={() => setNotesExpanded(prev => !prev)}
+              className="w-full flex items-center gap-2 text-left group"
+            >
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="text-sm font-semibold text-amber-800">Note to Players</span>
+              <span className="text-xs text-amber-600 hidden sm:inline">— Dates, venue, rules & more</span>
+              <span className={`text-xs text-amber-600 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
+              <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
+            </button>
+
+            {notesExpanded && (
+              <div className="mt-3 pl-6">
+                <ul className="space-y-1.5 text-sm text-slate-700 leading-relaxed">
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Start Dates:</span> Mar 21st–22nd (initial rounds for all categories). Dates for remaining rounds will be communicated later.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Venue:</span> Gopichand Badminton Academy (Kotak Courts)</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">FTEs Only</span></span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span>Max <span className="font-semibold">2 categories</span> per player</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Registration closes on 12th March, 2026</span></span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Doubles:</span> It&apos;s the player&apos;s responsibility to find their partner. The organizing team cannot accommodate requests to find a partner.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Non-marking shoes</span> are mandatory</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span>Only game shuttles are provided — racquets, shoes, etc. are the player&apos;s responsibility</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span>Snacks will be provided at the venue</span>
+                  </li>
+                </ul>
+                <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
+                  <p>Queries? Reach out — <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
+                  <p className="mt-0.5">Interested in joining the organizing team? Same alias!</p>
+                </div>
+              </div>
+            )}
+          </div>
+
         <section className="mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-slate-800">My Registrations</h2>
-              <span className={`px-3 py-1 rounded-full text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                {totalCount} / {maxSelections} Slots Used
-              </span>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-slate-800">My Registrations</h2>
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {totalCount} / {maxSelections} Slots Used
+                </span>
+              </div>
+              {selection.length > 0 && (
+                <button
+                  onClick={handleSave}
+                  disabled={!isSelectionValid || saving || !registrationOpen}
+                  className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-all text-sm ${
+                    isSelectionValid && !saving && registrationOpen
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
+                  ) : (
+                    `Save Changes (${selection.length})`
+                  )}
+                </button>
+              )}
             </div>
 
             {isMaxReached && (
