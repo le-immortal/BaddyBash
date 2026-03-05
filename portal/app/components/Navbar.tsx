@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Trophy, User, Menu, X } from 'lucide-react';
+import { User, Menu, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { signInAction, signOutAction } from '@/app/lib/actions';
@@ -19,12 +19,9 @@ export default function Navbar() {
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
-            <Trophy className="w-6 h-6 text-yellow-500" />
+            <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
             <span>Baddy Bash 2026</span>
           </Link>
-          {pathname === '/' && (
-            <Image src="/microsoft-logo.svg" alt="Microsoft" width={20} height={20} className="hidden md:block" />
-          )}
 
           {/* Mobile Menu Button */}
           <button 
@@ -40,7 +37,7 @@ export default function Navbar() {
               <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
             )}
             {session?.user && (
-              <Link href="/bracket" className="hover:text-gray-300">Fixtures</Link>
+              <Link href="/fixtures" className="hover:text-gray-300">Fixtures</Link>
             )}
             {isAdmin && (
               <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
@@ -84,7 +81,7 @@ export default function Navbar() {
             )}
             {session?.user && (
               <Link 
-                href="/bracket" 
+                href="/fixtures" 
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="block py-2 px-4 rounded hover:bg-slate-800 transition"
               >

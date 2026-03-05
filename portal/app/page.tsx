@@ -17,10 +17,10 @@ export default async function Home() {
       <header className="bg-slate-900 text-white">
         <div className="container mx-auto px-4 py-6 flex justify-between items-center">
           <div className="font-bold text-2xl flex items-center gap-2">
-            🏆 Baddy Bash 2026
+            <Image src="/microsoft-logo.svg" alt="Microsoft" width={28} height={28} />
+            Baddy Bash 2026
           </div>
           <div className="flex items-center gap-4">
-            <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
             <LoginLink />
           </div>
         </div>

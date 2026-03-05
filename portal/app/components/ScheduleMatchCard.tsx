@@ -29,6 +29,7 @@ export default function ScheduleMatchCard({ match, userId, totalRounds }: Schedu
 
   const isPlayer1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
   const opponentName = isPlayer1 ? match.player2Name : match.player1Name;
+  const opponentAlias = isPlayer1 ? match.player2Id : match.player1Id;
   const userWon = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
 
   const cat = CAT_COLOR[match.category] || CAT_COLOR.MS;
@@ -85,6 +86,7 @@ export default function ScheduleMatchCard({ match, userId, totalRounds }: Schedu
             <span className="font-semibold text-slate-800">
               {opponentName || <span className="text-slate-400 italic font-normal">TBD</span>}
             </span>
+            {opponentAlias && <span className="text-xs text-slate-400 ml-1">({opponentAlias.includes('|') ? opponentAlias.split('|').map(a => `@${a}`).join(' & ') : `@${opponentAlias}`})</span>}
           </p>
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0 ${
