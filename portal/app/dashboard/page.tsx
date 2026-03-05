@@ -655,6 +655,7 @@ export default function Dashboard() {
                       {completedMatches.map(match => {
                         const isP1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
                         const opponent = isP1 ? match.player2Name : match.player1Name;
+                        const opponentAlias = isP1 ? match.player2Id : match.player1Id;
                         const won = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
                         const totalR = totalRoundsMap[match.category] || match.round;
                         const roundLabel = match.round === totalR ? 'Final' : match.round === totalR - 1 ? 'Semi' : match.round === totalR - 2 ? 'QF' : `R${match.round}`;
@@ -669,6 +670,7 @@ export default function Dashboard() {
                             <span className="text-slate-400 text-xs w-10 shrink-0">{roundLabel}</span>
                             <span className="text-slate-700 truncate flex-1">
                               vs <span className="font-medium">{opponent || 'TBD'}</span>
+                              {opponentAlias && <span className="text-xs text-slate-400 ml-1">({opponentAlias.includes('|') ? opponentAlias.split('|').map(a => `@${a}`).join(' & ') : `@${opponentAlias}`})</span>}
                             </span>
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${won ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                               {won ? 'W' : 'L'}

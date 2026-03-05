@@ -22,7 +22,7 @@ export default auth((req) => {
   }
 
   // Block unauthenticated requests to protected pages
-  const isProtectedPage = ["/dashboard", "/admin", "/bracket"].some((path) =>
+  const isProtectedPage = ["/dashboard", "/admin", "/bracket", "/fixtures"].some((path) =>
     pathname.startsWith(path)
   )
   if (isProtectedPage && !req.auth?.user) {
@@ -37,6 +37,7 @@ export const config = {
     "/dashboard/:path*",
     "/admin/:path*",
     "/bracket/:path*",
+    "/fixtures/:path*",
     "/api/:path*",
   ],
 }
