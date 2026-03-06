@@ -56,7 +56,7 @@ export default async function Home() {
                   <Calendar className="w-6 h-6 text-slate-400" />
                   <div>
                     <p className="font-semibold">March 21-22, 2026</p>
-                    <p className="text-sm text-slate-400">9:00 AM - 6:00 PM</p>
+                    <p className="text-sm text-slate-400">9:00 AM - 9:00 PM</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
