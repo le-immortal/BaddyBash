@@ -8,6 +8,7 @@ import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
+import Image from 'next/image';
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -430,13 +431,18 @@ export default function Dashboard() {
     return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
   }
 
+  // Subtle badminton SVG background
   // Profile-first gate: if alias/name/phone not saved, show setup form
   if (!profileSaved || isEditingProfile) {
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen relative">
+        <div className="fixed inset-0 -z-10">
+          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+          <div className="absolute inset-0 bg-black/40" />
+        </div>
         <Navbar />
         <main className="container mx-auto py-16 px-4 max-w-md">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+          <div className="bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-8">
             <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Welcome to Baddy Bash 2026!'}</h1>
             <p className="text-slate-600 text-sm mb-6">
               {isEditingProfile 
@@ -625,7 +631,11 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen relative">
+      <div className="fixed inset-0 -z-10">
+        <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-slate-50/75" />
+      </div>
       <Navbar />
       <main className="container mx-auto py-8 px-4">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
@@ -780,7 +790,7 @@ export default function Dashboard() {
                 <ul className="space-y-1.5 text-sm text-slate-700 leading-relaxed">
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span><span className="font-semibold">Start Dates:</span> Mar 21st–22nd (initial rounds for all categories). Dates for remaining rounds will be communicated later.</span>
+                    <span><span className="font-semibold">Start Dates:</span> <span className="bg-amber-200/80 text-amber-900 font-semibold px-1 rounded">Mar 21st–22nd (initial rounds for all categories)</span>. Dates for remaining rounds will be communicated later.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
@@ -792,11 +802,11 @@ export default function Dashboard() {
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span>Max <span className="font-semibold">2 categories</span> per player</span>
+                    <span>Max <span className="font-semibold">2 categories</span> per player.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span><span className="font-semibold">Registration closes on 12th March, 2026</span></span>
+                    <span><span className="font-semibold">Registration closes on 12th March, 2026.</span></span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
@@ -804,15 +814,15 @@ export default function Dashboard() {
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span><span className="font-semibold">Non-marking shoes</span> are mandatory</span>
+                    <span><span className="font-semibold">Non-marking shoes</span> are mandatory.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span>Only game shuttles are provided. Racquets, shoes, etc. are the player&apos;s responsibility</span>
+                    <span>Only game shuttles will be provided. Racquets, shoes, etc. are the player&apos;s responsibility.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span>Snacks will be provided at the venue</span>
+                    <span>Snacks will be provided at the venue.</span>
                   </li>
                 </ul>
                 <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
@@ -824,7 +834,10 @@ export default function Dashboard() {
           </div>
 
         <section className="mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="relative overflow-hidden p-6 rounded-xl shadow-sm border border-slate-200">
+            <Image src="/badminton-bg.jpg" alt="" fill className="object-cover" />
+            <div className="absolute inset-0 bg-white/50" />
+            <div className="relative z-10">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-semibold text-slate-800">My Registrations</h2>
@@ -904,6 +917,7 @@ export default function Dashboard() {
                   />
                 );
               })}
+            </div>
             </div>
           </div>
         </section>
