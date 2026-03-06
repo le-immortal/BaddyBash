@@ -469,8 +469,8 @@ export default function Dashboard() {
                   value={alias}
                   onChange={(e) => {
                     const raw = e.target.value;
-                    // Only allow lowercase alphabets
-                    const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+                    // Only allow lowercase alphanumeric
+                    const cleaned = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
                     if (raw !== cleaned) {
                       setAliasWarning(true);
                       setTimeout(() => setAliasWarning(false), 4000);
@@ -483,7 +483,7 @@ export default function Dashboard() {
                   }`}
                 />
                 {!isEditingProfile && aliasWarning && (
-                  <p className="mt-1 text-xs text-red-500 font-medium">Only alphabets allowed. Use the short alias from your Teams profile (e.g., janedoe).</p>
+                  <p className="mt-1 text-xs text-red-500 font-medium">Only letters and numbers allowed. Use the short alias from your Teams profile (e.g., janedoe).</p>
                 )}
                 {!isEditingProfile && !aliasWarning && (
                   <p className="mt-1 text-xs text-slate-400">Please use your correct alias, it will be used to link your doubles registrations as well. Use the short alias from your Teams profile, not your full email prefix. No @microsoft.com needed (e.g., <span className="font-medium text-slate-500">janedoe</span> not <span className="text-slate-400">janedoe@microsoft.com or jane.doe</span>).</p>

@@ -102,7 +102,7 @@ export default function RegistrationCard({
                 value={partnerAlias || ''}
                 onChange={(e) => {
                   const raw = e.target.value;
-                  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+                  const cleaned = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
                   if (raw !== cleaned) {
                     setPartnerAliasWarning(true);
                     setTimeout(() => setPartnerAliasWarning(false), 4000);
@@ -112,7 +112,7 @@ export default function RegistrationCard({
                 disabled={status !== 'selected'} 
               />
               {partnerAliasWarning && (
-                <p className="mt-0.5 text-[10px] text-red-500 font-medium">Only alphabets allowed. Use the short alias from your partner&apos;s Teams profile.</p>
+                <p className="mt-0.5 text-[10px] text-red-500 font-medium">Only letters and numbers allowed. Use the short alias from your partner&apos;s Teams profile.</p>
               )}
               <div className="mt-1">
                 <button
