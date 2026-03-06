@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'rea
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
+import Image from 'next/image';
 import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
@@ -231,7 +232,11 @@ export default function BracketPage() {
   // If check pending, show loader (or just wait)
   if (checkingAccess) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100">
+      <div className="min-h-screen relative text-slate-100">
+        <div className="fixed inset-0 -z-10">
+          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+          <div className="absolute inset-0 bg-slate-900/85" />
+        </div>
         <Navbar />
         <div className="flex items-center justify-center py-32">
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -247,7 +252,11 @@ export default function BracketPage() {
   // Gate mechanism
   if (!bracketsVisible && !isAdmin) {
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100">
+        <div className="min-h-screen relative text-slate-100">
+          <div className="fixed inset-0 -z-10">
+            <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+            <div className="absolute inset-0 bg-slate-900/85" />
+          </div>
           <Navbar />
           <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
               <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
@@ -264,7 +273,11 @@ export default function BracketPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen relative text-slate-100">
+      <div className="fixed inset-0 -z-10">
+        <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-slate-900/85" />
+      </div>
       <Navbar />
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
