@@ -808,7 +808,7 @@ export default function Dashboard() {
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span>Only game shuttles are provided — racquets, shoes, etc. are the player&apos;s responsibility</span>
+                    <span>Only game shuttles are provided. Racquets, shoes, etc. are the player&apos;s responsibility</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-amber-500 font-bold shrink-0">•</span>
@@ -816,8 +816,8 @@ export default function Dashboard() {
                   </li>
                 </ul>
                 <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
-                  <p>Queries? Reach out — <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
-                  <p className="mt-0.5">Interested in joining the organizing team? Same alias!</p>
+                  <p>For any queries, please reach out to the Baddy Bash organizing team — <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
+                  <p className="mt-0.5">If anyone is interested to join the Baddy Bash organizing team, please reach us at the above mentioned alias.</p>
                 </div>
               </div>
             )}
