@@ -674,11 +674,14 @@ export default function Dashboard() {
         </header>
 
         {/* Your Matches Section — shown when brackets are published, or always for admins */}
-        {committedCategories.length > 0 && (bracketsVisible === true || isAdmin) && (
+        {true && (
           <>
             {/* Upcoming / Live Matches */}
             <section className="mb-8">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <div className="relative p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: "url('/badminton-2.jpg')" }} />
+                <div className="absolute inset-0 bg-white/60" />
+                <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-4">
                   <CalendarDays className="w-5 h-5 text-blue-600" />
                   <h2 className="text-xl font-semibold text-slate-800">Your Matches</h2>
@@ -719,13 +722,17 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
             </section>
 
             {/* Match History */}
             {!matchesLoading && (
               <section className="mb-8">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div className="relative p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: "url('/badminton-2.jpg')" }} />
+                  <div className="absolute inset-0 bg-white/60" />
+                  <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-4">
                     <History className="w-5 h-5 text-slate-500" />
                     <h2 className="text-xl font-semibold text-slate-800">Match History</h2>
@@ -738,7 +745,7 @@ export default function Dashboard() {
                   {completedMatches.length === 0 ? (
                     <p className="text-center text-slate-400 py-6">No completed matches yet. Your results will appear here.</p>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100/60">
                       {completedMatches.map(match => {
                         const isP1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
                         const opponent = isP1 ? match.player2Name : match.player1Name;
@@ -754,7 +761,7 @@ export default function Dashboard() {
                             }`}>
                               {match.category}
                             </span>
-                            <span className="text-slate-400 text-xs w-10 shrink-0">{roundLabel}</span>
+                            <span className="text-slate-600 text-xs font-semibold w-10 shrink-0">{roundLabel}</span>
                             <span className="text-slate-700 truncate flex-1">
                               vs <span className="font-medium">{opponent || 'TBD'}</span>
                               {opponentAlias && <span className="text-xs text-slate-400 ml-1">({opponentAlias.includes('|') ? opponentAlias.split('|').map(a => `@${a}`).join(' & ') : `@${opponentAlias}`})</span>}
@@ -767,6 +774,7 @@ export default function Dashboard() {
                       })}
                     </div>
                   )}
+                  </div>
                 </div>
               </section>
             )}
