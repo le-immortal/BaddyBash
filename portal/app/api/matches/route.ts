@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
         if (p1) {
             match.player1Id = p1.id;
             match.player1Name = p1.name;
-            match.player1Seed = seed1;
+            match.player1Seed = p1.seed || undefined; // only admin-assigned seeds; slot position drives placement but is not displayed
         } else {
             match.player1Name = "BYE";
             match.status = 'completed'; // One side is BYE -> auto-win logic triggers below
@@ -324,7 +324,7 @@ export async function POST(request: NextRequest) {
         if (p2) {
             match.player2Id = p2.id;
             match.player2Name = p2.name;
-            match.player2Seed = seed2;
+            match.player2Seed = p2.seed || undefined; // only admin-assigned seeds; slot position drives placement but is not displayed
         } else {
             match.player2Name = "BYE";
             match.status = 'completed';

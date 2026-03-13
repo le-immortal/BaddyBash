@@ -73,6 +73,9 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
       {/* Player 1 */}
       <div className={`flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 ${p1Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
         <div className="flex-1 min-w-0 flex items-center gap-1">
+          {match.player1Seed && (
+            <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player1Seed}]</span>
+          )}
           {match.player1Name ? (
             <div className="min-w-0">
               <span className="truncate block">{match.player1Name}</span>
@@ -86,6 +89,9 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
       {/* Player 2 */}
       <div className={`flex items-center justify-between px-2 py-0.5 ${p2Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
         <div className="flex-1 min-w-0 flex items-center gap-1">
+          {match.player2Seed && (
+            <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player2Seed}]</span>
+          )}
           {match.player2Name ? (
             <div className="min-w-0">
               <span className="truncate block">{match.player2Name}</span>

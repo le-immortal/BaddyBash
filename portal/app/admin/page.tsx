@@ -304,12 +304,15 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
            regToPairKey.set(r.id, pk);
          }
          currentSeeds.forEach(s => {
+           if (!seedValues[s.id]) return; // only include players admin explicitly seeded
            const pk = regToPairKey.get(s.id);
            if (pk) seedMap[pk] = s.currentSeed;
            seedMap[s.id] = s.currentSeed; // Also send reg.id as fallback
          });
        } else {
-         currentSeeds.forEach(s => seedMap[s.id] = s.currentSeed);
+         currentSeeds.forEach(s => {
+           if (seedValues[s.id]) seedMap[s.id] = s.currentSeed; // only include players admin explicitly seeded
+         });
        }
     }
 
