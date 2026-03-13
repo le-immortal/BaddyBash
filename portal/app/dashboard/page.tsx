@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [userMatches, setUserMatches] = useState<MatchDocument[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [bracketsVisible, setBracketsVisible] = useState<boolean | null>(null); // null = unknown yet
+  const isAdmin = session?.user?.isAdmin === true;
   const [totalRoundsMap, setTotalRoundsMap] = useState<Record<string, number>>({});
   const [apiError, setApiError] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -146,7 +147,7 @@ export default function Dashboard() {
 
   // Fetch matches for all categories the user is registered in
   const fetchUserMatches = useCallback(async () => {
-    if (!userId || committedCategories.length === 0 || bracketsVisible === false) return;
+    if (!userId || committedCategories.length === 0 || (bracketsVisible === false && !isAdmin)) return;
     setMatchesLoading(true);
     try {
       const results = await Promise.all(
@@ -191,7 +192,7 @@ export default function Dashboard() {
     } finally {
       setMatchesLoading(false);
     }
-  }, [userId, committedCategories, bracketsVisible]);
+  }, [userId, committedCategories, bracketsVisible, isAdmin]);
 
   useEffect(() => {
     if (profileSaved && committedCategories.length > 0 && bracketsVisible !== null) {
@@ -672,8 +673,8 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Your Matches Section — only shown when brackets are published */}
-        {committedCategories.length > 0 && bracketsVisible === true && (
+        {/* Your Matches Section — shown when brackets are published, or always for admins */}
+        {committedCategories.length > 0 && (bracketsVisible === true || isAdmin) && (
           <>
             {/* Upcoming / Live Matches */}
             <section className="mb-8">
@@ -875,7 +876,7 @@ export default function Dashboard() {
               <div className="flex items-center p-3 mb-6 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
                 <Lock className="w-5 h-5 mr-3 flex-shrink-0" />
                 <div>
-                  <span className="font-bold">Registrations Closed.</span> New registrations are currently paused.
+                  <span className="font-bold">Registrations are closed.</span>
                 </div>
               </div>
             )}
