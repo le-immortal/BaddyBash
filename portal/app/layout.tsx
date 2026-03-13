@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Bebas_Neue } from "next/font/google";
+import { Geist, Geist_Mono, Bebas_Neue, Black_Ops_One } from "next/font/google";
 import "./globals.css";
 import Providers from "./components/Providers";
 
@@ -19,6 +19,12 @@ const bebasNeue = Bebas_Neue({
   subsets: ["latin"],
 });
 
+const orbitron = Black_Ops_One({
+  weight: "400",
+  variable: "--font-orbitron",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Baddy Bash 2026 Portal",
   description: "Microsoft Internal Badminton Tournament Portal",
@@ -32,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${bebasNeue.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${bebasNeue.variable} ${orbitron.variable} antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

@@ -866,7 +866,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as Category)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-h-[44px]"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white min-h-[44px]"
             >
               {CATEGORIES.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>

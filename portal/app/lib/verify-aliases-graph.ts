@@ -14,6 +14,8 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { CosmosClient } from "@azure/cosmos";
+import { writeFileSync } from "fs";
+import { join } from "path";
 
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
@@ -102,6 +104,7 @@ async function run() {
   type ResultEntry = { alias: string; name: string; email: string; reason: string; graphName: string; graphEmail: string };
   const validAliases: ResultEntry[] = [];
   const invalidAliases: ResultEntry[] = [];
+  const skippedMatching: ResultEntry[] = [];
 
   for (const user of toCheck) {
     const alias = (user.alias || user.id || "").toLowerCase();
@@ -110,8 +113,15 @@ async function run() {
     const entry = { alias, name: user.name, email: user.email || "", reason: user.reason, graphName: result.displayName || "", graphEmail: result.mail || "" };
 
     if (result.found) {
-      validAliases.push(entry);
-      process.stdout.write(".");
+      const dbEmail = (user.email || "").toLowerCase().trim();
+      const graphEmail = (result.mail || "").toLowerCase().trim();
+      if (dbEmail && graphEmail && dbEmail === graphEmail) {
+        skippedMatching.push(entry);
+        process.stdout.write("=");
+      } else {
+        validAliases.push(entry);
+        process.stdout.write(".");
+      }
     } else {
       invalidAliases.push(entry);
       process.stdout.write("✗");
@@ -147,7 +157,7 @@ async function run() {
   } else {
     for (const u of validAliases) {
       const tag = u.reason === "no-email" ? "[no email]  " : "[mismatch]  ";
-      console.log(`  ✓  ${tag}alias: ${pad(u.alias, 20)} | email: ${pad(u.email || "(none)", 35)} | Graph: ${u.graphName} <${u.graphEmail}>`);
+      console.log(`  ✓  ${tag}alias: ${pad(u.alias, 20)} | DB name: ${pad(u.name, 25)} | Graph name: ${pad(u.graphName, 25)} | DB email: ${pad(u.email || "(none)", 35)} | Graph email: ${u.graphEmail}`);
     }
     console.log(`\n  ${validAliases.length} alias(es) are real org members — just entered a different alias than their email prefix.\n`);
   }
@@ -161,7 +171,26 @@ async function run() {
   console.log(`  Users with alias ≠ email prefix:  ${aliasMismatchUsers.length}`);
   console.log(`  → Alias valid in org:             ${validAliases.length}`);
   console.log(`  → Alias NOT in org (typo?):       ${invalidAliases.length}`);
+  console.log(`  → Skipped (DB email = Graph email):${skippedMatching.length}`);
   console.log("");
+  // ── Export to CSV ─────────────────────────────────────────────────
+  const allResults = [
+    ...validAliases.map(u => ({ ...u, status: "VALID (suspicious)" })),
+    ...invalidAliases.map(u => ({ ...u, status: "NOT FOUND", graphName: "", graphEmail: "" })),
+  ];
+
+  const csvLines = [
+    "Status,Reason,Alias,DB Name,Graph Name,DB Email,Graph Email",
+    ...allResults.map(u =>
+      [u.status, u.reason, u.alias, u.name, u.graphName, u.email || "", u.graphEmail]
+        .map(v => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    ),
+  ];
+
+  const outPath = join(process.cwd(), `alias-report-${new Date().toISOString().slice(0, 10)}.csv`);
+  writeFileSync(outPath, csvLines.join("\r\n"), "utf8");
+  console.log(`📄 Report saved to: ${outPath}\n`);
 }
 
 function pad(str: string, len: number): string {
