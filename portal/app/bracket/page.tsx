@@ -9,9 +9,9 @@ import { Category, MatchDocument, CATEGORIES } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
-const SLOT_H = 90;          // Every match slot is this tall (was 64; increased to fit schedule info)
+const SLOT_H = 110;         // Every match slot is this tall
 const CONN_W = 28;         // Width of SVG connector column between rounds
-const CARD_W = 224;        // w-56 = 224px
+const CARD_W = 256;        // w-64 = 256px
 const VISIBLE_ROUNDS = 4;
 
 /** Block height for a match slot at a given visible-column index. */
@@ -36,7 +36,7 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
 
   return (
     <div
-      className={`w-56 rounded border text-xs leading-tight shrink-0 transition-all duration-200 ${
+      className={`w-64 rounded border text-xs leading-tight shrink-0 transition-all duration-200 ${
         highlighted
           ? 'bg-blue-900/50 border-blue-400 ring-2 ring-blue-400/40 shadow-lg shadow-blue-500/10'
           : isBye
@@ -412,7 +412,7 @@ export default function BracketPage() {
 
             {/* Bracket tree */}
             <div ref={bracketRef} className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-auto"
-                 style={{ maxHeight: 'calc(100vh - 320px)' }}>
+                 style={{ maxHeight: 'calc(100vh - 100px)' }}>
 
               {/* Round headers — sticky at top of scroll container */}
               <div className="flex sticky top-0 z-10 border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-sm">

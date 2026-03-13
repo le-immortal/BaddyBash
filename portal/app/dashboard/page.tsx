@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument } from '../lib/models';
-import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, RefreshCw, ChevronDown } from 'lucide-react';
+import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
 
@@ -685,14 +685,6 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mb-4">
                   <CalendarDays className="w-5 h-5 text-blue-600" />
                   <h2 className="text-xl font-semibold text-slate-800">Your Matches</h2>
-                  <button
-                    onClick={fetchUserMatches}
-                    disabled={matchesLoading}
-                    className="ml-1 p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
-                    title="Refresh matches"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${matchesLoading ? 'animate-spin' : ''}`} />
-                  </button>
                   {upcomingMatches.length > 0 && (
                     <span className="ml-auto text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                       {upcomingMatches.length} upcoming
