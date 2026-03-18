@@ -1,19 +1,29 @@
 /**
  * Generate standard tournament seeding order for a bracket of given size.
- * E.g., size 8  [1,8,4,5,2,7,3,6]  top seeds maximally separated,
- * seed 1 faces seed N, seed 2 faces seed N-1, etc.
- * 
- * Recursive logic:
- * - Base case: size 1 -> [1]
- * - Recursive step: size N -> fold size N/2. Each seed S in N/2 becomes [S, N+1-S].
+ * Produces the canonical draw where seed 1 and 2 can only meet in the final,
+ * 1/2/3/4 can only meet in semis, etc.
+ *
+ * E.g., size 16: [1,16, 9,8, 5,12, 13,4, 3,14, 11,6, 7,10, 15,2]
+ *
+ * Algorithm: build the list of "player-1" slots by iteratively inserting
+ * complement positions (s + half), then pair each with its complement (n+1-s).
  */
 export function generateSeedOrder(bracketSize: number): number[] {
-  if (bracketSize === 1) return [1];
-  const half = generateSeedOrder(bracketSize / 2);
+  // Build top-seed positions: start with [1], expand by inserting s+half for each half
+  let p1Seeds = [1];
+  for (let half = 2; half <= bracketSize / 2; half <<= 1) {
+    const expanded: number[] = [];
+    for (const s of p1Seeds) {
+      expanded.push(s);
+      expanded.push(s + half);
+    }
+    p1Seeds = expanded;
+  }
+  // Interleave each top seed with its complement to form match pairs
   const result: number[] = [];
-  for (const seed of half) {
-    result.push(seed);
-    result.push(bracketSize + 1 - seed);
+  for (const s of p1Seeds) {
+    result.push(s);
+    result.push(bracketSize + 1 - s);
   }
   return result;
 }

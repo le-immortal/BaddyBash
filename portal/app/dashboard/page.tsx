@@ -201,8 +201,8 @@ export default function Dashboard() {
   }, [profileSaved, committedCategories, bracketsVisible, fetchUserMatches]);
 
   // Derived match lists — avoids re-filtering on every render
-  const upcomingMatches = useMemo(() => userMatches.filter(m => m.status !== 'completed'), [userMatches]);
-  const completedMatches = useMemo(() => userMatches.filter(m => m.status === 'completed'), [userMatches]);
+  const upcomingMatches = useMemo(() => userMatches.filter(m => m.status !== 'completed' && m.status !== 'bye'), [userMatches]);
+  const completedMatches = useMemo(() => userMatches.filter(m => m.status === 'completed' || m.status === 'bye'), [userMatches]);
 
   const maxSelections = 2;
   const totalCount = committedCategories.length + selection.length;
