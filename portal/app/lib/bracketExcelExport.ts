@@ -136,11 +136,12 @@ export async function exportVisualBracket(
         if (chunk.length) sectionMap.set(r, chunk);
       }
 
+      const sectionLabel = `${category}${s + 1}`;
       renderSheet(
-        workbook.addWorksheet(`Section ${s + 1}`),
+        workbook.addWorksheet(sectionLabel),
         sectionMap,
         totalRounds,                       // keep naming correct (Final / Semis etc.)
-        `${catName} — Section ${s + 1} of ${sectionCount}`,
+        `${sectionLabel} — ${catName} — Section ${s + 1} of ${sectionCount}`,
       );
     }
 
