@@ -18,7 +18,8 @@ import ExcelJS from 'exceljs';
 import { MatchDocument, Category, CATEGORIES } from './models';
 
 // ── Configuration ─────────────────────────────────────────────────────
-const SECTION_SIZE = 16;   // first-round matches per sheet
+/** Max first-round matches per sheet. Must be a power of 2. */
+const SECTION_SIZE = 16;
 const BASE_SLOT   = 2;     // row-spacing unit for the first round
 const HEADER_ROWS = 3;     // title · round-headers · gap
 
@@ -232,8 +233,8 @@ function renderSheet(
       const p2Win   = isDone && match.winnerId === match.player2Id;
 
       // ·· Match number label (one row above P1) ···················
-      if (match.matchNumber) {
-        const lbl = ws.getCell(Math.max(1, p1 - 1), dataCol);
+      if (match.matchNumber && p1 - 1 > HEADER_ROWS) {
+        const lbl = ws.getCell(p1 - 1, dataCol);
         // Only write if the cell is empty (avoid overwriting data)
         if (!lbl.value) {
           lbl.value = `M${match.matchNumber}`;
