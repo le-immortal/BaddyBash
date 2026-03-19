@@ -11,6 +11,7 @@ import SeedingVisualizer from '../components/SeedingVisualizer';
 import ErrorScreen from '../components/ErrorScreen';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { exportVisualBracket } from '../lib/bracketExcelExport';
 
 interface AdminRegistration {
   id: string;
@@ -792,6 +793,28 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     }
   };
 
+  const handleExportVisualBracket = async () => {
+    setShowExportMenu(false);
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      const data: MatchDocument[] = await res.json();
+      if (data.length === 0) { alert('No bracket generated yet for this category.'); return; }
+
+      const buffer = await exportVisualBracket(data, selectedCategory);
+      saveAs(
+        new Blob([buffer]),
+        `BaddyBash_2026_VisualBracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+    } catch (err) {
+      console.error('Failed to export visual bracket:', err);
+      alert('Failed to export visual bracket.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Auth loading or settings not yet loaded
   if (sessionStatus === 'loading' || !settingsLoaded) {
     return (
@@ -902,6 +925,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🏆 Bracket / Draw
+                  </button>
+                  <button
+                    onClick={handleExportVisualBracket}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
+                  >
+                    🎯 Visual Bracket
                   </button>
                 </div>
               )}
