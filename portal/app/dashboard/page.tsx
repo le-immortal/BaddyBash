@@ -676,6 +676,85 @@ export default function Dashboard() {
         {/* Your Matches Section — shown when brackets are published, or always for admins */}
         {true && (
           <>
+            {/* Instructions to Players — collapsible */}
+            <div className="mb-6 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400 rounded-r-lg">
+              <button
+                onClick={() => setNotesExpanded(prev => !prev)}
+                className="w-full flex items-center gap-2 text-left group"
+              >
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-sm font-semibold text-amber-800">Instructions to Players</span>
+                <span className="text-xs text-amber-600 hidden sm:inline">— Please read before your match</span>
+                <span className={`text-xs text-amber-600 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
+                <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
+              </button>
+
+              {notesExpanded && (
+                <div className="mt-3 pl-6">
+                  <ul className="space-y-1.5 text-sm text-slate-700 leading-relaxed">
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Your scheduled matches and reporting times are listed below. You can also visit the{' '}
+                        <a href="/bracket" className="text-blue-600 hover:underline font-medium">Fixtures page</a>{' '}
+                        to view the full tournament draw across all rounds.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span><span className="font-semibold">Format:</span> Knockout. Singles of 30 points (no deuce) until pre-quarters. From Quarters onwards, best of 3 games of 21 points (deuce until 30).</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Every player must participate in initial rounds on <span className="font-semibold">21st/22nd March as per their schedule.</span></span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Please <span className="font-semibold">report as per your assigned time slot.</span> A walkover will be given to the opponent if you fail to report on time.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>We&apos;re coordinating <span className="font-semibold">1000+ players</span> — please stick strictly to your timelines and assigned slots.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Report on time → Complete registration → Collect your T-Shirt → Be ready for your game.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span><span className="font-semibold">Please bring:</span> your own racquets, non-marking sports shoes (bare foot is allowed), and your ID card.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Snacks &amp; refreshments will be provided at the venue.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Please <span className="font-semibold">do not arrive too early or linger after your games.</span> The Academy has strict instructions to limit crowd size at any given time.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span><span className="font-semibold">Parking:</span> The Academy has limited parking. Please use MS Campus parking — do not park on roads or at the Academy.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>T-Shirts are only for <span className="font-semibold">participating players</span>, not for registration companions.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span><span className="font-semibold">Umpire&apos;s decision is final.</span> Please do not argue — the umpiring team are your colleagues volunteering their time.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span>Please do not use outside spaces or empty courts for practice.</span>
+                    </li>
+                  </ul>
+                  <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
+                    <p>For any queries or discrepancies, reach out to <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Upcoming / Live Matches */}
             <section className="mb-8">
               <div className="relative p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -691,6 +770,9 @@ export default function Dashboard() {
                     </span>
                   )}
                 </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
+                  <span className="font-semibold">📋 Notice:</span> Times displayed are your <span className="font-semibold">scheduled reporting times</span> — please arrive at the court on your listed time. Matches will get started 15 mins after the reporting time.
+                </p>
 
                 {matchesLoading ? (
                   <div className="flex items-center justify-center py-8 text-slate-400">
