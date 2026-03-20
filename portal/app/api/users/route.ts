@@ -40,12 +40,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (aliasParam) {
-      // Ownership check: users can only look up their own profile (admins can look up anyone)
-      const { authorized } = await requireOwnerOrAdmin(aliasParam);
-      if (!authorized) {
-        return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
-      }
-
       // Query by alias - trim, lowercase, and strip @domain suffix
       const cleanAlias = String(aliasParam).trim().toLowerCase().replace(/@.*$/, '');
       const { resources } = await container.items
@@ -58,7 +52,19 @@ export async function GET(request: NextRequest) {
       if (resources.length === 0) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
-      return NextResponse.json(resources[0]);
+
+      const found = resources[0];
+
+      // Allow access if: (a) user has no email yet (pre-created stub waiting to be claimed),
+      // or (b) the requester owns this record or is admin
+      if (found.email) {
+        const { authorized } = await requireOwnerOrAdmin(cleanAlias);
+        if (!authorized) {
+          return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
+        }
+      }
+
+      return NextResponse.json(found);
     }
 
     if (emailParam) {
@@ -143,16 +149,16 @@ export async function POST(request: NextRequest) {
       // User doesn't exist yet — that's fine
     }
 
-    // If registration is closed and user already exists, block profile field updates
+    // If registration is closed and user already exists WITH an email (fully set up),
+    // block profile updates. But allow linking (claiming a pre-created stub with no email).
     const settings = await getGlobalSettings();
-    if (!settings.registrationOpen && existing) {
-      // Preserve existing name/phone/tShirtSize — registration is closed
+    if (!settings.registrationOpen && existing && existing.email) {
       return NextResponse.json(
         { error: "Registration is closed. Profile updates are not allowed." },
         { status: 403 }
       );
     }
-    // Allow through: new user creation (first-time setup) OR registration is open
+    // Allow through: new user creation, linking a stub, OR registration is open
 
     // Security Check: If user exists and has an email, do not allow overwriting it with a different email
     if (existing && existing.email && cleanEmail && existing.email !== cleanEmail) {
@@ -247,9 +253,10 @@ export async function PATCH(request: NextRequest) {
     // Strip isAdmin from updates — only settable via direct DB access
     delete cleanUpdates.isAdmin;
 
-    // If registration is closed, strip profile fields (name, phoneNumber, tShirtSize)
+    // If registration is closed, restrict profile updates — but allow initial linking
     const settings = await getGlobalSettings();
-    if (!settings.registrationOpen) {
+    const isLinking = !existing.email && cleanUpdates.email; // first-time claim of a pre-created stub
+    if (!settings.registrationOpen && !isLinking) {
       delete cleanUpdates.name;
       delete cleanUpdates.phoneNumber;
       delete cleanUpdates.tShirtSize;
