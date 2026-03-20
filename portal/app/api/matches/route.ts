@@ -56,11 +56,7 @@ function fillNextMatchSlot(
  * Requires authentication.
  */
 export async function GET(request: NextRequest) {
-  // Auth gate — reject unauthenticated requests
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Public endpoint — no auth required for reading bracket data
 
   const category = request.nextUrl.searchParams.get("category") as Category | null;
 

@@ -385,11 +385,13 @@ export default function BracketPage() {
           <>
             {/* Stats + navigation */}
             <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-slate-400 flex gap-3">
+              <div className="text-sm text-slate-400 flex flex-wrap items-center gap-3">
                 <span>{stats.real} matches</span>
                 {stats.byes > 0 && <span className="text-slate-500">({stats.byes} byes)</span>}
                 <span className="text-slate-600">•</span>
                 <span>{totalRounds} rounds</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-amber-400/80 text-xs">📋 Times displayed are <span className="font-semibold">reporting times</span></span>
               </div>
               {sortedRounds.length > VISIBLE_ROUNDS && (
                 <div className="flex items-center gap-2">

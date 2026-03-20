@@ -15,14 +15,18 @@ export default auth((req) => {
   }
 
   // Block unauthenticated requests to all other /api/* routes
+  // Exceptions: GET /api/matches and GET /api/settings are public (bracket page is public)
   if (pathname.startsWith("/api/")) {
-    if (!req.auth?.user) {
+    const isPublicApi =
+      (pathname.startsWith("/api/matches") || pathname.startsWith("/api/settings")) &&
+      req.method === "GET"
+    if (!isPublicApi && !req.auth?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
   }
 
   // Block unauthenticated requests to protected pages
-  const isProtectedPage = ["/dashboard", "/admin", "/bracket", "/fixtures"].some((path) =>
+  const isProtectedPage = ["/dashboard", "/admin", "/fixtures"].some((path) =>
     pathname.startsWith(path)
   )
   if (isProtectedPage && !req.auth?.user) {
@@ -36,7 +40,6 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/admin/:path*",
-    "/bracket/:path*",
     "/fixtures/:path*",
     "/api/:path*",
   ],
