@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'react';
 import Navbar from '../components/Navbar';
-import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X, Swords, Save, Undo2 } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
 import { Category, MatchDocument, CATEGORIES } from '../lib/models';
@@ -26,13 +26,32 @@ function getRoundName(round: number, totalRounds: number): string {
 }
 
 /* ── Match card ────────────────────────────────────────────────────── */
-function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?: boolean }) {
+interface MatchCardProps {
+  match: MatchDocument;
+  highlighted?: boolean;
+  advanceMode?: boolean;
+  pendingWinnerId?: string;
+  onSelectWinner?: (matchId: string, playerId: string, playerName: string) => void;
+}
+
+function MatchCard({ match, highlighted, advanceMode, pendingWinnerId, onSelectWinner }: MatchCardProps) {
   const isBye = match.status === 'bye';
   const fmtAlias = (id: string) => id.includes('|') ? id.split('|').map(a => `@${a}`).join(' & ') : `@${id}`;
   const isLive = match.status === 'in_progress';
   const isComplete = match.status === 'completed';
   const p1Win = match.winnerId && match.winnerId === match.player1Id;
   const p2Win = match.winnerId && match.winnerId === match.player2Id;
+
+  // Advance mode: show pending selection
+  const p1Pending = advanceMode && pendingWinnerId === match.player1Id;
+  const p2Pending = advanceMode && pendingWinnerId === match.player2Id;
+  const canAdvance = advanceMode && !isBye && !isComplete && match.player1Id && match.player2Id;
+
+  const handlePlayerClick = (playerId: string | undefined, playerName: string | undefined, e: React.MouseEvent) => {
+    if (!canAdvance || !playerId || !playerName || !onSelectWinner) return;
+    e.stopPropagation();
+    onSelectWinner(match.id, playerId, playerName);
+  };
 
   return (
     <div
@@ -71,7 +90,14 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
       )}
 
       {/* Player 1 */}
-      <div className={`flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 ${p1Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
+      <div
+        onClick={(e) => handlePlayerClick(match.player1Id, match.player1Name, e)}
+        className={`flex items-center justify-between px-2 py-0.5 border-b border-slate-700/40 transition-all ${
+          p1Pending
+            ? 'bg-green-900/50 text-green-300 font-semibold'
+            : p1Win ? 'text-green-400 font-semibold' : 'text-slate-300'
+        } ${canAdvance ? 'cursor-pointer hover:bg-slate-700/50' : ''}`}
+      >
         <div className="flex-1 min-w-0 flex items-center gap-1">
           {match.player1Seed && (
             <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player1Seed}]</span>
@@ -83,11 +109,19 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
             </div>
           ) : <span className="text-slate-600 italic text-[10px]">TBD</span>}
         </div>
-        {isComplete && p1Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
+        {p1Pending && <span className="text-green-400 ml-1 shrink-0 text-[10px] font-bold">W</span>}
+        {!p1Pending && isComplete && p1Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
       </div>
 
       {/* Player 2 */}
-      <div className={`flex items-center justify-between px-2 py-0.5 ${p2Win ? 'text-green-400 font-semibold' : 'text-slate-300'}`}>
+      <div
+        onClick={(e) => handlePlayerClick(match.player2Id, match.player2Name, e)}
+        className={`flex items-center justify-between px-2 py-0.5 transition-all ${
+          p2Pending
+            ? 'bg-green-900/50 text-green-300 font-semibold'
+            : p2Win ? 'text-green-400 font-semibold' : 'text-slate-300'
+        } ${canAdvance ? 'cursor-pointer hover:bg-slate-700/50' : ''}`}
+      >
         <div className="flex-1 min-w-0 flex items-center gap-1">
           {match.player2Seed && (
             <span className="text-[9px] font-bold text-amber-500/80 shrink-0">[{match.player2Seed}]</span>
@@ -101,7 +135,8 @@ function MatchCard({ match, highlighted }: { match: MatchDocument; highlighted?:
             <span className="text-slate-600 italic text-[10px]">{isBye ? '— bye —' : 'TBD'}</span>
           )}
         </div>
-        {isComplete && p2Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
+        {p2Pending && <span className="text-green-400 ml-1 shrink-0 text-[10px] font-bold">W</span>}
+        {!p2Pending && isComplete && p2Win && <span className="text-green-500 ml-1 shrink-0 text-[10px]">W</span>}
       </div>
 
     </div>
@@ -151,6 +186,63 @@ export default function BracketPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [apiError, setApiError] = useState(false);
 
+  // Advance mode state (admin only)
+  const [advanceMode, setAdvanceMode] = useState(false);
+  const [pendingAdvances, setPendingAdvances] = useState<Map<string, { winnerId: string; winnerName: string }>>(new Map());
+  const [saving, setSaving] = useState(false);
+
+  const handleSelectWinner = useCallback((matchId: string, playerId: string, playerName: string) => {
+    setPendingAdvances(prev => {
+      const next = new Map(prev);
+      // Toggle: if same player already selected, deselect
+      const existing = next.get(matchId);
+      if (existing?.winnerId === playerId) {
+        next.delete(matchId);
+      } else {
+        next.set(matchId, { winnerId: playerId, winnerName: playerName });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCancelAdvance = useCallback(() => {
+    setPendingAdvances(new Map());
+    setAdvanceMode(false);
+  }, []);
+
+  const handleSaveAdvances = useCallback(async () => {
+    if (pendingAdvances.size === 0) return;
+    setSaving(true);
+    try {
+      const advances = Array.from(pendingAdvances.entries()).map(([matchId, { winnerId, winnerName }]) => ({
+        matchId,
+        winnerId,
+        winnerName,
+      }));
+
+      const res = await fetch('/api/matches/advance', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: selectedCategory, advances }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to save advancements');
+        return;
+      }
+
+      const data = await res.json();
+      setMatches(data.matches);
+      setPendingAdvances(new Map());
+      setAdvanceMode(false);
+    } catch {
+      alert('Failed to save advancements');
+    } finally {
+      setSaving(false);
+    }
+  }, [pendingAdvances, selectedCategory]);
+
   // Check brackets visibility
   useEffect(() => {
     fetch('/api/settings').then(res => {
@@ -173,17 +265,58 @@ export default function BracketPage() {
     finally { setLoading(false); }
   }, [selectedCategory]);
 
-  useEffect(() => { fetchMatches(); setRoundOffset(0); }, [fetchMatches]);
+  useEffect(() => { fetchMatches(); setRoundOffset(0); setPendingAdvances(new Map()); setAdvanceMode(false); }, [fetchMatches]);
 
-  // Group matches by round
+  // Project matches with pending advances applied locally (cascading preview)
+  const projectedMatches = useMemo(() => {
+    if (!advanceMode || pendingAdvances.size === 0) return matches;
+
+    // Deep-clone matches to avoid mutating state
+    const cloned: MatchDocument[] = matches.map(m => ({ ...m }));
+    const matchMap = new Map<string, MatchDocument>();
+    for (const m of cloned) matchMap.set(m.id, m);
+
+    // Sort pending by round order so cascading works
+    const pending = Array.from(pendingAdvances.entries())
+      .map(([id, val]) => ({ id, ...val, round: matchMap.get(id)?.round ?? 0 }))
+      .sort((a, b) => a.round - b.round);
+
+    for (const { id, winnerId, winnerName } of pending) {
+      const m = matchMap.get(id);
+      if (!m || !m.nextMatchId) continue;
+
+      // Determine seed of the winner
+      let winnerSeed: number | undefined;
+      if (winnerId === m.player1Id) winnerSeed = m.player1Seed;
+      else if (winnerId === m.player2Id) winnerSeed = m.player2Seed;
+
+      // Fill the winner into the next match slot
+      const next = matchMap.get(m.nextMatchId);
+      if (!next) continue;
+
+      if (m.nextMatchSlot === 1) {
+        next.player1Id = winnerId;
+        next.player1Name = winnerName;
+        next.player1Seed = winnerSeed;
+      } else {
+        next.player2Id = winnerId;
+        next.player2Name = winnerName;
+        next.player2Seed = winnerSeed;
+      }
+    }
+
+    return cloned;
+  }, [matches, advanceMode, pendingAdvances]);
+
+  // Group matches by round (use projected matches for display)
   const { sortedRounds, totalRounds, stats } = useMemo(() => {
     const rMap = new Map<number, MatchDocument[]>();
-    matches.forEach(m => { const l = rMap.get(m.round) || []; l.push(m); rMap.set(m.round, l); });
+    projectedMatches.forEach(m => { const l = rMap.get(m.round) || []; l.push(m); rMap.set(m.round, l); });
     rMap.forEach(l => l.sort((a, b) => a.position - b.position));
     const sorted = Array.from(rMap.entries()).sort(([a], [b]) => a - b);
-    const byes = matches.filter(m => m.status === 'bye').length;
-    return { sortedRounds: sorted, totalRounds: rMap.size, stats: { total: matches.length, real: matches.length - byes, byes } };
-  }, [matches]);
+    const byes = projectedMatches.filter(m => m.status === 'bye').length;
+    return { sortedRounds: sorted, totalRounds: rMap.size, stats: { total: projectedMatches.length, real: projectedMatches.length - byes, byes } };
+  }, [projectedMatches]);
 
   // Search: find matches where player name contains the query
   const { highlightedIds, searchResultList, searchResultCount } = useMemo(() => {
@@ -191,7 +324,7 @@ export default function BracketPage() {
     if (!q) return { highlightedIds: new Set<string>(), searchResultList: [] as string[], searchResultCount: 0 };
     const ids = new Set<string>();
     const list: string[] = [];
-    matches.forEach(m => {
+    projectedMatches.forEach(m => {
       if (
         (m.player1Name && m.player1Name.toLowerCase().includes(q)) ||
         (m.player2Name && m.player2Name.toLowerCase().includes(q)) ||
@@ -203,7 +336,7 @@ export default function BracketPage() {
       }
     });
     return { highlightedIds: ids, searchResultList: list, searchResultCount: ids.size };
-  }, [searchQuery, matches]);
+  }, [searchQuery, projectedMatches]);
 
   // Reset search index when query changes
   useEffect(() => { setSearchIndex(0); }, [searchQuery]);
@@ -212,7 +345,7 @@ export default function BracketPage() {
   const scrollToResult = useCallback((idx: number) => {
     if (searchResultList.length === 0) return;
     const targetId = searchResultList[idx];
-    const targetMatch = matches.find(m => m.id === targetId);
+    const targetMatch = projectedMatches.find(m => m.id === targetId);
     if (!targetMatch) return;
     const roundIdx = sortedRounds.findIndex(([r]) => r === targetMatch.round);
     if (roundIdx >= 0 && (roundIdx < roundOffset || roundIdx >= roundOffset + VISIBLE_ROUNDS)) {
@@ -224,7 +357,7 @@ export default function BracketPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       }
     }, 100);
-  }, [searchResultList, matches, sortedRounds, roundOffset]);
+  }, [searchResultList, projectedMatches, sortedRounds, roundOffset]);
 
   // Auto-scroll when search results change or index changes
   useEffect(() => {
@@ -288,88 +421,115 @@ export default function BracketPage() {
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
-          <button onClick={fetchMatches} className="text-slate-400 hover:text-white p-2" title="Refresh">
-            <RefreshCw className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Category tabs */}
-        <div className="flex flex-wrap gap-1 bg-slate-800 p-1 rounded-lg mb-6 w-fit">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${
-                selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Search bar */}
-        {matches.length > 0 && !loading && (
-          <div className="relative mb-4 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search player name or alias..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchResultCount > 0) {
-                  e.preventDefault();
-                  if (e.shiftKey) {
-                    setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount);
-                  } else {
-                    setSearchIndex(i => (i + 1) % searchResultCount);
-                  }
-                }
-              }}
-              className="w-full pl-9 pr-9 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
-            {searchQuery && (
+          <div className="flex items-center gap-2">
+            {isAdmin && matches.length > 0 && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                onClick={() => { if (advanceMode) { handleCancelAdvance(); } else { setAdvanceMode(true); } }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  advanceMode
+                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                    : 'bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`}
+                title={advanceMode ? 'Exit Advance Mode' : 'Enter Advance Mode'}
               >
-                <X className="w-4 h-4" />
+                <Swords className="w-4 h-4" />
+                {advanceMode ? 'Exit Advance' : 'Advance Mode'}
               </button>
             )}
-            {searchQuery.trim() && searchResultCount > 0 && (
-              <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {searchResultCount > 1 && (
-                  <>
-                    <button
-                      onClick={() => setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount)}
-                      className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
-                      title="Previous result"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-xs text-slate-500 tabular-nums min-w-[3ch] text-center">
-                      {searchIndex + 1}/{searchResultCount}
-                    </span>
-                    <button
-                      onClick={() => setSearchIndex(i => (i + 1) % searchResultCount)}
-                      className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
-                      title="Next result"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </>
-                )}
-                {searchResultCount <= 1 && (
-                  <span className="text-xs text-slate-500">{searchResultCount} match</span>
-                )}
-              </div>
-            )}
-            {searchQuery.trim() && searchResultCount === 0 && (
-              <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-red-400">No results</div>
-            )}
+            <button onClick={fetchMatches} className="text-slate-400 hover:text-white p-2" title="Refresh">
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Advance mode banner */}
+        {advanceMode && (
+          <div className="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
+            <Swords className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-amber-200">Click on a player name to mark them as the winner. Select multiple matches, then save all at once.</span>
           </div>
         )}
+
+        {/* Sticky tabs + search bar */}
+        <div className="sticky top-0 z-20 -mx-4 px-4 py-3 bg-slate-900/95 backdrop-blur-sm">
+          {/* Category tabs */}
+          <div className="flex flex-wrap gap-1 bg-slate-800 p-1 rounded-lg mb-3 w-fit">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${
+                  selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Search bar */}
+          {matches.length > 0 && !loading && (
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search player name or alias..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchResultCount > 0) {
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                      setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount);
+                    } else {
+                      setSearchIndex(i => (i + 1) % searchResultCount);
+                    }
+                  }
+                }}
+                className="w-full pl-9 pr-9 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              {searchQuery.trim() && searchResultCount > 0 && (
+                <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {searchResultCount > 1 && (
+                    <>
+                      <button
+                        onClick={() => setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount)}
+                        className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                        title="Previous result"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-xs text-slate-500 tabular-nums min-w-[3ch] text-center">
+                        {searchIndex + 1}/{searchResultCount}
+                      </span>
+                      <button
+                        onClick={() => setSearchIndex(i => (i + 1) % searchResultCount)}
+                        className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                        title="Next result"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                  {searchResultCount <= 1 && (
+                    <span className="text-xs text-slate-500">{searchResultCount} match</span>
+                  )}
+                </div>
+              )}
+              {searchQuery.trim() && searchResultCount === 0 && (
+                <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-red-400">No results</div>
+              )}
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -454,7 +614,13 @@ export default function BracketPage() {
                               style={{ height: bh }}
                               className="flex items-center"
                             >
-                              <MatchCard match={match} highlighted={highlightedIds.has(match.id)} />
+                              <MatchCard
+                                match={match}
+                                highlighted={highlightedIds.has(match.id)}
+                                advanceMode={advanceMode}
+                                pendingWinnerId={pendingAdvances.get(match.id)?.winnerId}
+                                onSelectWinner={handleSelectWinner}
+                              />
                             </div>
                           ))}
                         </div>
@@ -467,6 +633,31 @@ export default function BracketPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* Floating save bar for advance mode */}
+        {advanceMode && pendingAdvances.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 border border-slate-600 rounded-xl px-5 py-3 shadow-2xl shadow-black/50">
+            <span className="text-sm text-slate-300">
+              <span className="text-white font-bold">{pendingAdvances.size}</span> change{pendingAdvances.size !== 1 ? 's' : ''} pending
+            </span>
+            <button
+              onClick={handleCancelAdvance}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+              Discard
+            </button>
+            <button
+              onClick={handleSaveAdvances}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {saving ? 'Saving...' : 'Save All'}
+            </button>
+          </div>
         )}
       </div>
     </div>
