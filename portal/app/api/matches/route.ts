@@ -411,13 +411,19 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const { matchId, category, winnerId, winnerName, scheduledTime } = (await request.json()) as {
+    const body = (await request.json()) as {
       matchId: string;
       category: Category;
       winnerId?: string;
       winnerName?: string;
       scheduledTime?: string;
+      player1Id?: string;
+      player1Name?: string;
+      player2Id?: string;
+      player2Name?: string;
     };
+
+    const { matchId, category } = body;
 
     if (!matchId || !category) {
       return NextResponse.json(
@@ -440,17 +446,28 @@ export async function PATCH(request: NextRequest) {
     // 2. Update fields
     let updated = false;
 
+    // Handle Player Updates (swap / replace)
+    if (body.player1Id !== undefined) {
+      match.player1Id = body.player1Id || undefined;
+      match.player1Name = body.player1Name || undefined;
+      updated = true;
+    }
+    if (body.player2Id !== undefined) {
+      match.player2Id = body.player2Id || undefined;
+      match.player2Name = body.player2Name || undefined;
+      updated = true;
+    }
+
     // Handle Schedule Updates
-    if (scheduledTime !== undefined) {
-        match.scheduledTime = scheduledTime;
+    if (body.scheduledTime !== undefined) {
+        match.scheduledTime = body.scheduledTime;
         updated = true;
     }
 
     // Handle Winner / Advancement
-    if (winnerId && winnerName) {
-        // Prevent re-completing unless strict override needed (but UI locks it)
-        match.winnerId = winnerId;
-        match.winnerName = winnerName;
+    if (body.winnerId && body.winnerName) {
+        match.winnerId = body.winnerId;
+        match.winnerName = body.winnerName;
         match.status = "completed";
         updated = true;
     }
@@ -459,7 +476,7 @@ export async function PATCH(request: NextRequest) {
       await updateMatchWithAdvancement(match, {});
     }
 
-    return NextResponse.json({ message: "Match updated successfully" });
+    return NextResponse.json({ message: "Match updated successfully", match });
   } catch (error) {
     console.error("Error updating match:", error);
     return NextResponse.json({ error: "Failed to update match" }, { status: 500 });
