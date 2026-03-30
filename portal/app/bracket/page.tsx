@@ -175,6 +175,7 @@ function EditPlayersModal({ match, category, onClose, onSaved }: EditPlayersModa
   const [p1Name, setP1Name] = useState(match.player1Name || '');
   const [p2Id, setP2Id] = useState(match.player2Id || '');
   const [p2Name, setP2Name] = useState(match.player2Name || '');
+  const [scheduledTime, setScheduledTime] = useState(match.scheduledTime || '');
   const [saving, setSaving] = useState(false);
 
   // User search
@@ -230,6 +231,7 @@ function EditPlayersModal({ match, category, onClose, onSaved }: EditPlayersModa
           player1Name: p1Name || '',
           player2Id: p2Id || '',
           player2Name: p2Name || '',
+          scheduledTime,
         }),
       });
       if (!res.ok) {
@@ -248,7 +250,8 @@ function EditPlayersModal({ match, category, onClose, onSaved }: EditPlayersModa
   };
 
   const hasChanges = p1Id !== (match.player1Id || '') || p1Name !== (match.player1Name || '') ||
-                     p2Id !== (match.player2Id || '') || p2Name !== (match.player2Name || '');
+                     p2Id !== (match.player2Id || '') || p2Name !== (match.player2Name || '') ||
+                     scheduledTime !== (match.scheduledTime || '');
 
   const renderSlot = (slot: 1 | 2) => {
     const id = slot === 1 ? p1Id : p2Id;
@@ -344,6 +347,18 @@ function EditPlayersModal({ match, category, onClose, onSaved }: EditPlayersModa
           </div>
 
           {renderSlot(2)}
+
+          {/* Scheduled Time */}
+          <div className="mt-2 pt-2 border-t border-slate-700/50">
+            <label className="block text-[10px] uppercase text-slate-400 font-medium mb-1">Scheduled Time</label>
+            <input
+              type="text"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+              placeholder="e.g. 10:30 AM, Court 2 - 11am"
+              className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
 
         <div className="p-3 border-t border-slate-800 flex justify-end gap-2">
