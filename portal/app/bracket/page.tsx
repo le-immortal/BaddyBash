@@ -499,14 +499,19 @@ export default function BracketPage() {
     try {
       setLoading(true);
       const res = await fetch(`/api/matches?category=${selectedCategory}`);
-      if (res.ok) { setMatches(await res.json()); }
+      if (res.ok) {
+        const data = await res.json();
+        setMatches(data);
+        const numRounds = new Set(data.map((m: MatchDocument) => m.round)).size;
+        setRoundOffset(Math.max(0, numRounds - VISIBLE_ROUNDS));
+      }
       else if (res.status >= 500) { setApiError(true); }
-      else { setMatches([]); }
+      else { setMatches([]); setRoundOffset(0); }
     } catch { setApiError(true); }
     finally { setLoading(false); }
   }, [selectedCategory]);
 
-  useEffect(() => { fetchMatches(); setRoundOffset(0); setPendingAdvances(new Map()); setAdvanceMode(false); }, [fetchMatches]);
+  useEffect(() => { fetchMatches(); setPendingAdvances(new Map()); setAdvanceMode(false); }, [fetchMatches]);
 
   // Project matches with pending advances applied locally (cascading preview)
   const projectedMatches = useMemo(() => {
