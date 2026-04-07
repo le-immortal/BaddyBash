@@ -4,7 +4,7 @@
  *   2. Users WITH email but where alias doesn't match email prefix — verify alias is real
  *
  * Usage:
- *   $env:GRAPH_TOKEN="eyJ0..."; npx tsx app/lib/verify-aliases-graph.ts
+ *   $env:GRAPH_TOKEN="eyJ0..."; npx tsx cli/verify-aliases-graph.ts
  *
  * Get your token from https://developer.microsoft.com/graph/graph-explorer
  *

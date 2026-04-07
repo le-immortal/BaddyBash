@@ -2,7 +2,7 @@
  * Resolve Microsoft aliases to email addresses via Microsoft Graph.
  *
  * Usage:
- *   $env:GRAPH_TOKEN="eyJ0..."; npx tsx app/lib/resolve-aliases.ts
+ *   $env:GRAPH_TOKEN="eyJ0..."; npx tsx cli/resolve-aliases.ts
  *
  * Get your token from https://developer.microsoft.com/graph/graph-explorer
  * (needs User.Read.All or User.ReadBasic.All permission)
