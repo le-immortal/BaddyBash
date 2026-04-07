@@ -1,7 +1,7 @@
 /**
  * Wipe all dummy/seed data from Cosmos DB while preserving global settings.
  *
- * Usage: npx tsx app/lib/clear-data.ts
+ * Usage: npx tsx cli/clear-data.ts
  *
  * What it does:
  *   - users       →  deletes all items EXCEPT CONFIG_GLOBAL

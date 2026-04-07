@@ -44,3 +44,10 @@ next-env.d.ts
 deploy-temp/
 *.zip
 app-logs/
+app-logs-new/
+
+# generated reports
+*.csv
+
+# dev artifacts
+bracket-simulation.html

@@ -1,7 +1,7 @@
 /**
  * Audit aliases: cross-check user aliases vs emails, and check doubles partner accounts.
  *
- * Usage: npx tsx app/lib/audit-aliases.ts
+ * Usage: npx tsx cli/audit-aliases.ts
  *
  * Checks performed:
  *   1. Alias vs Email prefix — only prints mismatches

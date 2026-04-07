@@ -1,7 +1,7 @@
 /**
  * Database initialization & seed script.
  *
- * Usage: npx tsx app/lib/seed.ts
+ * Usage: npx tsx cli/seed.ts
  *
  * Requires COSMOS_ENDPOINT and COSMOS_KEY in .env.local
  */
@@ -9,7 +9,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { CosmosClient } from "@azure/cosmos";
-import { UserDocument, RegistrationDocument } from "./models";
+import { UserDocument, RegistrationDocument } from "../app/lib/models";
 
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;

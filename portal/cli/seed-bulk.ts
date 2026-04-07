@@ -2,7 +2,7 @@
  * Bulk seed script — wipes ALL data, then reseeds with exact counts.
  * Some players are shared between singles and doubles (max 2 categories).
  *
- * Usage: npx tsx app/lib/seed-bulk.ts
+ * Usage: npx tsx cli/seed-bulk.ts
  *
  * Target counts:
  *   MS:  443 players  → 443 registrations
@@ -22,7 +22,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { CosmosClient } from "@azure/cosmos";
-import type { UserDocument, RegistrationDocument } from "./models";
+import type { UserDocument, RegistrationDocument } from "../app/lib/models";
 
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
