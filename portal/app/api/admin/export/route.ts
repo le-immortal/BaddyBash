@@ -1,15 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUsersContainer, getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { UserDocument, RegistrationDocument } from "@/app/lib/models";
+import { getActiveSeason } from "@/app/lib/settings";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   try {
+    const seasonParam = request.nextUrl.searchParams.get("season");
+    const seasonId = seasonParam || await getActiveSeason();
+
     const usersContainer = getUsersContainer();
     const regsContainer = getRegistrationsContainer();
 
@@ -18,9 +22,12 @@ export async function GET() {
       .query<UserDocument>("SELECT * FROM c")
       .fetchAll();
 
-    // 2. Fetch all confirmed registrations
+    // 2. Fetch all confirmed registrations for this season
     const { resources: registrations } = await regsContainer.items
-      .query<RegistrationDocument>("SELECT * FROM c WHERE c.status = 'confirmed'")
+      .query<RegistrationDocument>({
+        query: "SELECT * FROM c WHERE c.status = 'confirmed' AND c.seasonId = @seasonId",
+        parameters: [{ name: "@seasonId", value: seasonId }],
+      })
       .fetchAll();
 
     // 3. Map registrations to users
@@ -71,7 +78,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="baddybash_2026_players_${new Date().toISOString().split('T')[0]}.csv"`,
+        "Content-Disposition": `attachment; filename="baddybash_${seasonId}_players_${new Date().toISOString().split('T')[0]}.csv"`,
       },
     });
 

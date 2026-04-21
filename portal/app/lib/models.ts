@@ -10,6 +10,11 @@
  * - MatchDocument: structured SetScore[], explicit MatchStatus, tournamentId.
  * - UUID-based match IDs (round/position tracked separately).
  * - Single source of truth for all types (types.ts & bracketUtils.ts deleted).
+ *
+ * v3 changes (multi-season):
+ * - Added required `seasonId` to RegistrationDocument and MatchDocument.
+ * - Registration IDs now include seasonId: `${userId}_${category}_${seasonId}`.
+ * - SeasonConfig document for per-season settings and active season tracking.
  */
 
 export type Category = "MS" | "WS" | "MD" | "WD" | "XD";
@@ -53,12 +58,13 @@ export interface UserDocument {
  * For doubles: includes partnerId and partnerName.
  */
 export interface RegistrationDocument {
-  id: string;             // unique registration id (e.g., `${userId}_${category}`)
+  id: string;             // unique registration id: `${userId}_${category}_${seasonId}`
   userId: string;         // partition key
   userName: string;
   category: Category;
   status: RegistrationStatus;
-  tournamentId?: string;  // e.g., "baddybash-2026" — future-proofs multi-event
+  seasonId: string;       // e.g., "2026" — scopes registration to a season
+  tournamentId?: string;  // legacy alias for seasonId (kept for backward compat)
   partnerId?: string;     // for doubles (MD, WD, XD)
   partnerName?: string;
   partnerPhone?: string;
@@ -78,7 +84,8 @@ export interface RegistrationDocument {
 export interface MatchDocument {
   id: string;             // UUID — not tied to round/position
   category: Category;     // partition key
-  tournamentId?: string;  // e.g., "baddybash-2026"
+  seasonId: string;       // e.g., "2026" — scopes match to a season
+  tournamentId?: string;  // legacy alias for seasonId
   round: number;          // round number (1 = first round)
   position: number;       // position in the round (0-indexed)
   status: MatchStatus;    // explicit lifecycle state
@@ -153,4 +160,29 @@ export const CATEGORIES: { id: Category; name: string; type: "singles" | "double
 
 export function isDoubles(category: Category): boolean {
   return category === "MD" || category === "WD" || category === "XD";
+}
+
+/**
+ * Build a deterministic registration document ID.
+ * Format: `${userId}_${category}_${seasonId}`
+ */
+export function makeRegistrationId(userId: string, category: string, seasonId: string): string {
+  return `${userId}_${category}_${seasonId}`;
+}
+
+// ─── Season Config ────────────────────────────────────────────────
+
+export interface SeasonEntry {
+  id: string;               // e.g., "2026", "2027"
+  label: string;            // e.g., "Baddy Bash 2026"
+  registrationOpen: boolean;
+  bracketsVisible: boolean;
+  archived: boolean;        // true = read-only, no writes allowed
+}
+
+export interface SeasonConfig {
+  id: "SEASON_CONFIG";
+  activeSeason: string;     // e.g., "2027"
+  seasons: SeasonEntry[];
+  updatedAt?: string;
 }

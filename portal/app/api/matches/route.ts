@@ -8,7 +8,7 @@ import {
 import { requireAdmin, isAdmin } from "@/app/lib/authHelpers";
 import { auth } from "@/auth";
 import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
-import { getGlobalSettings } from "@/app/lib/settings";
+import { getGlobalSettings, getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
 
 interface BracketParticipant {
@@ -59,18 +59,22 @@ export async function GET(request: NextRequest) {
   // Public endpoint — no auth required for reading bracket data
 
   const category = request.nextUrl.searchParams.get("category") as Category | null;
+  const seasonParam = request.nextUrl.searchParams.get("season");
 
   if (!category) {
     return NextResponse.json({ error: "category is required" }, { status: 400 });
   }
 
   try {
-    // 1. Check Bracket Visibility Setting — admins bypass
+    // 1. Resolve season
+    const seasonId = seasonParam || await getActiveSeason();
+
+    // 2. Check Bracket Visibility Setting — admins bypass
     const adminUser = await isAdmin();
     if (!adminUser) {
       try {
-        const settings = await getGlobalSettings();
-        if (settings.bracketsVisible === false) {
+        const seasonSettings = await getSeasonSettings(seasonId);
+        if (seasonSettings.bracketsVisible === false) {
           return NextResponse.json(
             { error: "Brackets are not yet published." },
             { status: 403 }
@@ -84,8 +88,11 @@ export async function GET(request: NextRequest) {
   const matchesContainer = getMatchesContainer();
   const { resources: matches } = await matchesContainer.items
     .query<MatchDocument>({
-      query: "SELECT * FROM c WHERE c.category = @category",
-      parameters: [{ name: "@category", value: category }],
+      query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
+      parameters: [
+        { name: "@category", value: category },
+        { name: "@seasonId", value: seasonId },
+      ],
     })
     .fetchAll();
 
@@ -123,15 +130,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "category is required" }, { status: 400 });
     }
 
+    // Resolve season
+    const seasonId = tournamentId || await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(seasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json({ error: "Cannot generate brackets for an archived season" }, { status: 403 });
+    }
+
     const regContainer = getRegistrationsContainer();
     const matchContainer = getMatchesContainer();
     const userContainer = getUsersContainer();
 
-    // 1. Fetch confirmed registrations
+    // 1. Fetch confirmed registrations (scoped to season)
     const { resources: registrations } = await regContainer.items
       .query<RegistrationDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category AND c.status = 'confirmed'",
-        parameters: [{ name: "@category", value: category }],
+        query: "SELECT * FROM c WHERE c.category = @category AND c.status = 'confirmed' AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@category", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -237,11 +254,14 @@ export async function POST(request: NextRequest) {
     const totalRounds = Math.log2(bracketSize); // e.g., 8 -> 3 rounds
     const seedOrder = generateSeedOrder(bracketSize);
 
-    // 5. Delete existing matches
+    // 5. Delete existing matches (scoped to season)
     const { resources: existingMatches } = await matchContainer.items
       .query<MatchDocument>({
-        query: "SELECT c.id, c.category FROM c WHERE c.category = @category",
-        parameters: [{ name: "@category", value: category }],
+        query: "SELECT c.id, c.category FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@category", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -267,7 +287,8 @@ export async function POST(request: NextRequest) {
          const match: MatchDocument = {
             id: randomUUID(),
             category,
-            tournamentId,
+            seasonId,
+            tournamentId: seasonId,
             round: r,
             position: pos,
             status: 'scheduled',
