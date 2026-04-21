@@ -1,0 +1,10 @@
+{
+  "exportedAt": "2026-04-20T05:49:29.729Z",
+  "sourceEndpoint": "https://baddybashdb.documents.azure.com:443",
+  "database": "baddybash",
+  "counts": {
+    "users": 1324,
+    "registrations": 1581,
+    "matches": 1467
+  }
+}

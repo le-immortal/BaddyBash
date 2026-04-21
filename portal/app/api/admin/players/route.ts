@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
-import { RegistrationDocument, UserDocument, isDoubles } from "@/app/lib/models";
+import { RegistrationDocument, UserDocument, isDoubles, makeRegistrationId } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { cacheGet, cacheSet, cacheDeleteByPrefix } from "@/app/lib/cache";
+import { getActiveSeason } from "@/app/lib/settings";
 
 const PLAYERS_CACHE_PREFIX = "admin-players:";
 const PLAYERS_CACHE_TTL = 30_000; // 30 seconds
@@ -29,7 +30,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Check cache first
-    const cacheKey = `${PLAYERS_CACHE_PREFIX}${category}`;
+    const seasonParam = request.nextUrl.searchParams.get("season");
+    const seasonId = seasonParam || await getActiveSeason();
+    const cacheKey = `${PLAYERS_CACHE_PREFIX}${category}:${seasonId}`;
     const cached = cacheGet<unknown>(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
@@ -43,8 +46,11 @@ export async function GET(request: NextRequest) {
     const { resources: registrations } = await registrationsContainer.items
       .query<RegistrationDocument>({
         query:
-          "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
-        parameters: [{ name: "@cat", value: category }],
+          "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seasonId, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.category = @cat AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@cat", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -179,7 +185,7 @@ export async function PATCH(request: NextRequest) {
 
     // For doubles, sync seed to partner's registration so both sides match
     if (isDoubles(existing.category) && existing.partnerId) {
-      const partnerRegId = `${existing.partnerId}_${existing.category}`;
+      const partnerRegId = makeRegistrationId(existing.partnerId, existing.category, existing.seasonId);
       try {
         const { resource: partnerReg } = await container
           .item(partnerRegId, existing.partnerId)
@@ -239,11 +245,17 @@ export async function PUT(request: NextRequest) {
 
     const container = getRegistrationsContainer();
 
-    // 1. Fetch all registrations for this category in one query
+    // Resolve season
+    const seasonId = await getActiveSeason();
+
+    // 1. Fetch all registrations for this category + season in one query
     const { resources: registrations } = await container.items
       .query<RegistrationDocument>({
-        query: "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled'",
-        parameters: [{ name: "@cat", value: category }],
+        query: "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@cat", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -275,7 +287,7 @@ export async function PUT(request: NextRequest) {
 
       // For doubles, also sync seed to partner's registration
       if (isDoublesCategory && reg.partnerId) {
-        const partnerRegId = `${reg.partnerId}_${category}`;
+        const partnerRegId = makeRegistrationId(reg.partnerId, category, seasonId);
         const partnerReg = regById.get(partnerRegId);
         if (partnerReg && !queued.has(partnerRegId)) {
           const partnerCurrentSeed = partnerReg.seed || null;

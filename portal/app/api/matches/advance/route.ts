@@ -3,6 +3,7 @@ import { getMatchesContainer } from "@/app/lib/cosmosClient";
 import { MatchDocument, Category } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
+import { getActiveSeason } from "@/app/lib/settings";
 
 interface AdvanceEntry {
   matchId: string;
@@ -36,11 +37,17 @@ export async function PUT(request: NextRequest) {
 
     const container = getMatchesContainer();
 
-    // 1. Fetch all matches for this category
+    // Resolve season
+    const seasonId = await getActiveSeason();
+
+    // 1. Fetch all matches for this category + season
     const { resources: allMatches } = await container.items
       .query<MatchDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category",
-        parameters: [{ name: "@category", value: category }],
+        query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@category", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -97,8 +104,11 @@ export async function PUT(request: NextRequest) {
     // 5. Return the full updated match list
     const { resources: updatedMatches } = await container.items
       .query<MatchDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category",
-        parameters: [{ name: "@category", value: category }],
+        query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@category", value: category },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 

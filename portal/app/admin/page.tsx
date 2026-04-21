@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload } from 'lucide-react';
-import { Category, MatchDocument, MatchStatus } from '../lib/models';
+import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload, CalendarPlus, Archive } from 'lucide-react';
+import { Category, MatchDocument, MatchStatus, SeasonEntry } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
 import ErrorScreen from '../components/ErrorScreen';
@@ -74,6 +74,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   const exportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Season state
+  const [activeSeason, setActiveSeason] = useState<string>('2026');
+  const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<string>('');
+
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -84,13 +89,26 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   }, []);
 
   useEffect(() => {
-    fetch('/api/settings').then(res => {
+    fetch('/api/settings?full=1').then(res => {
       if (!res.ok) { setApiError(true); return null; }
       return res.json();
     }).then(data => {
       if (!data) return;
-      setRegistrationOpen(data.registrationOpen !== false);
-      setBracketsVisible(data.bracketsVisible === true);
+      // Full SeasonConfig
+      if (data.seasons) {
+        setSeasons(data.seasons);
+        setActiveSeason(data.activeSeason || '2026');
+        setSelectedSeason(data.activeSeason || '2026');
+        const active = data.seasons.find((s: SeasonEntry) => s.id === data.activeSeason);
+        if (active) {
+          setRegistrationOpen(active.registrationOpen !== false);
+          setBracketsVisible(active.bracketsVisible === true);
+        }
+      } else {
+        // Backward compat fallback
+        setRegistrationOpen(data.registrationOpen !== false);
+        setBracketsVisible(data.bracketsVisible === true);
+      }
     }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
   }, []);
 
@@ -134,7 +152,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   const fetchPlayers = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/admin/players?category=${selectedCategory}`);
+      const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
+      const res = await fetch(`/api/admin/players?category=${selectedCategory}${seasonQ}`);
       if (res.ok) {
         const data: AdminPlayer[] = await res.json();
         setPlayers(data);        
@@ -164,12 +183,13 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedSeason]);
 
   const fetchMatches = useCallback(async () => {
     try {
       setMatchesLoading(true);
-      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
+      const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
       if (res.ok) {
         const data: MatchDocument[] = await res.json();
         setMatches(data);
@@ -182,7 +202,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     } finally {
       setMatchesLoading(false);
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedSeason]);
 
   useEffect(() => {
     if (activeTab === 'registrations') {
@@ -862,6 +882,59 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             <p className="text-slate-600 mt-1 md:mt-2 text-sm md:text-base">Manage players, seeds, and fixtures.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            {/* Season Switcher */}
+            {seasons.length > 1 && (
+              <select
+                value={selectedSeason}
+                onChange={(e) => setSelectedSeason(e.target.value)}
+                className="border border-indigo-300 rounded-lg px-3 py-2 text-sm text-indigo-800 bg-indigo-50 font-medium min-h-[44px]"
+              >
+                {seasons.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}{s.archived ? ' (Archived)' : s.id === activeSeason ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {/* New Season button */}
+            <button
+              onClick={async () => {
+                const year = prompt('Enter new season ID (e.g., "2027"):');
+                if (!year) return;
+                const label = prompt('Enter season label:', `Baddy Bash ${year}`);
+                if (!label) return;
+                if (!confirm(`Create "${label}" and archive the current season?`)) return;
+                try {
+                  const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'createSeason', seasonId: year, label }),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to create season');
+                    return;
+                  }
+                  const config = await res.json();
+                  setSeasons(config.seasons);
+                  setActiveSeason(config.activeSeason);
+                  setSelectedSeason(config.activeSeason);
+                  alert(`Season "${label}" created! Previous season has been archived.`);
+                  fetchPlayers();
+                } catch { alert('Failed to create season'); }
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 min-h-[44px]"
+              title="Create New Season"
+            >
+              <CalendarPlus size={16} />
+              <span className="hidden sm:inline">New Season</span>
+            </button>
+            {/* Archived indicator */}
+            {seasons.find(s => s.id === selectedSeason)?.archived && (
+              <span className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                <Archive size={14} /> Viewing Archived Season
+              </span>
+            )}
             <button
               onClick={toggleBrackets}
               className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border min-h-[44px] ${

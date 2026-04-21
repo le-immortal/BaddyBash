@@ -1,12 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { User, Menu, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { signInAction, signOutAction } from '@/app/lib/actions';
+
+export default function Navbar() {
+  const { data: session } = useSession();
+  const pathname = usePathname();
+  const isAdmin = session?.user?.isAdmin === true;
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
+
+  useEffect(() => {
+    fetch('/api/settings?full=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(config => {
+        if (!config?.seasons) return;
+        const active = config.seasons.find((s: { id: string }) => s.id === config.activeSeason);
+        if (active?.label) setSeasonLabel(active.label);
+      })
+      .catch(() => {});
+  }, []);
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -20,7 +38,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center">
           <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
             <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
-            <span>Baddy Bash 2026</span>
+            <span>{seasonLabel}</span>
           </Link>
 
           {/* Mobile Menu Button */}

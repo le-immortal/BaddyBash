@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
-import { RegistrationDocument, UserDocument, isDoubles, Category } from "@/app/lib/models";
-import { getGlobalSettings } from "@/app/lib/settings";
+import { RegistrationDocument, UserDocument, isDoubles, Category, makeRegistrationId } from "@/app/lib/models";
+import { getGlobalSettings, getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
 import { requireOwnerOrAdmin } from "@/app/lib/authHelpers";
 import { cacheDeleteByPrefix } from "@/app/lib/cache";
@@ -40,10 +40,17 @@ export async function GET(request: NextRequest) {
     // Trim and lowercase userId for consistency
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
     
+    // Season scoping: use query param or active season
+    const seasonParam = request.nextUrl.searchParams.get("season");
+    const seasonId = seasonParam || await getActiveSeason();
+    
     const { resources } = await container.items
       .query<RegistrationDocument>({
-        query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: cleanUserId }],
+        query: "SELECT * FROM c WHERE c.userId = @userId AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@userId", value: cleanUserId },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -69,17 +76,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 0. Check Global Settings
-    try {
-      const settings = await getGlobalSettings();
-      if (settings.registrationOpen === false) {
-          return NextResponse.json(
-            { error: "Registrations are currently closed." },
-            { status: 403 }
-          );
-      }
-    } catch {
-       // If config doc doesn't exist, assume open
+    // 0. Resolve active season and check settings
+    const seasonId = await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(seasonId);
+
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "This season is archived. No changes allowed." },
+        { status: 403 }
+      );
+    }
+    if (!seasonSettings.registrationOpen) {
+      return NextResponse.json(
+        { error: "Registrations are currently closed." },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();
@@ -138,12 +149,15 @@ export async function POST(request: NextRequest) {
 
     const container = getRegistrationsContainer();
 
-    // Server-side Max-2 check: count existing active registrations
+    // Server-side Max-2 check: count existing active registrations (scoped to season)
     const { resources: existing } = await container.items
       .query<RegistrationDocument>({
         query:
-          "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
-        parameters: [{ name: "@userId", value: cleanUserId }],
+          "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+        parameters: [
+          { name: "@userId", value: cleanUserId },
+          { name: "@seasonId", value: seasonId },
+        ],
       })
       .fetchAll();
 
@@ -166,8 +180,11 @@ export async function POST(request: NextRequest) {
     if (isDoubles(category) && cleanPartnerId) {
       const { resources: partnerRegs } = await container.items
         .query<RegistrationDocument>({
-          query: "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled'",
-          parameters: [{ name: "@userId", value: cleanPartnerId }],
+          query: "SELECT * FROM c WHERE c.userId = @userId AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+          parameters: [
+            { name: "@userId", value: cleanPartnerId },
+            { name: "@seasonId", value: seasonId },
+          ],
         })
         .fetchAll();
 
@@ -221,11 +238,12 @@ export async function POST(request: NextRequest) {
 
     // 2. Create MAIN Registration
     const registration: RegistrationDocument = {
-      id: `${cleanUserId}_${category}`,
+      id: makeRegistrationId(cleanUserId, category, seasonId),
       userId: cleanUserId,
       userName: userName.trim(),
       category,
       status: "confirmed",
+      seasonId,
       partnerId: cleanPartnerId || undefined,
       partnerName: finalPartnerName,
       partnerPhone: finalPartnerPhone,
@@ -264,7 +282,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create confirmed registration for partner
-      const partnerRegId = `${cleanPartnerId}_${category}`;
+      const partnerRegId = makeRegistrationId(cleanPartnerId, category, seasonId);
       let partnerRegExists = false;
       try {
         const { resource: existingReg } = await container.item(partnerRegId, cleanPartnerId).read<RegistrationDocument>();
@@ -280,6 +298,7 @@ export async function POST(request: NextRequest) {
           userName: finalPartnerName || cleanPartnerId,
           category,
           status: "confirmed",
+          seasonId,
           partnerId: cleanUserId,
           partnerName: userName.trim(),
           partnerPhone: body.userPhone ? body.userPhone.trim() : '',
@@ -380,7 +399,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     const container = getRegistrationsContainer();
-    const regId = `${cleanUserId}_${category}`;
+    const seasonId = await getActiveSeason();
+    const regId = makeRegistrationId(cleanUserId, category, seasonId);
 
     // 2. Fetch the registration to check for partner
     try {
@@ -395,7 +415,7 @@ export async function DELETE(request: NextRequest) {
         // Also check if partnerId actually exists on the registration
         if (reg.partnerId) {
           const cleanPartnerId = reg.partnerId;
-          const partnerRegId = `${cleanPartnerId}_${category}`;
+          const partnerRegId = makeRegistrationId(cleanPartnerId, category, reg.seasonId || seasonId);
           try {
             await container.item(partnerRegId, cleanPartnerId).delete();
           } catch (e: unknown) {
