@@ -40,7 +40,6 @@ describe("season label smoke coverage", () => {
     expect(getSeasonLabel({ id: "2028", label: "   " })).toBe("Baddy Bash 2028");
     expect(
       getSeasonLabelFromConfig({
-        id: "SEASON_CONFIG",
         activeSeason: "2029",
         seasons: [],
       })
