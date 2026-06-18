@@ -4,7 +4,7 @@
  * Usage: npx tsx cli/clear-data.ts
  *
  * What it does:
- *   - users       →  deletes all items EXCEPT CONFIG_GLOBAL
+ *   - users       →  deletes all items EXCEPT CONFIG_GLOBAL and SEASON_CONFIG
  *   - registrations → deletes ALL items
  *   - matches      → deletes ALL items
  *
@@ -20,7 +20,7 @@ const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
 const databaseId = process.env.COSMOS_DATABASE || "baddybash";
 
-const PRESERVED_IDS = ["CONFIG_GLOBAL"]; // IDs to keep in the users container
+const PRESERVED_IDS = ["CONFIG_GLOBAL", "SEASON_CONFIG"]; // IDs to keep in the users container
 
 async function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -77,7 +77,7 @@ async function main() {
 
   console.log(`\n🗄  Database: ${databaseId}`);
   console.log(`   Endpoint: ${endpoint}`);
-  console.log(`\n⚠  This will DELETE all data from users (except CONFIG_GLOBAL), registrations, and matches.\n`);
+  console.log(`\n⚠  This will DELETE all data from users (except CONFIG_GLOBAL/SEASON_CONFIG), registrations, and matches.\n`);
 
   const answer = await prompt("Type YES to confirm: ");
   if (answer !== "yes") {
@@ -93,7 +93,7 @@ async function main() {
   await clearContainer(client, "registrations", "/userId");
   await clearContainer(client, "matches", "/category");
 
-  console.log("\n✅ Done! All dummy data cleared. CONFIG_GLOBAL preserved.\n");
+  console.log("\n✅ Done! All dummy data cleared. CONFIG_GLOBAL/SEASON_CONFIG preserved.\n");
 }
 
 main().catch((err) => {

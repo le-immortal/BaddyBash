@@ -14,6 +14,8 @@ import { UserDocument, RegistrationDocument } from "../app/lib/models";
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
 const databaseId = process.env.COSMOS_DATABASE || "baddybash";
+const SEASON_ID = "2026";
+type SeedRegistration = Omit<RegistrationDocument, "seasonId"> & Partial<Pick<RegistrationDocument, "seasonId" | "tournamentId">>;
 
 async function seed() {
   if (!endpoint || !key) {
@@ -80,7 +82,7 @@ async function seed() {
   //   MD (2 teams): jdoe+arjun[1], akash+ravi
   //   XD (3 teams): mjohnson+jsmith[1], ravi+priyam, akash+neha
 
-  const sampleRegistrations: RegistrationDocument[] = [
+  const sampleRegistrations: SeedRegistration[] = [
     // ── Men's Singles (4 players → clean 4-draw) ──
     { id: "jdoe_MS", userId: "jdoe", userName: "John Doe", category: "MS", status: "confirmed", seed: 1, createdAt: now, updatedAt: now },
     { id: "mjohnson_MS", userId: "mjohnson", userName: "Mike Johnson", category: "MS", status: "confirmed", seed: 2, createdAt: now, updatedAt: now },
@@ -110,7 +112,12 @@ async function seed() {
 
   console.log("📝 Seeding registrations...");
   for (const reg of sampleRegistrations) {
-    await registrationsContainer.items.upsert(reg);
+    await registrationsContainer.items.upsert({
+      ...reg,
+      id: `${reg.userId}_${reg.category}_${SEASON_ID}`,
+      seasonId: SEASON_ID,
+      tournamentId: SEASON_ID,
+    } satisfies RegistrationDocument);
   }
 
   console.log("🎉 Seed complete!");

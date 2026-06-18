@@ -1,6 +1,7 @@
 import { Container } from "@azure/cosmos";
 import { MatchDocument } from "@/app/lib/models";
-import { getMatchesContainer } from "@/app/lib/cosmosClient";
+import { getSeasonSettings } from "@/app/lib/settings";
+import { getTournamentMatchesContainer, matchPartitionKey } from "@/app/lib/tournamentData";
 
 /**
  * Updates a match document with new data and handles advancing the winner to the next match.
@@ -13,8 +14,13 @@ export async function updateMatchWithAdvancement(
   match: MatchDocument,
   updates: Partial<MatchDocument>
 ): Promise<MatchDocument> {
-  const container = getMatchesContainer();
-  const category = match.category;
+  const seasonSettings = await getSeasonSettings(match.seasonId);
+  if (seasonSettings.archived) {
+    throw new Error("Archived seasons are read-only");
+  }
+
+  const container = getTournamentMatchesContainer();
+  const partitionKey = matchPartitionKey(match);
   
   // 2. Apply updates locally
   const updatedMatch: MatchDocument = {
@@ -24,7 +30,7 @@ export async function updateMatchWithAdvancement(
   };
 
   // 3. Save the match
-  await container.item(match.id, category).replace(updatedMatch);
+  await container.item(match.id, partitionKey).replace(updatedMatch);
 
   // 4. Handle Advancement logic if match is completed
   if (
@@ -49,7 +55,7 @@ export async function advanceWinnerToNextMatch(
 
     // Fetch the next match
     const { resource: nextMatch } = await container
-      .item(match.nextMatchId, match.category)
+      .item(match.nextMatchId, matchPartitionKey(match))
       .read<MatchDocument>();
 
     if (!nextMatch) {
@@ -93,7 +99,6 @@ export async function advanceWinnerToNextMatch(
 
     if (nextMatchUpdated) {
       nextMatch.updatedAt = new Date().toISOString();
-      await container.item(nextMatch.id, nextMatch.category).replace(nextMatch);
+      await container.item(nextMatch.id, matchPartitionKey(nextMatch)).replace(nextMatch);
     }
 }
-

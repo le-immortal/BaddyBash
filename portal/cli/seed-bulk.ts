@@ -27,6 +27,8 @@ import type { UserDocument, RegistrationDocument } from "../app/lib/models";
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
 const databaseId = process.env.COSMOS_DATABASE || "baddybash";
+const SEASON_ID = "2026";
+type SeedRegistration = Omit<RegistrationDocument, "seasonId"> & Partial<Pick<RegistrationDocument, "seasonId" | "tournamentId">>;
 
 /* ── Name generators ────────────────────────────────────────────────── */
 const maleFirst = [
@@ -169,7 +171,7 @@ async function bulkSeed() {
   console.log(`  ✅ ${allUsers.length} users upserted.`);
 
   /* ── Step 3: Build registrations ─────────────────────────────────── */
-  const regs: RegistrationDocument[] = [];
+  const regs: SeedRegistration[] = [];
 
   // ── MS — 443 singles, top 16 seeded ─────────────────────────────────
   for (let i = 0; i < maleMS.length; i++) {
@@ -297,7 +299,12 @@ async function bulkSeed() {
   console.log(`📝 Upserting ${regs.length} registrations...`);
   for (let i = 0; i < regs.length; i += BATCH) {
     const chunk = regs.slice(i, i + BATCH);
-    await Promise.all(chunk.map((r) => regsContainer.items.upsert(r)));
+    await Promise.all(chunk.map((r) => regsContainer.items.upsert({
+      ...r,
+      id: `${r.userId}_${r.category}_${SEASON_ID}`,
+      seasonId: SEASON_ID,
+      tournamentId: SEASON_ID,
+    } satisfies RegistrationDocument)));
     if ((i / BATCH) % 4 === 0) process.stdout.write(`  ${i + chunk.length}/${regs.length}\r`);
   }
   console.log(`  ✅ ${regs.length} registrations upserted.`);

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMatchesContainer } from "@/app/lib/cosmosClient";
 import { MatchDocument, Category } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
-import { getActiveSeason } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import {
+  getTournamentMatchesContainer,
+  matchPartitionKey,
+  seasonCategoryQuery,
+} from "@/app/lib/tournamentData";
 
 interface AdvanceEntry {
   matchId: string;
@@ -23,9 +27,11 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const { category, advances } = (await request.json()) as {
+    const { category, advances, season, seasonId: bodySeasonId } = (await request.json()) as {
       category: Category;
       advances: AdvanceEntry[];
+      season?: string;
+      seasonId?: string;
     };
 
     if (!category || !advances || !Array.isArray(advances) || advances.length === 0) {
@@ -35,20 +41,22 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const container = getMatchesContainer();
+    const container = getTournamentMatchesContainer();
 
     // Resolve season
-    const seasonId = await getActiveSeason();
+    const seasonId = season || bodySeasonId || await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(seasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Archived seasons are read-only" },
+        { status: 403 }
+      );
+    }
 
     // 1. Fetch all matches for this category + season
+    const matchQuery = seasonCategoryQuery(seasonId, category);
     const { resources: allMatches } = await container.items
-      .query<MatchDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@category", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<MatchDocument>({ query: matchQuery.query, parameters: matchQuery.parameters }, matchQuery.options)
       .fetchAll();
 
     const matchMap = new Map<string, MatchDocument>();
@@ -80,8 +88,9 @@ export async function PUT(request: NextRequest) {
     // Validation happens here against the fresh DB state (after prior advancements have cascaded)
     for (const { matchId, winnerId, winnerName } of toProcess) {
       // Re-read the match from DB to get the latest state (may have been updated by prior advancement)
+      const matchForPartition = matchMap.get(matchId);
       const { resource: freshMatch } = await container
-        .item(matchId, category)
+        .item(matchId, matchForPartition ? matchPartitionKey(matchForPartition) : category)
         .read<MatchDocument>();
 
       if (!freshMatch) continue;
@@ -102,14 +111,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // 5. Return the full updated match list
+    const updatedMatchQuery = seasonCategoryQuery(seasonId, category);
     const { resources: updatedMatches } = await container.items
-      .query<MatchDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@category", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<MatchDocument>({ query: updatedMatchQuery.query, parameters: updatedMatchQuery.parameters }, updatedMatchQuery.options)
       .fetchAll();
 
     updatedMatches.sort((a, b) => a.round - b.round || a.position - b.position);
