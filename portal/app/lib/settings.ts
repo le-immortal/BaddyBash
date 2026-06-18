@@ -1,5 +1,6 @@
 import { getSettingsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import { SeasonConfig, SeasonEntry } from "@/app/lib/models";
+import { getFallbackSeasonLabel } from "@/app/lib/seasonLabels";
 
 // ── Legacy type kept for backward compatibility with existing API consumers ──
 export interface GlobalSettings {
@@ -13,11 +14,17 @@ export interface GlobalSettings {
 // ── Season Config (new, replaces CONFIG_GLOBAL) ──────────────────────────────
 
 const SEASON_CONFIG_ID = "SEASON_CONFIG";
-const DEFAULT_SEASON = "2026";
 
 const SETTINGS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 let cachedSeasonConfig: SeasonConfig | null = null;
 let cachedAt = 0;
+
+function getDefaultSeasonId(): string {
+  const configuredSeason =
+    process.env.DEFAULT_SEASON?.trim() || process.env.NEXT_PUBLIC_DEFAULT_SEASON?.trim();
+
+  return configuredSeason || String(new Date().getFullYear());
+}
 
 function isCosmosNotFound(error: unknown): boolean {
   const candidate = error as { code?: unknown; statusCode?: unknown };
@@ -25,13 +32,15 @@ function isCosmosNotFound(error: unknown): boolean {
 }
 
 function defaultSeasonConfig(): SeasonConfig {
+  const defaultSeason = getDefaultSeasonId();
+
   return {
     id: "SEASON_CONFIG",
-    activeSeason: DEFAULT_SEASON,
+    activeSeason: defaultSeason,
     seasons: [
       {
-        id: DEFAULT_SEASON,
-        label: "Baddy Bash 2026",
+        id: defaultSeason,
+        label: getFallbackSeasonLabel(defaultSeason),
         registrationOpen: true,
         bracketsVisible: false,
         archived: false,

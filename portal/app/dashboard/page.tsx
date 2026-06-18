@@ -5,11 +5,11 @@ import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
-import { Category, MatchDocument, SeasonConfig } from '../lib/models';
+import { Category, MatchDocument, SeasonConfig, SeasonEntry } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
-import { getSeasonLabelFromConfig } from '../lib/seasonLabels';
+import { getSeasonLabel, getSeasonLabelFromConfig } from '../lib/seasonLabels';
 
 function DashboardShell({
   children,
@@ -61,9 +61,18 @@ interface Registration {
   userName: string;
   category: Category;
   status: string;
+  seasonId?: string;
   partnerId?: string;
   partnerName?: string;
   partnerPhone?: string;
+}
+
+interface HistoricalSeasonData {
+  season: SeasonEntry;
+  registrations: Registration[];
+  matches: MatchDocument[];
+  totalRoundsMap: Record<string, number>;
+  resultsAvailable: boolean;
 }
 
 export default function Dashboard() {
@@ -97,6 +106,10 @@ export default function Dashboard() {
   const [aliasGuideOpen, setAliasGuideOpen] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(true);
   const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
+  const [seasonConfig, setSeasonConfig] = useState<SeasonConfig | null>(null);
+  const [pastSeasonsOpen, setPastSeasonsOpen] = useState(false);
+  const [historicalSeasons, setHistoricalSeasons] = useState<HistoricalSeasonData[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Check global settings (registration open + brackets visible)
   useEffect(() => {
@@ -108,12 +121,14 @@ export default function Dashboard() {
       if (data.seasons) {
         const config = data as SeasonConfig;
         const activeSeason = config.seasons.find((season) => season.id === config.activeSeason);
+        setSeasonConfig(config);
         setSeasonLabel(getSeasonLabelFromConfig(config));
         setRegistrationOpen(activeSeason?.registrationOpen !== false);
         setBracketsVisible(activeSeason?.bracketsVisible !== false);
         return;
       }
 
+      setSeasonConfig(null);
       setRegistrationOpen(data.registrationOpen !== false);
       setBracketsVisible(data.bracketsVisible !== false);
     }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
@@ -250,9 +265,129 @@ export default function Dashboard() {
     }
   }, [profileSaved, committedCategories, bracketsVisible, fetchUserMatches]);
 
+  useEffect(() => {
+    if (!profileSaved || !userId || !seasonConfig) {
+      setHistoricalSeasons([]);
+      return;
+    }
+
+    const archivedSeasons = seasonConfig.seasons
+      .filter((season) => season.archived)
+      .sort((a, b) => b.id.localeCompare(a.id));
+
+    if (archivedSeasons.length === 0) {
+      setHistoricalSeasons([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadHistoricalSeasons = async () => {
+      setHistoryLoading(true);
+      try {
+        const seasonHistory: Array<HistoricalSeasonData | null> = await Promise.all(
+          archivedSeasons.map(async (season) => {
+            const regsResponse = await fetchWithTimeout(
+              `/api/registrations?userId=${encodeURIComponent(userId)}&season=${encodeURIComponent(season.id)}`
+            );
+
+            if (!regsResponse.ok) {
+              return null;
+            }
+
+            const registrations = (await regsResponse.json() as Registration[]).filter((registration) => registration.status !== 'cancelled');
+            const categories = Array.from(new Set(registrations.map((registration) => registration.category)));
+
+            if (categories.length === 0) {
+              return {
+                season,
+                registrations,
+                matches: [],
+                totalRoundsMap: {},
+                resultsAvailable: season.bracketsVisible !== false,
+              } satisfies HistoricalSeasonData;
+            }
+
+            const shouldLoadResults = season.bracketsVisible !== false || isAdmin;
+            if (!shouldLoadResults) {
+              return {
+                season,
+                registrations,
+                matches: [],
+                totalRoundsMap: {},
+                resultsAvailable: false,
+              } satisfies HistoricalSeasonData;
+            }
+
+            const matchResponses = await Promise.all(
+              categories.map((category) =>
+                fetch(`/api/matches?category=${category}&season=${encodeURIComponent(season.id)}`, { cache: 'no-store' })
+                  .then((response) => response.ok ? response.json() as Promise<MatchDocument[]> : [] as MatchDocument[])
+                  .catch(() => [] as MatchDocument[])
+              )
+            );
+
+            const totalRoundsMapForSeason: Record<string, number> = {};
+            const allMatches: MatchDocument[] = [];
+
+            matchResponses.forEach((matches, index) => {
+              const category = categories[index];
+              totalRoundsMapForSeason[category] = matches.reduce((max, match) => Math.max(max, match.round), 0);
+
+              allMatches.push(
+                ...matches.filter(
+                  (match) => match.status !== 'bye' && (
+                    match.player1Id === userId ||
+                    match.player2Id === userId ||
+                    (match.player1Id?.split('|').includes(userId) ?? false) ||
+                    (match.player2Id?.split('|').includes(userId) ?? false)
+                  )
+                )
+              );
+            });
+
+            allMatches.sort((a, b) => (a.matchNumber ?? 0) - (b.matchNumber ?? 0));
+
+            return {
+              season,
+              registrations,
+              matches: allMatches,
+              totalRoundsMap: totalRoundsMapForSeason,
+              resultsAvailable: true,
+            } satisfies HistoricalSeasonData;
+          })
+        );
+
+        if (!cancelled) {
+          setHistoricalSeasons(
+            seasonHistory
+              .filter((season): season is HistoricalSeasonData => Boolean(season))
+              .filter((season) => season.registrations.length > 0 || season.matches.length > 0)
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load past seasons:', err);
+        if (!cancelled) {
+          setHistoricalSeasons([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
+      }
+    };
+
+    loadHistoricalSeasons();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, profileSaved, seasonConfig, userId]);
+
   // Derived match lists — avoids re-filtering on every render
   const upcomingMatches = useMemo(() => userMatches.filter(m => m.status !== 'completed' && m.status !== 'bye'), [userMatches]);
   const completedMatches = useMemo(() => userMatches.filter(m => m.status === 'completed' || m.status === 'bye'), [userMatches]);
+  const hasArchivedSeasons = seasonConfig?.seasons.some((season) => season.archived) ?? false;
 
   const maxSelections = 2;
   const totalCount = committedCategories.length + selection.length;
@@ -1062,6 +1197,128 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
+        {hasArchivedSeasons && (
+          <section className="mb-10">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPastSeasonsOpen((previous) => !previous)}
+                className="flex w-full items-center gap-3 px-6 py-4 text-left hover:bg-slate-50"
+                aria-expanded={pastSeasonsOpen}
+                aria-controls="past-seasons-panel"
+              >
+                <History className="w-5 h-5 text-slate-500" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold text-slate-800">Past Seasons</h2>
+                  <p className="text-sm text-slate-500">Archived registrations and results are available in read-only mode.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                  {historyLoading ? 'Loading…' : `${historicalSeasons.length} season${historicalSeasons.length === 1 ? '' : 's'}`}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${pastSeasonsOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {pastSeasonsOpen && (
+                <div id="past-seasons-panel" className="border-t border-slate-100 bg-slate-50/60 px-6 py-5">
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-8 text-slate-500">
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Loading archived seasons...
+                    </div>
+                  ) : historicalSeasons.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-slate-500">No archived registrations found for your account yet.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {historicalSeasons.map((history) => {
+                        const completedHistoryMatches = history.matches.filter((match) => match.status === 'completed' || match.status === 'bye');
+
+                        return (
+                          <article key={history.season.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-lg font-semibold text-slate-800">{getSeasonLabel(history.season)}</h3>
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Read only</span>
+                                </div>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {history.registrations.length} registration{history.registrations.length === 1 ? '' : 's'} saved for this archived season.
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                                {completedHistoryMatches.length} result{completedHistoryMatches.length === 1 ? '' : 's'}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <h4 className="text-sm font-semibold text-slate-700">Registrations</h4>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {history.registrations.map((registration) => {
+                                    const categoryName = CATEGORIES.find((category) => category.id === registration.category)?.name || registration.category;
+                                    const partnerText = registration.partnerName ? ` · ${registration.partnerName}` : '';
+
+                                    return (
+                                      <span key={registration.id} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                                        {categoryName}{partnerText}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                <h4 className="text-sm font-semibold text-slate-700">Match Results</h4>
+                                {!history.resultsAvailable ? (
+                                  <p className="mt-3 text-sm text-slate-500">Results are not published for this archived season.</p>
+                                ) : completedHistoryMatches.length === 0 ? (
+                                  <p className="mt-3 text-sm text-slate-500">No completed archived matches were found for your account.</p>
+                                ) : (
+                                  <div className="mt-3 divide-y divide-slate-100">
+                                    {completedHistoryMatches.map((match) => {
+                                      const isPlayer1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
+                                      const opponent = isPlayer1 ? match.player2Name : match.player1Name;
+                                      const opponentAlias = isPlayer1 ? match.player2Id : match.player1Id;
+                                      const won = match.winnerId === userId || (match.winnerId?.split('|').includes(userId) ?? false);
+                                      const totalRounds = history.totalRoundsMap[match.category] || match.round;
+                                      const roundLabel = match.round === totalRounds ? 'Final' : match.round === totalRounds - 1 ? 'Semi' : match.round === totalRounds - 2 ? 'QF' : `R${match.round}`;
+
+                                      return (
+                                        <div key={match.id} className="flex items-center gap-3 py-2.5 text-sm">
+                                          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                            { MS: 'bg-blue-100 text-blue-700', WS: 'bg-pink-100 text-pink-700', MD: 'bg-indigo-100 text-indigo-700', WD: 'bg-purple-100 text-purple-700', XD: 'bg-teal-100 text-teal-700' }[match.category] || 'bg-slate-100 text-slate-700'
+                                          }`}>
+                                            {match.category}
+                                          </span>
+                                          <span className="w-10 shrink-0 text-xs font-semibold text-slate-500">{roundLabel}</span>
+                                          <span className="min-w-0 flex-1 truncate text-slate-700">
+                                            vs <span className="font-medium">{opponent || 'TBD'}</span>
+                                            {opponentAlias && (
+                                              <span className="ml-1 text-xs text-slate-400">
+                                                ({opponentAlias.includes('|') ? opponentAlias.split('|').map((alias) => `@${alias}`).join(' & ') : `@${opponentAlias}`})
+                                              </span>
+                                            )}
+                                          </span>
+                                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${won ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {won ? 'W' : 'L'}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </DashboardShell>
   );

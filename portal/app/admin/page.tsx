@@ -13,6 +13,8 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { exportVisualBracket } from '../lib/bracketExcelExport';
 
+const getCurrentSeasonFallback = () => String(new Date().getFullYear());
+
 function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50">
@@ -41,6 +43,50 @@ interface AdminPlayer {
   alias?: string;
   phoneNumber?: string;
   registrations: AdminRegistration[];
+}
+
+type ExportActionType = 'players-category' | 'players-csv' | 'bracket' | 'visual-bracket';
+
+type PendingAdminAction =
+  | { type: 'export'; exportType: ExportActionType }
+  | { type: 'save-seeds'; source: 'visualizer' | 'list' }
+  | { type: 'generate-fixtures' }
+  | { type: 'import' };
+
+type ImportErrorDetail = {
+  id?: string;
+  error: string;
+};
+
+type ImportFeedback = {
+  tone: 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  errors: ImportErrorDetail[];
+};
+
+function ImportFeedbackPanel({ feedback }: { feedback: ImportFeedback }) {
+  const toneClasses = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    warning: 'border-amber-200 bg-amber-50 text-amber-800',
+    error: 'border-red-200 bg-red-50 text-red-800',
+  } satisfies Record<ImportFeedback['tone'], string>;
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClasses[feedback.tone]}`}>
+      <p className="text-sm font-semibold">{feedback.title}</p>
+      <p className="mt-1 text-sm">{feedback.message}</p>
+      {feedback.errors.length > 0 && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+          {feedback.errors.map((error, index) => (
+            <li key={`${error.id || 'row'}-${index}`}>
+              <span className="font-medium">{error.id || `Row ${index + 1}`}</span>: {error.error}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export default function AdminDashboard() {
@@ -75,6 +121,8 @@ type ImportPreviewItem = {
 
 // ... inside component ...
 const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(null);
+  const [importFeedback, setImportFeedback] = useState<ImportFeedback | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAdminAction | null>(null);
 
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [bracketsVisible, setBracketsVisible] = useState(false);
@@ -84,11 +132,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Season state
-  const [activeSeason, setActiveSeason] = useState<string>('2026');
+  const [activeSeason, setActiveSeason] = useState<string>(getCurrentSeasonFallback);
   const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const selectedSeasonEntry = seasons.find(s => s.id === selectedSeason);
   const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
+  const selectedSeasonLabel = selectedSeasonEntry?.label || `Season ${selectedSeason || activeSeason}`;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -108,15 +157,19 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       // Full SeasonConfig
       if (data.seasons) {
         setSeasons(data.seasons);
-        setActiveSeason(data.activeSeason || '2026');
-        setSelectedSeason(data.activeSeason || '2026');
-        const active = data.seasons.find((s: SeasonEntry) => s.id === data.activeSeason);
+        const resolvedSeason = data.activeSeason || data.seasons[0]?.id || getCurrentSeasonFallback();
+        setActiveSeason(resolvedSeason);
+        setSelectedSeason(resolvedSeason);
+        const active = data.seasons.find((s: SeasonEntry) => s.id === resolvedSeason);
         if (active) {
           setRegistrationOpen(active.registrationOpen !== false);
           setBracketsVisible(active.bracketsVisible === true);
         }
       } else {
         // Backward compat fallback
+        const resolvedSeason = getCurrentSeasonFallback();
+        setActiveSeason(resolvedSeason);
+        setSelectedSeason(resolvedSeason);
         setRegistrationOpen(data.registrationOpen !== false);
         setBracketsVisible(data.bracketsVisible === true);
       }
@@ -130,7 +183,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setSeedingMode(false);
     setEditingMatch(null);
     setImportPreview(null);
+    setImportFeedback(null);
     setImporting(false);
+    setPendingAction(null);
+    setShowExportMenu(false);
   }, [selectedSeasonEntry]);
 
   const updateSelectedSeasonSettings = async (updates: Partial<Pick<SeasonEntry, 'registrationOpen' | 'bracketsVisible'>>) => {
@@ -362,14 +418,21 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     }
   };
 
-  const handleGenerateFixtures = async () => {
+  const requestSaveSeeds = (source: 'visualizer' | 'list' = 'visualizer') => {
     if (isSelectedSeasonArchived) {
       alert('Archived seasons are read-only.');
       return;
     }
 
-    if (!seedingMode && !confirm(`Generate bracket for ${selectedCategory}? This will replace any existing bracket.`)) return;
-    
+    setPendingAction({ type: 'save-seeds', source });
+  };
+
+  const handleGenerateFixtures = async () => {
+    if (isSelectedSeasonArchived) {
+      alert('Archived seasons are read-only.');
+      return;
+    }
+     
     // Build seed map from visualizer state if active
     // For doubles, key by pairKey (deterministic sorted "userId|partnerId")
     // so the API can look up seeds regardless of which partner's registration it encounters first
@@ -423,6 +486,15 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     } finally {
       setGenerating(false);
     }
+  };
+
+  const requestGenerateFixtures = () => {
+    if (isSelectedSeasonArchived) {
+      alert('Archived seasons are read-only.');
+      return;
+    }
+
+    setPendingAction({ type: 'generate-fixtures' });
   };
 
   const startSeeding = () => {
@@ -605,6 +677,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
     setImporting(true);
     setImportPreview(null); // Clear previous
+    setImportFeedback(null);
 
     try {
       // 1. Fetch current matches to compare against
@@ -794,22 +867,70 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           body: JSON.stringify({ updates, season: selectedSeason }),
         });
 
-        if (!res.ok) {
-          const err = await res.json();
-          alert(`Import failed: ${err.error || 'Unknown error'}`);
+        const result = await res.json();
+        const errors = Array.isArray(result.errors) ? result.errors as ImportErrorDetail[] : [];
+        const updated = typeof result.updated === 'number' ? result.updated : 0;
+        const failed = typeof result.failed === 'number' ? result.failed : errors.length;
+
+        if (res.status === 200) {
+          const message = `Successfully updated ${updated} match${updated === 1 ? '' : 'es'}.`;
+          setImportFeedback({
+            tone: 'success',
+            title: 'Bracket import completed',
+            message,
+            errors: [],
+          });
+          alert(message);
+          setImportPreview(null);
+          setImporting(false);
+          fetchMatches();
           return;
         }
 
-        const result = await res.json();
-        alert(`Successfully updated ${result.processed} matches.`);
-        
-        // Refresh and close
-        setImportPreview(null);
+        if (res.status === 207) {
+          const message = `Updated ${updated} match${updated === 1 ? '' : 'es'}, but ${failed} row${failed === 1 ? '' : 's'} failed.`;
+          setImportFeedback({
+            tone: 'warning',
+            title: 'Bracket import partially completed',
+            message,
+            errors,
+          });
+          alert(message);
+          setImportPreview(null);
+          setImporting(false);
+          fetchMatches();
+          return;
+        }
+
+        if (res.status === 400) {
+          const failureCount = errors.length;
+          const message = failureCount > 0
+            ? `No matches were updated. ${failureCount} row${failureCount === 1 ? '' : 's'} failed validation or update.`
+            : 'No matches were updated.';
+          setImportFeedback({
+            tone: 'error',
+            title: 'Bracket import failed',
+            message,
+            errors,
+          });
+          setImporting(false);
+          alert(`Import failed for ${failureCount} row${failureCount === 1 ? '' : 's'}. Review the error list for details.`);
+          return;
+        }
+
+        const fallbackMessage = result.error || 'Unknown error';
+        setImportFeedback({
+          tone: 'error',
+          title: 'Bracket import failed',
+          message: fallbackMessage,
+          errors,
+        });
         setImporting(false);
-        fetchMatches(); // Reload grid
+        alert(`Import failed: ${fallbackMessage}`);
 
       } catch (error) {
         console.error(error);
+        setImporting(false);
         alert("Failed to execute import.");
       }
   };
@@ -915,6 +1036,94 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     }
   };
 
+  const requestExport = (exportType: ExportActionType) => {
+    setShowExportMenu(false);
+    setPendingAction({ type: 'export', exportType });
+  };
+
+  const requestImportCommit = () => {
+    if (!importPreview || importPreview.length === 0) return;
+    setPendingAction({ type: 'import' });
+  };
+
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+
+    const action = pendingAction;
+    setPendingAction(null);
+
+    if (action.type === 'save-seeds') {
+      await handleSaveSeeds(action.source);
+      return;
+    }
+
+    if (action.type === 'generate-fixtures') {
+      await handleGenerateFixtures();
+      return;
+    }
+
+    if (action.type === 'import') {
+      await executeImport();
+      return;
+    }
+
+    switch (action.exportType) {
+      case 'players-category':
+        await handleExport();
+        break;
+      case 'players-csv':
+        window.location.href = `/api/admin/export?season=${encodeURIComponent(selectedSeason || activeSeason)}`;
+        break;
+      case 'bracket':
+        await handleExportBracket();
+        break;
+      case 'visual-bracket':
+        await handleExportVisualBracket();
+        break;
+    }
+  };
+
+  const pendingActionDetails = pendingAction ? (() => {
+    switch (pendingAction.type) {
+      case 'save-seeds':
+        return {
+          title: `Save seeds for ${selectedSeasonLabel}?`,
+          description: `This will persist the current seed order for ${CATEGORIES.find((category) => category.id === selectedCategory)?.name || selectedCategory} in ${selectedSeasonLabel}.`,
+          confirmLabel: 'Save Seeds',
+          confirmClassName: 'bg-blue-600 hover:bg-blue-700',
+        };
+      case 'generate-fixtures':
+        return {
+          title: `Generate fixtures for ${selectedSeasonLabel}?`,
+          description: `This will ${seedingMode ? 'generate' : 'replace'} the ${selectedCategory} bracket for ${selectedSeasonLabel}.`,
+          confirmLabel: 'Generate Fixtures',
+          confirmClassName: 'bg-green-600 hover:bg-green-700',
+        };
+      case 'import':
+        return {
+          title: `Import bracket changes for ${selectedSeasonLabel}?`,
+          description: `This will apply ${importPreview?.length || 0} queued match updates to ${selectedSeasonLabel}.`,
+          confirmLabel: 'Commit Import',
+          confirmClassName: 'bg-emerald-600 hover:bg-emerald-700',
+        };
+      case 'export': {
+        const exportLabels: Record<ExportActionType, string> = {
+          'players-category': `${selectedCategory} player list`,
+          'players-csv': 'all-player CSV export',
+          bracket: `${selectedCategory} bracket export`,
+          'visual-bracket': `${selectedCategory} visual bracket export`,
+        };
+
+        return {
+          title: `Export ${selectedSeasonLabel}?`,
+          description: `You are exporting the ${exportLabels[pendingAction.exportType]} for ${selectedSeasonLabel}.`,
+          confirmLabel: 'Export',
+          confirmClassName: 'bg-blue-600 hover:bg-blue-700',
+        };
+      }
+    }
+  })() : null;
+
   // Auth loading or settings not yet loaded
   if (sessionStatus === 'loading' || !settingsLoaded) {
     return (
@@ -1012,8 +1221,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             </button>
             {/* Archived indicator */}
             {isSelectedSeasonArchived && (
-              <span className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                <Archive size={14} /> Viewing Archived Season
+              <span className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                <Archive size={14} /> 📦 Archived Season — Read Only
               </span>
             )}
             <button
@@ -1064,26 +1273,26 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               {showExportMenu && (
                 <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1">
                   <button
-                    onClick={() => { setShowExportMenu(false); handleExport(); }}
+                    onClick={() => requestExport('players-category')}
                     disabled={loading || players.length === 0}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                   >
                     📋 Players (Category)
                   </button>
                   <button
-                    onClick={() => { setShowExportMenu(false); window.location.href = `/api/admin/export?season=${encodeURIComponent(selectedSeason || activeSeason)}`; }}
+                    onClick={() => requestExport('players-csv')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🌍 All Players (CSV)
                   </button>
                   <button
-                    onClick={handleExportBracket}
+                    onClick={() => requestExport('bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🏆 Bracket / Draw
                   </button>
                   <button
-                    onClick={handleExportVisualBracket}
+                    onClick={() => requestExport('visual-bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🎯 Visual Bracket
@@ -1104,7 +1313,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importing || isSelectedSeasonArchived}
-              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 min-h-[44px]"
+              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-slate-200 border border-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 min-h-[44px]"
               title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : 'Import Bracket Data'}
             >
               <Upload size={16} />
@@ -1113,20 +1322,84 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           </div>
         </header>
 
+        {isSelectedSeasonArchived && (
+          <div className="mb-6 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-5 py-4 text-slate-800 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl" aria-hidden="true">📦</span>
+                <div>
+                  <p className="font-semibold">Archived Season — Read Only</p>
+                  <p className="text-sm text-slate-600">
+                    You are viewing <span className="font-medium">{selectedSeasonLabel}</span>. Editing, seeding, imports, and fixture generation are disabled, but exports remain available.
+                  </p>
+                </div>
+              </div>
+              <span className="self-start rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                Season context: {selectedSeason}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {pendingAction && pendingActionDetails && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="admin-season-action-title"
+              className="w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+            >
+              <div className="border-b border-slate-100 px-6 py-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Season Operation</p>
+                <h2 id="admin-season-action-title" className="mt-2 text-xl font-bold text-slate-900">
+                  {pendingActionDetails.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{pendingActionDetails.description}</p>
+              </div>
+              <div className="flex justify-end gap-3 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => setPendingAction(null)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executePendingAction}
+                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${pendingActionDetails.confirmClassName}`}
+                >
+                  {pendingActionDetails.confirmLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Import Preview Modal */}
         {importPreview && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
               <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Review Changes
-                </h2>
+                <div>
+                  <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    Review Changes
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Importing updates into <span className="font-medium text-slate-700">{selectedSeasonLabel}</span>
+                  </p>
+                </div>
                 <div className="text-sm text-slate-500">
                   {importPreview.length} matches to update
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
+                {importFeedback && (
+                  <div className="mb-4">
+                    <ImportFeedbackPanel feedback={importFeedback} />
+                  </div>
+                )}
                 {importPreview.length === 0 ? (
                   <p className="text-center text-slate-500">No changes detected.</p>
                 ) : (
@@ -1173,7 +1446,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                   Cancel
                 </button>
                 <button
-                  onClick={executeImport}
+                  onClick={requestImportCommit}
                   className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 shadow-sm"
                 >
                   Commit {importPreview.length} Changes
@@ -1237,17 +1510,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                              Cancel
                            </button>
                            <button 
-                             onClick={() => handleSaveSeeds('visualizer')}
+                             onClick={() => requestSaveSeeds('visualizer')}
                              disabled={savingSeeds || isSelectedSeasonArchived}
-                             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2"
+                             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                            >
                              {savingSeeds ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                              Save Seeds
                            </button>
                            <button 
-                             onClick={handleGenerateFixtures}
+                             onClick={requestGenerateFixtures}
                              disabled={generating || isSelectedSeasonArchived}
-                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 disabled:bg-slate-200 disabled:text-slate-500"
                            >
                              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                              Generate Bracket
@@ -1282,9 +1555,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         })()}
                         </span>
                         <button 
-                          onClick={() => handleSaveSeeds('list')}
+                          onClick={() => requestSaveSeeds('list')}
                           disabled={savingSeeds || isSelectedSeasonArchived || Object.keys(seedValues).length === 0}
-                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1 ml-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1 ml-4 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                         >
                           {savingSeeds ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                           Save Seeds
@@ -1292,7 +1565,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         <button 
                           onClick={startSeeding}
                           disabled={isSelectedSeasonArchived}
-                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                         >
                           <ArrowRight className="w-3 h-3" />
                           Seed & Generate
@@ -1466,6 +1739,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                             Archived seasons are read-only. Bracket generation and match updates are disabled.
                         </div>
                     )}
+                    {importFeedback && (
+                        <div className="border-b border-slate-100 px-6 py-4">
+                            <ImportFeedbackPanel feedback={importFeedback} />
+                        </div>
+                    )}
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                         <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
                             <Swords className="w-5 h-5 text-blue-600" />
@@ -1474,9 +1752,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         <div className="flex gap-2">
                             {matches.length > 0 && (
                                 <button
-                                    onClick={handleGenerateFixtures}
+                                    onClick={requestGenerateFixtures}
                                     disabled={generating || isSelectedSeasonArchived}
-                                    className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50"
+                                    className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 disabled:bg-slate-100 disabled:text-slate-400"
                                     title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : 'Regenerate Bracket'}
                                 >
                                     {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
@@ -1498,9 +1776,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                              <Trophy className="w-12 h-12 text-slate-300" />
                              <p>No matches found for this category.</p>
                              <button 
-                                onClick={handleGenerateFixtures}
+                                onClick={requestGenerateFixtures}
                                 disabled={generating || isSelectedSeasonArchived}
-                                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
+                                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500 flex items-center gap-2 font-medium"
                              >
                                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                                 Generate Bracket

@@ -131,7 +131,8 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { registrationId, userId, seed, season } = body;
+    const { registrationId, userId, seed, season, seasonId: bodySeasonId } = body;
+    const requestedSeasonId = bodySeasonId || season;
 
     // IMPORTANT: Allow seed to be null (unsetting a seed).
     if (!registrationId || !userId || seed === undefined) {
@@ -146,13 +147,13 @@ export async function PATCH(request: NextRequest) {
     const existing = isTournamentV2Enabled()
       ? (await container.items
           .query<RegistrationDocument>({
-            query: season
+            query: requestedSeasonId
               ? "SELECT TOP 1 * FROM c WHERE c.id = @registrationId AND c.userId = @userId AND c.seasonId = @seasonId"
               : "SELECT TOP 1 * FROM c WHERE c.id = @registrationId AND c.userId = @userId",
             parameters: [
               { name: "@registrationId", value: registrationId },
               { name: "@userId", value: userId },
-              ...(season ? [{ name: "@seasonId", value: season }] : []),
+              ...(requestedSeasonId ? [{ name: "@seasonId", value: requestedSeasonId }] : []),
             ],
           })
           .fetchAll()).resources[0]
@@ -165,17 +166,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (season && existing.seasonId !== season) {
+    if (requestedSeasonId && existing.seasonId !== requestedSeasonId) {
       return NextResponse.json(
         { error: "Registration does not belong to the selected season" },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
     const seasonSettings = await getSeasonSettings(existing.seasonId);
     if (seasonSettings.archived) {
       return NextResponse.json(
-        { error: "Archived seasons are read-only" },
+        { error: "Cannot modify archived season" },
         { status: 403 }
       );
     }
@@ -289,7 +290,7 @@ export async function PUT(request: NextRequest) {
     const seasonSettings = await getSeasonSettings(seasonId);
     if (seasonSettings.archived) {
       return NextResponse.json(
-        { error: "Archived seasons are read-only" },
+        { error: "Cannot modify archived season" },
         { status: 403 }
       );
     }
