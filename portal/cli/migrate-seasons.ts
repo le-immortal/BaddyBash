@@ -19,6 +19,12 @@ config({ path: ".env.local" });
 import { CosmosClient, Container } from "@azure/cosmos";
 import type { RegistrationDocument, MatchDocument, SeasonConfig } from "../app/lib/models";
 
+interface LegacyGlobalSettings {
+  id: "CONFIG_GLOBAL";
+  registrationOpen?: boolean;
+  bracketsVisible?: boolean;
+}
+
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
 const databaseId = process.env.COSMOS_DATABASE || "baddybash";
@@ -190,6 +196,16 @@ async function createSeasonConfig(container: Container) {
     return;
   }
 
+  let legacySettings: LegacyGlobalSettings | undefined;
+  try {
+    const { resource } = await container
+      .item("CONFIG_GLOBAL", "CONFIG_GLOBAL")
+      .read<LegacyGlobalSettings>();
+    legacySettings = resource;
+  } catch {
+    // CONFIG_GLOBAL may not exist in fresh environments.
+  }
+
   const seasonConfig: SeasonConfig = {
     id: "SEASON_CONFIG",
     activeSeason: SEASON_ID,
@@ -197,8 +213,8 @@ async function createSeasonConfig(container: Container) {
       {
         id: SEASON_ID,
         label: "Baddy Bash 2026",
-        registrationOpen: true,
-        bracketsVisible: false,
+        registrationOpen: legacySettings?.registrationOpen ?? true,
+        bracketsVisible: legacySettings?.bracketsVisible ?? false,
         archived: false,
       },
     ],
