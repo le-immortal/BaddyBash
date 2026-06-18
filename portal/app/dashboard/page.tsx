@@ -43,6 +43,11 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), dashboardFetchTimeoutMs);
 
+  // If the caller supplied a signal, forward its abort to our controller
+  if (init?.signal) {
+    init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } finally {
@@ -147,10 +152,11 @@ export default function Dashboard() {
   // On login: look up existing user by email — NO doc creation here
   useEffect(() => {
     if (sessionStatus !== 'authenticated' || !session?.user) return;
+    const controller = new AbortController();
     const initUser = async () => {
       try {
         // Look up by email to see if this user has already set up their profile
-        const res = await fetchWithTimeout(`/api/users?email=${encodeURIComponent(sessionEmail)}`);
+        const res = await fetchWithTimeout(`/api/users?email=${encodeURIComponent(sessionEmail)}`, { signal: controller.signal });
         if (res.ok) {
           const user = await res.json();
           // Check if we got a valid user object with required fields
@@ -172,6 +178,7 @@ export default function Dashboard() {
         }
         // If 404, user hasn't set up profile yet — that's fine, show the setup form
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to init user:', err);
         setApiError(true);
       } finally {
@@ -179,6 +186,7 @@ export default function Dashboard() {
       }
     };
     initUser();
+    return () => controller.abort();
   }, [sessionStatus, session, sessionEmail]);
 
   useEffect(() => {
