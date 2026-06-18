@@ -1,8 +1,8 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-18 after doc cleanup and verification refresh. Cross-referenced against [PRD.md](PRD.md).
 
-**Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS  
+**Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
 
 ---
@@ -19,23 +19,26 @@ Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md
 - [x] `SessionProvider` wrapper in `app/components/Providers.tsx`
 
 ### Database (Cosmos DB)
-- [x] Three containers: `users` (PK: `/id`), `registrations` (PK: `/userId`), `matches` (PK: `/category`)
+- [x] Core containers: `users` (PK: `/id`), `settings` (PK: `/id`), `registrations_v2` (PK: `/seasonCategory`), `matches_v2` (PK: `/seasonCategory`)
+- [x] Legacy rollback/source containers retained: `registrations` (PK: `/userId`), `matches` (PK: `/category`)
 - [x] Singleton `CosmosClient` in `app/lib/cosmosClient.ts`
-- [x] Type-safe models in `app/lib/models.ts` — `UserDocument`, `RegistrationDocument`, `MatchDocument`, `SeasonConfig`
-- [x] DB init endpoint: `POST /api/setup` (idempotent, admin-only)
-- [x] Env vars: `COSMOS_ENDPOINT`, `COSMOS_KEY`, `COSMOS_DATABASE`
+- [x] Type-safe models in `app/lib/models.ts` — `UserDocument`, `RegistrationDocument`, `MatchDocument`, `SeasonConfig`; v2 docs include `seasonCategory` and `schemaVersion`
+- [x] Version-aware tournament container helper in `app/lib/tournamentData.ts` (`v2` default; `COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy` rollback)
+- [x] DB init endpoint: `POST /api/setup` (idempotent, admin-only) creates legacy + v2 containers
+- [x] Env vars: `COSMOS_ENDPOINT`, `COSMOS_KEY`, `COSMOS_DATABASE`, optional `COSMOS_TOURNAMENT_CONTAINER_VERSION`
 
 ### API Routes
 | Endpoint | Methods | Auth | Purpose |
 |----------|---------|------|---------|
 | `/api/users` | GET, POST | Authenticated | Lookup by ID/alias/email, create profile |
 | `/api/registrations` | GET, POST, DELETE | Authenticated | Fetch/create/withdraw registrations |
-| `/api/matches` | GET, POST, PUT, PATCH | Public R / Admin W | Bracket CRUD, bulk advance |
-| `/api/admin/players` | GET, PATCH | Admin | List participants (cached), update seeds |
+| `/api/matches` | GET, POST, PATCH | Public R / Admin W | Season/category bracket read, fixture generation, match edit/update |
+| `/api/matches/advance` | PUT | Admin | Bulk winner advancement for a selected season/category |
+| `/api/admin/players` | GET, PATCH, PUT | Admin | List participants (cached), update one seed, batch update seeds |
 | `/api/admin/export` | GET | Admin | CSV export of users + registrations |
 | `/api/admin/import/bracket` | POST | Admin | Bulk import match results from Excel |
-| `/api/settings` | GET, POST | Auth R / Admin W | Season config, toggle registration/brackets |
-| `/api/setup` | POST | Admin | Initialize Cosmos DB containers |
+| `/api/settings` | GET, POST | Public R / Admin W | Season config, toggle registration/brackets, create/update seasons |
+| `/api/setup` | POST | Admin | Initialize Cosmos DB containers, including `settings`, `registrations_v2`, `matches_v2` |
 
 ### Player Dashboard (`app/dashboard/page.tsx`)
 - [x] Profile-first gate (name, alias, phone, t-shirt size)
@@ -55,7 +58,7 @@ Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md
 - [ ] Email/notification to partner (not implemented)
 
 ### Registration Controls
-- [x] `registrationOpen` toggle in global config (`CONFIG_GLOBAL`)
+- [x] `registrationOpen` toggle in active season config (`SEASON_CONFIG`; legacy `CONFIG_GLOBAL` shim retained)
 - [x] Admin UI: Lock/Unlock toggle in dashboard header
 - [x] User UI: "Registrations Closed" banner, disabled save button
 - [x] Withdraw: hard delete + partner cleanup for doubles
@@ -150,15 +153,136 @@ Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md
 
 ---
 
-## Phase 5: Multi-Season Support ✅ Complete
+## Phase 5: Multi-Season & Historical Seasons 🚧 Implemented, Verification Ongoing
 
-- [x] `seasonId` field on `RegistrationDocument` and `MatchDocument`
-- [x] Registration IDs: `${userId}_${category}_${seasonId}`
-- [x] `SeasonConfig` document: active season, per-season settings (registrationOpen, bracketsVisible, archived)
-- [x] Season selector in admin UI
-- [x] Archived seasons blocked from writes
-- [x] `settings.ts`: 12h cache for season config with invalidation
-- [x] Migration script: `cli/migrate-seasons.ts` (backfills seasonId, re-IDs registrations)
+### Current Baseline
+
+- [x] `seasonId` field exists on `RegistrationDocument` and `MatchDocument`
+- [x] Registration IDs use `${userId}_${category}_${seasonId}` via `makeRegistrationId()`
+- [x] `SeasonConfig` model supports `activeSeason`, `registrationOpen`, `bracketsVisible`, and `archived`
+- [x] Admin UI has a selected-season model and can view/update selected-season players, seeds, matches, fixture generation, imports, and exports
+- [x] Public fixtures page can select seasons and fetch `/api/matches?category=...&season=...`
+- [x] Archived seasons are blocked from several admin mutations: seed updates, fixture generation, match edit, bulk advance, and bracket import
+- [x] Duplicate seed checks are scoped by season
+- [x] `settings.ts` caches season config with invalidation on write
+- [x] Migration script exists: `cli/migrate-seasons.ts` backfills `seasonId`, re-IDs registrations, and creates `SEASON_CONFIG`
+- [x] Migration tooling exists to restore legacy data into the season-aware model
+- [x] `seasonCategory` and `schemaVersion` are written for v2 tournament documents
+- [x] `SEASON_CONFIG` is stored in the dedicated `settings` container
+- [x] Runtime tournament data path defaults to v2 containers; legacy containers remain available as fallback/rollback source
+- [ ] End-to-end browser smoke test against active + archived seasons still needed
+
+### Architecture Finding
+
+The original season concept was correct, but the legacy Cosmos partitioning was only partially aligned with the app's dominant access patterns.
+
+| Legacy container | Partition key | Works well for | Scaling concern |
+|-----------|-----------------------|----------------|-----------------|
+| `users` | `/id` | Point-reading a user by alias | Email lookup is cross-partition; legacy season config used to be mixed with user profile data |
+| `registrations` | `/userId` | Player dashboard: "my registrations" | Admin queries by `seasonId + category` are cross-partition |
+| `matches` | `/category` | Current category bracket reads | Historical season/category reads share the same category partition across all seasons |
+
+The live runtime now defaults tournament reads/writes to v2 containers aligned to season/category access patterns:
+
+| Runtime container | Partition key | Primary use |
+|-------------------|---------------|-------------|
+| `settings` | `/id` | `SEASON_CONFIG` and future singleton settings |
+| `registrations_v2` | `/seasonCategory` | Admin participants, fixture generation, historical season/category registration reads |
+| `matches_v2` | `/seasonCategory` | Public/admin brackets, match edits, imports, winner advancement |
+
+Legacy tournament containers remain available as rollback/source data via `COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy`.
+
+Target tournament partition key:
+
+```text
+seasonCategory = `${seasonId}#${category}`
+```
+
+Example:
+
+```json
+{
+	"id": "abhishek_MS_2026",
+	"userId": "abhishek",
+	"category": "MS",
+	"seasonId": "2026",
+	"seasonCategory": "2026#MS",
+	"status": "confirmed"
+}
+```
+
+### Incremental Development Plan
+
+#### Step 1: Stabilize Current Multi-Season Behavior
+
+- [x] Code paths now read `SEASON_CONFIG` from `settings` with fallback to legacy `users/SEASON_CONFIG`
+- [x] Migration tooling exists to backfill `seasonId` on legacy registrations and matches
+- [x] Ensure previous seasons have `archived: true`, `registrationOpen: false`, and `bracketsVisible: true`
+- [ ] Smoke test public fixtures for active and archived seasons
+- [ ] Smoke test dashboard remains active-season only for registration/editing
+- [ ] Smoke test admin selected-season views, exports, imports, and fixture generation
+
+#### Step 2: Harden API Contracts Around Season Scope
+
+- [ ] Require explicit `season` or active-season fallback consistently on all season-scoped reads
+- [ ] Keep player-facing writes bound to `getActiveSeason()` only
+- [ ] Allow admin writes only when the target season is not archived
+- [ ] Update `DELETE /api/registrations` to accept optional admin-only `season`, while player withdrawal remains active-season only
+- [ ] Ensure `/api/admin/export` exports only registered users for the selected season or clearly labels unregistered users
+- [ ] Add server-side validation that imported bracket rows belong to the requested season
+
+#### Step 3: Add Read-Optimized Fields Without Repartitioning Yet
+
+- [x] Add `seasonCategory` to `RegistrationDocument` and `MatchDocument`
+- [x] Set `seasonCategory` on all new registration and match writes
+- [x] Migration tooling backfills `seasonCategory` via `cli/restore-production-2026.ts` and `cli/migrate-tournament-v2.ts`
+- [x] Change tournament query path to filter on `seasonCategory` when v2 containers are active
+- [x] Add `schemaVersion` to tournament documents to simplify future migrations
+
+#### Step 4: Move To Read-Aligned Cosmos Containers
+
+- [x] Create v2 containers with partition key `/seasonCategory`:
+	- `registrations_v2`
+	- `matches_v2`
+- [x] Keep `users` partitioned by `/id`
+- [x] Move `SEASON_CONFIG` to a dedicated `settings` container partitioned by `/id`
+- [x] Write a migration that copies season-scoped data from old containers to v2 containers
+- [x] Add a feature flag/env switch to read from v2 containers after migration validation (`COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy` opts out)
+- [x] Keep old containers read-only until one full tournament cycle is validated
+
+#### Step 5: Improve Historical UX
+
+- [ ] Public fixtures: show a clear season selector when more than one visible season exists
+- [ ] Public fixtures: default to active season, but preserve selected season in URL query params for shareable links
+- [ ] Dashboard: add a read-only "Past Seasons" section after active registration flows are stable
+- [ ] Admin: always show selected season context in exports, imports, seed saving, and fixture generation confirmations
+- [ ] Admin: make archived-season read-only state visually obvious across all tabs
+
+#### Step 6: Production Readiness
+
+- [ ] Add Application Insights or Azure Monitor traces for Cosmos latency, 429 throttles, and failed API routes
+- [ ] Add integration tests for active season, archived season, and new-season creation
+- [ ] Add migration rollback instructions and JSON backup verification before live migration
+- [ ] Move production Cosmos authentication toward Managed Identity; keep `COSMOS_KEY` only for local development or emergency fallback
+- [x] Document Cosmos container creation, partition keys, and migration commands in `GETTING_STARTED.md`
+
+### Multi-Season Agent Handoff Notes
+
+- Active-season player flow should default to `getActiveSeason()` and should not let normal users mutate archived seasons.
+- Historical seasons should be readable when `bracketsVisible === true`; admins may bypass fixture visibility but should still be blocked from archived writes.
+- `settings` stores the singleton `SEASON_CONFIG` document with `id = "SEASON_CONFIG"` and partition key `/id`; `settings.ts` can still fall back to old `users/SEASON_CONFIG` during rollback.
+- Runtime tournament data defaults to `registrations_v2` and `matches_v2`, both partitioned by `/seasonCategory`.
+- Legacy `registrations` and `matches` containers are retained as source/rollback data; do not delete them until one full tournament cycle validates v2.
+- Before any future production migration: export a backup, run dry-run migration, validate counts by season/category, then run the write migration once.
+
+### Current Validation Notes
+
+- `npm run lint --quiet` passes.
+- `npm run test` passes with 3 Vitest smoke tests.
+- `npm run build` compiles/type-checks, but the Windows/OneDrive standalone copy step is still an environment-specific failure.
+- `npx --no-install tsc --noEmit --pretty false` still fails in some files; treat that as a known pre-existing issue, not a verified green check.
+- Historical migration notes recorded live Cosmos v2 counts and backfill status, but those runtime data checks were not re-verified in this doc-refresh session.
+- Legacy `registrations` and `matches` containers remain available as rollback/source data; runtime can opt out with `COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy`.
 
 ---
 
@@ -180,13 +304,15 @@ Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md
 |--------|---------|
 | `cli/seed.ts` | Insert 9 demo users + 18 registrations |
 | `cli/seed-bulk.ts` | Insert 1000+ users + 1588 registrations across all categories |
-| `cli/clear-data.ts` | Wipe all data (prompts before deleting config) |
+| `cli/clear-data.ts` | Wipe data while preserving `CONFIG_GLOBAL` and `SEASON_CONFIG` |
+| `cli/export-data.ts` | Export users, registrations, matches, and metadata to JSON backup |
+| `cli/import-data.ts` | Import JSON backup data back into Cosmos DB |
 | `cli/migrate-seasons.ts` | Backfill seasonId, re-ID registrations, create `SEASON_CONFIG` |
+| `cli/restore-production-2026.ts` | Replace dummy live data with production 2026 backup transformed to the season-aware model |
+| `cli/migrate-tournament-v2.ts` | Copy season-aware tournament data into `settings`, `registrations_v2`, and `matches_v2` |
 | `cli/resolve-aliases.ts` | Resolve aliases via Microsoft Graph |
 | `cli/audit-aliases.ts` | Audit alias/email consistency, verify partner accounts |
 | `cli/verify-aliases-graph.ts` | Graph-based alias verification |
-| `cli/export-data.ts` | Export all Cosmos DB data (users, registrations, matches) to local JSON |
-| `cli/import-data.ts` | Import JSON backup into any Cosmos DB instance (upsert, dry-run, selective) |
 
 ---
 
@@ -214,43 +340,8 @@ Generated from codebase analysis on 2026-04-08. Cross-referenced against [PRD.md
 | Real-time updates (WebSocket/SignalR) | §6 Tech Arch | Polling only — manual refresh buttons |
 | Partner email/SMS notifications | FR-04 | Auto-create only, no notification sent |
 | Waitlist / overflow logic | §9 Open Questions | Not built |
-| Automated tests | — | No unit or E2E tests |
+| Automated tests | — | Limited coverage only: 3 Vitest smoke tests; no broad integration or E2E suite |
 
 | Mobile responsiveness audit | — | Desktop-first, no mobile-specific work |
 | Gender validation from directory | §9 Open Questions | Relies on manual category selection |
 | Substitution / partner swap | §9 Open Questions | Not supported |
-
----
-
-## Change Log
-
-### 2026-04-21 — Multi-Season APIs + Data Backup Scripts
-
-**New: Data Export/Import CLI** (`cli/export-data.ts`, `cli/import-data.ts`)
-- Full database backup to local JSON files (users, registrations, matches + metadata)
-- Import into any Cosmos DB instance via upsert (supports `--dry-run`, `--skip-users`, `--skip-regs`, `--skip-matches`)
-- Strips Cosmos system properties (`_rid`, `_etag`, `_ts`) before importing
-- Auto-creates target database and containers on import
-- First backup created at `portal/my-backup/`
-
-**Unstaged changes (not yet committed):**
-
-| File | Summary |
-|------|---------|
-| `PROGRESS.md` | This update + CLI table additions |
-| `portal/app/admin/page.tsx` | Multi-season selector, import preview modal, visual bracket export |
-| `portal/app/api/admin/export/route.ts` | Season-scoped CSV export |
-| `portal/app/api/admin/players/route.ts` | Bulk seed save (PUT), season filtering |
-| `portal/app/api/matches/advance/route.ts` | Season-aware advancement |
-| `portal/app/api/matches/route.ts` | Season-scoped bracket generation & queries |
-| `portal/app/api/registrations/route.ts` | Season-scoped registration CRUD |
-| `portal/app/api/settings/route.ts` | Full SeasonConfig CRUD (create/archive seasons) |
-| `portal/app/components/Navbar.tsx` | Dynamic season label in header |
-| `portal/app/lib/models.ts` | `SeasonEntry`, `SeasonConfig` types |
-| `portal/app/lib/settings.ts` | SeasonConfig read/write with 12h cache + invalidation |
-
-**New untracked files:**
-- `portal/cli/export-data.ts` — Export script
-- `portal/cli/import-data.ts` — Import script
-- `portal/cli/migrate-seasons.ts` — Season migration backfill
-- `portal/my-backup/` — First full data backup (users, registrations, matches, metadata)

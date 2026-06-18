@@ -4,6 +4,8 @@ The official internal badminton tournament portal for Microsoft employees. Regis
 
 Built with Next.js 16, Azure Cosmos DB, and Tailwind CSS.
 
+> **Status note (2026-06-18):** the portal now defaults to the multi-season v2 Cosmos layout. Verified local checks are `npm run lint --quiet` and `npm run test`. `npx tsc --noEmit` still has pre-existing failures in this repo, so do not treat it as a passing gate.
+
 ---
 
 ## How It Works
@@ -42,6 +44,7 @@ While registration is open, you can withdraw from any category. For doubles, wit
 ### For Admins
 - **Registration Control** — open/close registration with one click
 - **Bracket Publishing** — toggle bracket visibility (hide during setup, publish when ready)
+- **Multi-Season Management** — create a new season, archive prior seasons, and view historical registrations/brackets
 - **Player Seeding** — assign seed numbers to players/teams, with duplicate detection and batch save
 - **Visual Seeding** — drag-and-drop seeding interface showing real-time matchup previews
 - **Bracket Generation** — single-elimination knockout brackets with proper seed placement (1 vs N, 2 vs N-1) and automatic byes
@@ -72,7 +75,7 @@ portal/
 │   │   ├── auth/       #   NextAuth handlers
 │   │   ├── matches/    #   Match CRUD + bracket generation
 │   │   ├── registrations/ # Registration CRUD
-│   │   ├── settings/   #   Global settings (reg open, brackets visible)
+│   │   ├── settings/   #   Season config (active season, reg open, brackets visible)
 │   │   ├── setup/      #   Database initialization
 │   │   └── users/      #   User profile CRUD
 │   ├── admin/          # Admin dashboard (seeding, matches, import/export)
@@ -81,18 +84,32 @@ portal/
 │   ├── auth/           # Auth error page
 │   ├── components/     # Shared UI (Navbar, MatchCard, SeedingVisualizer, etc.)
 │   └── lib/            # Utilities (Cosmos client, models, bracket math, settings cache)
+├── cli/                # Data maintenance scripts (seed, backup, import, migration)
 ├── public/             # Static assets
 └── types/              # TypeScript declaration files
 ```
 
 ## Data Model
 
-| Container | Partition Key | Purpose |
-|-----------|--------------|---------|
-| `users` | `/id` | Player profiles (id = lowercase alias) |
-| `registrations` | `/userId` | Category registrations (id = `userId_category`) |
-| `matches` | `/category` | Tournament matches with bracket structure |
-| `settings` | `/id` | Global config (registration open, brackets visible) |
+| Container | Partition Key | Role |
+|-----------|--------------|------|
+| `users` | `/id` | Player profiles and admin flags |
+| `settings` | `/id` | `SEASON_CONFIG` and season-level portal settings |
+| `registrations_v2` | `/seasonCategory` | Default runtime registration data for season/category-scoped reads and writes |
+| `matches_v2` | `/seasonCategory` | Default runtime bracket and match data for season/category-scoped reads and writes |
+| `registrations` | `/userId` | Legacy registration container retained for rollback/source data |
+| `matches` | `/category` | Legacy match container retained for rollback/source data |
+
+### Multi-Season Rules for Future Agents
+
+- `SEASON_CONFIG` lives in the `settings` container with `id = "SEASON_CONFIG"`.
+- `SeasonConfig.activeSeason` drives normal player registration and public bracket views.
+- Admin selected-season actions must pass the selected season to APIs; do not silently default admin writes to active season.
+- Archived seasons are read-only. Server routes must reject writes when `SeasonEntry.archived === true`.
+- Runtime tournament reads/writes default to `registrations_v2` and `matches_v2`; set `COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy` only when intentionally rolling back to legacy containers.
+- `seasonCategory` is `${seasonId}#${category}` and is the v2 partition key for tournament containers.
+- Always query matches by season and category; category alone can mix seasons in legacy data.
+- Always create registration IDs with `makeRegistrationId(userId, category, seasonId)`.
 
 ---
 
@@ -137,13 +154,31 @@ portal/
 
 ```bash
 # Small dataset (9 users)
-npx tsx app/lib/seed.ts
+npx tsx cli/seed.ts
 
 # Bulk dataset (1500+ users for stress testing)
-npx tsx app/lib/seed-bulk.ts
+npx tsx cli/seed-bulk.ts
 ```
 
 > **Warning**: Seeding scripts wipe existing data in the target database.
+
+### Backup and Multi-Season Migration
+
+```bash
+# Export current data before migration
+npx tsx cli/export-data.ts
+
+# Preview migration changes
+npx tsx cli/migrate-seasons.ts --dry-run
+
+# Apply migration
+npx tsx cli/migrate-seasons.ts
+
+# Restore from backup if needed
+npx tsx cli/import-data.ts
+```
+
+Migration backfills `seasonId` on legacy tournament data, re-IDs registrations to include season, copies `SEASON_CONFIG` into `settings`, and preserves legacy `CONFIG_GLOBAL` registration/bracket visibility values through the active-season compatibility shim.
 
 ---
 
