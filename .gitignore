@@ -45,9 +45,24 @@ deploy-temp/
 *.zip
 app-logs/
 app-logs-new/
+/portal/backup/
+/portal/my-backup/
 
 # generated reports
 *.csv
 
 # dev artifacts
 bracket-simulation.html
+# Squad: ignore runtime state (logs, inbox, sessions)
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+.squad/.scratch/
+.squad/.cache/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream
+# Squad runtime state stays local; workflows fall back to .ai-team/ when repo-backed squad files are absent.
+.squad
+# Local Copilot CLI config
+.copilot
