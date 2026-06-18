@@ -8,6 +8,34 @@ import type { OIDCConfig } from "next-auth/providers"
 const isDev = process.env.NODE_ENV === "development";
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const clientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID!;
+const adminLookupTimeoutMs = 3000;
+
+async function resolveIsAdmin(email: string): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    const lookup = (async () => {
+      const container = getUsersContainer();
+      const { resources } = await container.items
+        .query<UserDocument>({
+          query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
+          parameters: [{ name: "@email", value: email }],
+        })
+        .fetchAll();
+      return resources[0]?.isAdmin === true;
+    })();
+
+    const fallback = new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), adminLookupTimeoutMs);
+    });
+
+    return await Promise.race([lookup, fallback]);
+  } catch {
+    return false;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
@@ -94,18 +122,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user?.email || trigger === "update") {
         const email = user?.email || token.email;
         if (email) {
-          try {
-            const container = getUsersContainer();
-            const { resources } = await container.items
-              .query<UserDocument>({
-                query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
-                parameters: [{ name: "@email", value: email }],
-              })
-              .fetchAll();
-            token.isAdmin = resources[0]?.isAdmin === true;
-          } catch {
-            token.isAdmin = false;
-          }
+          token.isAdmin = await resolveIsAdmin(email);
         }
       }
       return token;
