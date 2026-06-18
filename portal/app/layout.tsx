@@ -26,7 +26,7 @@ const orbitron = Black_Ops_One({
 });
 
 export const metadata: Metadata = {
-  title: "Baddy Bash 2026 Portal",
+  title: "Baddy Bash Portal",
   description: "Microsoft Internal Badminton Tournament Portal",
 };
 

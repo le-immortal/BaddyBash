@@ -3,14 +3,18 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { SignInButton, LoginLink } from './components/SignInButton';
 import Image from 'next/image';
+import { getSeasonSettings } from '@/app/lib/settings';
+import { getSeasonLabel } from '@/app/lib/seasonLabels';
 
 export default async function Home() {
-  const session = await auth();
+  const [session, activeSeason] = await Promise.all([auth(), getSeasonSettings()]);
 
   // If already signed in, go straight to dashboard
   if (session?.user) {
     redirect('/dashboard');
   }
+
+  const seasonTitle = getSeasonLabel(activeSeason);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -18,7 +22,7 @@ export default async function Home() {
         <div className="container mx-auto px-4 py-6 flex justify-between items-center">
           <div className="font-bold text-2xl flex items-center gap-2">
             <Image src="/microsoft-logo.svg" alt="Microsoft" width={28} height={28} />
-            Baddy Bash 2026
+            {seasonTitle}
           </div>
           <div className="flex items-center gap-4">
             <LoginLink />
@@ -55,8 +59,8 @@ export default async function Home() {
                 <div className="flex items-start gap-4">
                   <Calendar className="w-6 h-6 text-slate-400" />
                   <div>
-                    <p className="font-semibold">March 21-22, 2026</p>
-                    <p className="text-sm text-slate-400">9:00 AM - 9:00 PM</p>
+                    <p className="font-semibold">{activeSeason.id} season</p>
+                    <p className="text-sm text-slate-400">Tournament schedule shared by organizers</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
@@ -80,7 +84,7 @@ export default async function Home() {
       </main>
 
       <footer className="bg-slate-950 text-slate-500 py-8 text-center text-sm">
-        © 2026 Baddy Bash Organizing Committee. Internal Use Only.
+        © {activeSeason.id} Baddy Bash Organizing Committee. Internal Use Only.
       </footer>
     </div>
   );

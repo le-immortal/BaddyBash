@@ -5,12 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { User, Menu, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
 import { signInAction, signOutAction } from '@/app/lib/actions';
+import type { SeasonConfig } from '@/app/lib/models';
+import { getSeasonLabelFromConfig } from '@/app/lib/seasonLabels';
 
 export default function Navbar() {
   const { data: session } = useSession();
-  const pathname = usePathname();
   const isAdmin = session?.user?.isAdmin === true;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
@@ -18,19 +18,12 @@ export default function Navbar() {
   useEffect(() => {
     fetch('/api/settings?full=1')
       .then(r => r.ok ? r.json() : null)
-      .then(config => {
+      .then((config: SeasonConfig | null) => {
         if (!config?.seasons) return;
-        const active = config.seasons.find((s: { id: string }) => s.id === config.activeSeason);
-        if (active?.label) setSeasonLabel(active.label);
+        setSeasonLabel(getSeasonLabelFromConfig(config));
       })
       .catch(() => {});
   }, []);
-
-export default function Navbar() {
-  const { data: session } = useSession();
-  const pathname = usePathname();
-  const isAdmin = session?.user?.isAdmin === true;
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <nav className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
