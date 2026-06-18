@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, Fragment, useRef, type ReactNode } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo, Fragment, useRef, type ReactNode } from 'react';
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X, Swords, Save, Undo2, Pencil, ArrowLeftRight } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
 import { Category, MatchDocument, CATEGORIES, SeasonEntry } from '../lib/models';
 import { useSession } from 'next-auth/react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+
+const getCurrentSeasonFallback = () => String(new Date().getFullYear());
 
 /* ── Layout constants ──────────────────────────────────────────────── */
 const SLOT_H = 110;         // Every match slot is this tall
@@ -27,6 +30,16 @@ function BracketShell({ children }: { children: ReactNode }) {
   );
 }
 
+function BracketPageFallback() {
+  return (
+    <BracketShell>
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    </BracketShell>
+  );
+}
+
 /** Block height for a match slot at a given visible-column index. */
 function blockH(colIdx: number) { return SLOT_H * Math.pow(2, colIdx); }
 
@@ -36,6 +49,14 @@ function getRoundName(round: number, totalRounds: number): string {
   if (r === 1) return 'Semis';
   if (r === 2) return 'Quarters';
   return `R${round}`;
+}
+
+export default function BracketPage() {
+  return (
+    <Suspense fallback={<BracketPageFallback />}>
+      <BracketPageContent />
+    </Suspense>
+  );
 }
 
 /* ── Match card ────────────────────────────────────────────────────── */
@@ -418,7 +439,10 @@ function Connectors({ colIdx, matchCount }: { colIdx: number; matchCount: number
 }
 
 /* ── Main page ─────────────────────────────────────────────────────── */
-export default function BracketPage() {
+function BracketPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
 
@@ -433,11 +457,17 @@ export default function BracketPage() {
   const [bracketsVisible, setBracketsVisible] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [apiError, setApiError] = useState(false);
-  const [activeSeason, setActiveSeason] = useState('2026');
+  const [activeSeason, setActiveSeason] = useState(getCurrentSeasonFallback);
   const [selectedSeason, setSelectedSeason] = useState('');
   const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
   const selectedSeasonEntry = seasons.find((season) => season.id === selectedSeason);
   const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
+  const publicSeasonOptions = useMemo(
+    () => seasons.filter((season) => season.id === activeSeason || season.bracketsVisible),
+    [seasons, activeSeason],
+  );
+  const seasonOptions = isAdmin ? seasons : publicSeasonOptions;
+  const showSeasonSelector = seasonOptions.length > 1;
 
   // Advance mode state (admin only)
   const [advanceMode, setAdvanceMode] = useState(false);
@@ -517,18 +547,43 @@ export default function BracketPage() {
       if (!data) return;
       if (data.seasons) {
         const loadedSeasons = data.seasons as SeasonEntry[];
-        const nextActiveSeason = data.activeSeason || loadedSeasons[0]?.id || '2026';
+        const nextActiveSeason = data.activeSeason || loadedSeasons[0]?.id || getCurrentSeasonFallback();
         setSeasons(loadedSeasons);
         setActiveSeason(nextActiveSeason);
-        setSelectedSeason(nextActiveSeason);
         const active = loadedSeasons.find((season) => season.id === nextActiveSeason);
         setBracketsVisible(active?.bracketsVisible === true);
       } else {
-        setSelectedSeason('2026');
+        const fallbackSeason = getCurrentSeasonFallback();
+        setActiveSeason(fallbackSeason);
+        setSelectedSeason(searchParams.get('season') || fallbackSeason);
         setBracketsVisible(data.bracketsVisible === true);
       }
     }).catch(() => setApiError(true)).finally(() => setCheckingAccess(false));
-  }, []);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (seasonOptions.length === 0) return;
+
+    const requestedSeason = searchParams.get('season');
+    const nextSeason = seasonOptions.some((season) => season.id === requestedSeason)
+      ? requestedSeason
+      : (seasonOptions.find((season) => season.id === activeSeason)?.id || seasonOptions[0]?.id || activeSeason);
+
+    if (nextSeason && nextSeason !== selectedSeason) {
+      setSelectedSeason(nextSeason);
+    }
+  }, [activeSeason, searchParams, seasonOptions, selectedSeason]);
+
+  useEffect(() => {
+    if (!selectedSeason) return;
+
+    const currentSeason = searchParams.get('season');
+    if (currentSeason === selectedSeason) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('season', selectedSeason);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, router, searchParams, selectedSeason]);
 
   useEffect(() => {
     if (!selectedSeasonEntry) return;
@@ -537,6 +592,12 @@ export default function BracketPage() {
 
   const fetchMatches = useCallback(async () => {
     if (!selectedSeason) return;
+    if (!isAdmin && selectedSeasonEntry?.bracketsVisible === false) {
+      setMatches([]);
+      setRoundOffset(0);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await fetch(`/api/matches?category=${selectedCategory}&season=${encodeURIComponent(selectedSeason)}`);
@@ -550,7 +611,7 @@ export default function BracketPage() {
       else { setMatches([]); setRoundOffset(0); }
     } catch { setApiError(true); }
     finally { setLoading(false); }
-  }, [selectedCategory, selectedSeason]);
+  }, [isAdmin, selectedCategory, selectedSeason, selectedSeasonEntry]);
 
   useEffect(() => { fetchMatches(); setPendingAdvances(new Map()); setAdvanceMode(false); setEditingMatch(null); }, [fetchMatches]);
 
@@ -674,24 +735,6 @@ export default function BracketPage() {
     );
   }
 
-  // Gate mechanism
-  if (!bracketsVisible && !isAdmin) {
-    return (
-        <BracketShell>
-          <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
-              <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
-                  <Lock className="w-12 h-12 text-blue-500" />
-              </div>
-              <h1 className="text-3xl font-bold mb-3 text-white">Fixtures Coming Soon</h1>
-              <p className="text-slate-400 max-w-md text-lg leading-relaxed">
-                  The tournament fixtures are currently being finalized by the organizers. 
-                  Please check back later for the official schedule.
-              </p>
-          </div>
-        </BracketShell>
-    );
-  }
-
   return (
     <BracketShell>
       <div className="container mx-auto py-8 px-4">
@@ -705,19 +748,23 @@ export default function BracketPage() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {seasons.length > 0 && (
-              <select
-                value={selectedSeason}
-                onChange={(e) => setSelectedSeason(e.target.value)}
-                className="bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm font-medium min-h-[40px]"
-                title="Select season"
-              >
-                {seasons.map((season) => (
-                  <option key={season.id} value={season.id}>
-                    {season.label}{season.archived ? ' (Archived)' : season.id === activeSeason ? ' (Current)' : ''}
-                  </option>
-                ))}
-              </select>
+            {showSeasonSelector && (
+              <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200">
+                <span className="text-slate-400">Season</span>
+                <select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(e.target.value)}
+                  className="bg-transparent text-slate-100 font-medium outline-none"
+                  title="Select season"
+                  aria-label="Select season"
+                >
+                  {seasonOptions.map((season) => (
+                    <option key={season.id} value={season.id} className="bg-slate-900">
+                      {season.label}{season.archived ? ' (Archived)' : season.id === activeSeason ? ' (Current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
             {isAdmin && matches.length > 0 && !isSelectedSeasonArchived && (
               <button
@@ -754,99 +801,112 @@ export default function BracketPage() {
           </div>
         )}
 
-        {/* Sticky tabs + search bar */}
-        <div className="sticky top-0 z-20 -mx-4 px-4 py-3 bg-slate-900/95 backdrop-blur-sm">
-          {/* Category tabs */}
-          <div className="flex flex-wrap gap-1 bg-slate-800 p-1 rounded-lg mb-3 w-fit">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${
-                  selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Search bar */}
-          {matches.length > 0 && !loading && (
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search player name or alias..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchResultCount > 0) {
-                    e.preventDefault();
-                    if (e.shiftKey) {
-                      setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount);
-                    } else {
-                      setSearchIndex(i => (i + 1) % searchResultCount);
-                    }
-                  }
-                }}
-                className="w-full pl-9 pr-9 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-              {searchQuery.trim() && searchResultCount > 0 && (
-                <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {searchResultCount > 1 && (
-                    <>
-                      <button
-                        onClick={() => setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount)}
-                        className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
-                        title="Previous result"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-xs text-slate-500 tabular-nums min-w-[3ch] text-center">
-                        {searchIndex + 1}/{searchResultCount}
-                      </span>
-                      <button
-                        onClick={() => setSearchIndex(i => (i + 1) % searchResultCount)}
-                        className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
-                        title="Next result"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  )}
-                  {searchResultCount <= 1 && (
-                    <span className="text-xs text-slate-500">{searchResultCount} match</span>
-                  )}
-                </div>
-              )}
-              {searchQuery.trim() && searchResultCount === 0 && (
-                <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-red-400">No results</div>
-              )}
+        {!bracketsVisible && !isAdmin ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-700 bg-slate-900/60 py-24 px-6 text-center">
+            <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
+              <Lock className="w-12 h-12 text-blue-500" />
             </div>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <span className="ml-3 text-slate-400">Loading bracket...</span>
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="bg-slate-800/50 p-10 rounded-xl border border-slate-700 text-center">
-            <p className="text-slate-400 text-lg">No bracket generated yet.</p>
-            <p className="text-slate-500 text-sm mt-2">Generate fixtures from the Admin Dashboard.</p>
+            <h2 className="text-3xl font-bold mb-3 text-white">Fixtures Coming Soon</h2>
+            <p className="text-slate-400 max-w-2xl text-lg leading-relaxed">
+              The tournament fixtures for {selectedSeasonEntry?.label || `Season ${selectedSeason}`} are still being finalized.
+              {showSeasonSelector ? ' You can switch seasons above to browse published historical draws.' : ' Please check back later for the official schedule.'}
+            </p>
           </div>
         ) : (
           <>
+            {/* Sticky tabs + search bar */}
+            <div className="sticky top-0 z-20 -mx-4 px-4 py-3 bg-slate-900/95 backdrop-blur-sm">
+              {/* Category tabs */}
+              <div className="flex flex-wrap gap-1 bg-slate-800 p-1 rounded-lg mb-3 w-fit">
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${
+                      selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search bar */}
+              {matches.length > 0 && !loading && (
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search player name or alias..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchResultCount > 0) {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                          setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount);
+                        } else {
+                          setSearchIndex(i => (i + 1) % searchResultCount);
+                        }
+                      }
+                    }}
+                    className="w-full pl-9 pr-9 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {searchQuery.trim() && searchResultCount > 0 && (
+                    <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {searchResultCount > 1 && (
+                        <>
+                          <button
+                            onClick={() => setSearchIndex(i => (i - 1 + searchResultCount) % searchResultCount)}
+                            className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                            title="Previous result"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs text-slate-500 tabular-nums min-w-[3ch] text-center">
+                            {searchIndex + 1}/{searchResultCount}
+                          </span>
+                          <button
+                            onClick={() => setSearchIndex(i => (i + 1) % searchResultCount)}
+                            className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+                            title="Next result"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      {searchResultCount <= 1 && (
+                        <span className="text-xs text-slate-500">{searchResultCount} match</span>
+                      )}
+                    </div>
+                  )}
+                  {searchQuery.trim() && searchResultCount === 0 && (
+                    <div className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-red-400">No results</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <span className="ml-3 text-slate-400">Loading bracket...</span>
+              </div>
+            ) : matches.length === 0 ? (
+              <div className="bg-slate-800/50 p-10 rounded-xl border border-slate-700 text-center">
+                <p className="text-slate-400 text-lg">No bracket generated yet.</p>
+                <p className="text-slate-500 text-sm mt-2">Generate fixtures from the Admin Dashboard.</p>
+              </div>
+            ) : (
+              <>
             {/* Stats + navigation */}
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm text-slate-400 flex flex-wrap items-center gap-3">
@@ -939,6 +999,8 @@ export default function BracketPage() {
                 </div>
               </div>
             </div>
+              </>
+            )}
           </>
         )}
 

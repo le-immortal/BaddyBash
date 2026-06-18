@@ -99,7 +99,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
+    const {
+      userId,
+      userName,
+      category,
+      partnerId,
+      partnerName,
+      partnerPhone,
+      partnerTShirtSize,
+      season,
+      seasonId: requestedSeasonId,
+      tournamentId,
+    } = body;
+    const targetSeasonId = requestedSeasonId || season || tournamentId;
+
+    if (targetSeasonId && targetSeasonId !== seasonId) {
+      return NextResponse.json(
+        { error: "Registrations can only be created for the active season" },
+        { status: 400 }
+      );
+    }
 
     const { email } = session.user;
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
@@ -346,6 +365,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
   const category = request.nextUrl.searchParams.get("category");
+  const seasonParam = request.nextUrl.searchParams.get("season");
 
   if (!userId || !category) {
     return NextResponse.json({ error: "userId and category are required" }, { status: 400 });
@@ -405,7 +425,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     const container = getTournamentRegistrationsContainer();
-    const seasonId = await getActiveSeason();
+    const activeSeasonId = await getActiveSeason();
+    if (!session.user.isAdmin && seasonParam && seasonParam !== activeSeasonId) {
+      return NextResponse.json(
+        { error: "Players can only withdraw from the active season" },
+        { status: 403 }
+      );
+    }
+    const seasonId = session.user.isAdmin && seasonParam ? seasonParam : activeSeasonId;
     const regId = makeRegistrationId(cleanUserId, category, seasonId);
     const regPartitionKey = registrationPartitionKey({ userId: cleanUserId, category: category as Category, seasonId });
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { MatchDocument } from "@/app/lib/models";
-import { getSeasonSettings } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { getTournamentMatchesContainer, isTournamentV2Enabled } from "@/app/lib/tournamentData";
 
 /**
@@ -22,13 +22,23 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { updates, season } = body as {
+    const { updates, season, seasonId: bodySeasonId } = body as {
       updates: Partial<MatchDocument>[];
       season?: string;
+      seasonId?: string;
     };
 
     if (!Array.isArray(updates)) {
       return NextResponse.json({ error: "Invalid updates format" }, { status: 400 });
+    }
+
+    const targetSeasonId = bodySeasonId || season || await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(targetSeasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Cannot modify archived season" },
+        { status: 403 }
+      );
     }
 
     const container = getTournamentMatchesContainer();
@@ -42,18 +52,23 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      if (update.seasonId && update.seasonId !== targetSeasonId) {
+        errors.push({ id: update.id, error: "Imported row does not belong to the selected season" });
+        continue;
+      }
+
       try {
         // Fetch current match to verify existence and get full object
         const currentMatch = isTournamentV2Enabled()
           ? (await container.items
               .query<MatchDocument>({
-                query: season
+                query: targetSeasonId
                   ? "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category AND c.seasonId = @seasonId"
                   : "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category",
                 parameters: [
                   { name: "@id", value: update.id },
                   { name: "@category", value: update.category },
-                  ...(season ? [{ name: "@seasonId", value: season }] : []),
+                  ...(targetSeasonId ? [{ name: "@seasonId", value: targetSeasonId }] : []),
                 ],
               })
               .fetchAll()).resources[0]
@@ -64,14 +79,8 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        if (season && currentMatch.seasonId !== season) {
-          errors.push({ id: update.id, error: "Match does not belong to the selected season" });
-          continue;
-        }
-
-        const seasonSettings = await getSeasonSettings(currentMatch.seasonId);
-        if (seasonSettings.archived) {
-          errors.push({ id: update.id, error: "Archived seasons are read-only" });
+        if (currentMatch.seasonId !== targetSeasonId) {
+          errors.push({ id: update.id, error: "Imported row does not belong to the selected season" });
           continue;
         }
 
@@ -86,14 +95,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const status = errors.length > 0 && results.length === 0 ? 400 : 200;
+    if (results.length === 0) {
+      return NextResponse.json(
+        { errors },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json({ 
-      message: "Bulk update processed", 
-      processed: results.length,
-      error: errors[0]?.error,
-      errors 
-    }, { status });
+    if (errors.length > 0) {
+      return NextResponse.json(
+        {
+          results,
+          errors,
+          updated: results.length,
+          failed: errors.length,
+        },
+        { status: 207 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        results,
+        updated: results.length,
+      },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error("Error processing bulk import:", error);

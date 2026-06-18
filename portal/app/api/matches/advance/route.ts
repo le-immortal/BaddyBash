@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest) {
     const seasonSettings = await getSeasonSettings(seasonId);
     if (seasonSettings.archived) {
       return NextResponse.json(
-        { error: "Archived seasons are read-only" },
+        { error: "Cannot modify archived season" },
         { status: 403 }
       );
     }

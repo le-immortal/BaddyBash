@@ -443,9 +443,12 @@ export async function PATCH(request: NextRequest) {
       player1Name?: string;
       player2Id?: string;
       player2Name?: string;
+      season?: string;
+      seasonId?: string;
     };
 
-    const { matchId, category } = body;
+    const { matchId, category, season, seasonId: bodySeasonId } = body;
+    const requestedSeasonId = bodySeasonId || season;
 
     if (!matchId || !category) {
       return NextResponse.json(
@@ -460,10 +463,13 @@ export async function PATCH(request: NextRequest) {
     const match = isTournamentV2Enabled()
       ? (await container.items
           .query<MatchDocument>({
-            query: "SELECT TOP 1 * FROM c WHERE c.id = @matchId AND c.category = @category",
+            query: requestedSeasonId
+              ? "SELECT TOP 1 * FROM c WHERE c.id = @matchId AND c.category = @category AND c.seasonId = @seasonId"
+              : "SELECT TOP 1 * FROM c WHERE c.id = @matchId AND c.category = @category",
             parameters: [
               { name: "@matchId", value: matchId },
               { name: "@category", value: category },
+              ...(requestedSeasonId ? [{ name: "@seasonId", value: requestedSeasonId }] : []),
             ],
           })
           .fetchAll()).resources[0]
@@ -473,10 +479,17 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
 
+    if (requestedSeasonId && match.seasonId !== requestedSeasonId) {
+      return NextResponse.json(
+        { error: "Match does not belong to the selected season" },
+        { status: 400 }
+      );
+    }
+
     const seasonSettings = await getSeasonSettings(match.seasonId || await getActiveSeason());
     if (seasonSettings.archived) {
       return NextResponse.json(
-        { error: "Archived seasons are read-only" },
+        { error: "Cannot modify archived season" },
         { status: 403 }
       );
     }
