@@ -1,14 +1,33 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
-import { Category, MatchDocument } from '../lib/models';
+import { Category, MatchDocument, SeasonConfig } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
+import { getSeasonLabelFromConfig } from '../lib/seasonLabels';
+
+function DashboardShell({
+  children,
+  className = 'min-h-screen bg-slate-50',
+  background,
+}: {
+  children: ReactNode;
+  className?: string;
+  background?: ReactNode;
+}) {
+  return (
+    <div className={className}>
+      {background}
+      <Navbar />
+      {children}
+    </div>
+  );
+}
 
 const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'MS', name: "Men's Singles" },
@@ -17,6 +36,19 @@ const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'WD', name: "Women's Doubles" },
   { id: 'XD', name: "Mixed Doubles" },
 ];
+
+const dashboardFetchTimeoutMs = 8000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), dashboardFetchTimeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 interface Registration {
   id: string;
@@ -59,14 +91,24 @@ export default function Dashboard() {
   const [aliasWarning, setAliasWarning] = useState(false);
   const [aliasGuideOpen, setAliasGuideOpen] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(true);
+  const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
 
   // Check global settings (registration open + brackets visible)
   useEffect(() => {
-    fetch('/api/settings').then(res => {
+    fetchWithTimeout('/api/settings?full=1').then(res => {
       if (!res.ok) { setApiError(true); return null; }
       return res.json();
     }).then(data => {
       if (!data) return;
+      if (data.seasons) {
+        const config = data as SeasonConfig;
+        const activeSeason = config.seasons.find((season) => season.id === config.activeSeason);
+        setSeasonLabel(getSeasonLabelFromConfig(config));
+        setRegistrationOpen(activeSeason?.registrationOpen !== false);
+        setBracketsVisible(activeSeason?.bracketsVisible !== false);
+        return;
+      }
+
       setRegistrationOpen(data.registrationOpen !== false);
       setBracketsVisible(data.bracketsVisible !== false);
     }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
@@ -88,7 +130,7 @@ export default function Dashboard() {
     if (!targetId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/registrations?userId=${encodeURIComponent(targetId)}`);
+      const res = await fetchWithTimeout(`/api/registrations?userId=${encodeURIComponent(targetId)}`);
       if (res.ok) {
         const regs: Registration[] = await res.json();
         const active = regs.filter(r => r.status !== 'cancelled');
@@ -108,7 +150,7 @@ export default function Dashboard() {
     const initUser = async () => {
       try {
         // Look up by email to see if this user has already set up their profile
-        const res = await fetch(`/api/users?email=${encodeURIComponent(sessionEmail)}`);
+        const res = await fetchWithTimeout(`/api/users?email=${encodeURIComponent(sessionEmail)}`);
         if (res.ok) {
           const user = await res.json();
           // Check if we got a valid user object with required fields
@@ -405,46 +447,51 @@ export default function Dashboard() {
     }
   };
 
+  if (sessionStatus === 'unauthenticated') {
+    return (
+      <DashboardShell>
+        <div className="flex items-center justify-center py-32 text-slate-600">
+          Please sign in to access your dashboard.
+        </div>
+      </DashboardShell>
+    );
+  }
+
   if (sessionStatus === 'loading' || loading || !settingsLoaded) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
+      <DashboardShell>
         <div className="flex items-center justify-center py-32">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           <span className="ml-3 text-slate-600">Loading dashboard...</span>
         </div>
-      </div>
-    );
-  }
-
-  if (sessionStatus === 'unauthenticated') {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
-        <div className="flex items-center justify-center py-32 text-slate-600">
-          Please sign in to access your dashboard.
-        </div>
-      </div>
+      </DashboardShell>
     );
   }
 
   if (apiError) {
-    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
+    return (
+      <DashboardShell>
+        <ErrorScreen bare title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />
+      </DashboardShell>
+    );
   }
 
   // Subtle badminton SVG background
   // Profile-first gate: if alias/name/phone not saved, show setup form
   if (!profileSaved || isEditingProfile) {
     return (
-      <div className="min-h-screen relative">
-        <div className="fixed inset-0 -z-10">
-          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-          <div className="absolute inset-0 bg-black/40" />
-        </div>
-        <Navbar />
+      <DashboardShell
+        className="min-h-screen relative"
+        background={(
+          <div className="fixed inset-0 -z-10">
+            <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+            <div className="absolute inset-0 bg-black/40" />
+          </div>
+        )}
+      >
         <main className="container mx-auto py-16 px-4 max-w-md">
           <div className="bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Welcome to Baddy Bash 2026!'}</h1>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : `Welcome to ${seasonLabel}!`}</h1>
             <p className="text-slate-600 text-sm mb-6">
               {isEditingProfile 
                 ? 'Update your details below. Note that your Microsoft Alias cannot be changed.' 
@@ -627,17 +674,20 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
-      </div>
+      </DashboardShell>
     );
   }
 
   return (
-    <div className="min-h-screen relative">
-      <div className="fixed inset-0 -z-10">
-        <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-        <div className="absolute inset-0 bg-slate-50/75" />
-      </div>
-      <Navbar />
+    <DashboardShell
+      className="min-h-screen relative"
+      background={(
+        <div className="fixed inset-0 -z-10">
+          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+          <div className="absolute inset-0 bg-slate-50/75" />
+        </div>
+      )}
+    >
       <main className="container mx-auto py-8 px-4">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
@@ -1005,6 +1055,6 @@ export default function Dashboard() {
           </div>
         </section>
       </main>
-    </div>
+    </DashboardShell>
   );
 }

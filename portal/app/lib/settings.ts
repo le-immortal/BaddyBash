@@ -1,4 +1,4 @@
-import { getUsersContainer } from "@/app/lib/cosmosClient";
+import { getSettingsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import { SeasonConfig, SeasonEntry } from "@/app/lib/models";
 
 // ── Legacy type kept for backward compatibility with existing API consumers ──
@@ -19,6 +19,11 @@ const SETTINGS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 let cachedSeasonConfig: SeasonConfig | null = null;
 let cachedAt = 0;
 
+function isCosmosNotFound(error: unknown): boolean {
+  const candidate = error as { code?: unknown; statusCode?: unknown };
+  return candidate.code === 404 || candidate.statusCode === 404;
+}
+
 function defaultSeasonConfig(): SeasonConfig {
   return {
     id: "SEASON_CONFIG",
@@ -35,6 +40,21 @@ function defaultSeasonConfig(): SeasonConfig {
   };
 }
 
+export function toPublicSeasonConfig(config: SeasonConfig): SeasonConfig {
+  return {
+    id: "SEASON_CONFIG",
+    activeSeason: config.activeSeason,
+    seasons: config.seasons.map((season) => ({
+      id: season.id,
+      label: season.label,
+      registrationOpen: season.registrationOpen,
+      bracketsVisible: season.bracketsVisible,
+      archived: season.archived,
+    })),
+    ...(config.updatedAt ? { updatedAt: config.updatedAt } : {}),
+  };
+}
+
 /**
  * Fetch the full SeasonConfig document (cached 12 h, invalidated on write).
  */
@@ -44,17 +64,36 @@ export async function getSeasonConfig(): Promise<SeasonConfig> {
   }
 
   try {
-    const container = getUsersContainer();
-    const { resource } = await container
+    const settingsContainer = getSettingsContainer();
+    const { resource } = await settingsContainer
       .item(SEASON_CONFIG_ID, SEASON_CONFIG_ID)
       .read<SeasonConfig>();
 
-    cachedSeasonConfig = resource || defaultSeasonConfig();
+    cachedSeasonConfig = resource ? toPublicSeasonConfig(resource) : defaultSeasonConfig();
     cachedAt = Date.now();
     return cachedSeasonConfig;
-  } catch {
-    // First run or missing doc — return defaults
-    return defaultSeasonConfig();
+  } catch (error) {
+    if (!isCosmosNotFound(error)) {
+      throw error;
+    }
+
+    try {
+      const usersContainer = getUsersContainer();
+      const { resource } = await usersContainer
+        .item(SEASON_CONFIG_ID, SEASON_CONFIG_ID)
+        .read<SeasonConfig>();
+
+      cachedSeasonConfig = resource ? toPublicSeasonConfig(resource) : defaultSeasonConfig();
+      cachedAt = Date.now();
+      return cachedSeasonConfig;
+    } catch (fallbackError) {
+      if (!isCosmosNotFound(fallbackError)) {
+        throw fallbackError;
+      }
+
+      // First run or missing doc — return defaults
+      return defaultSeasonConfig();
+    }
   }
 }
 
@@ -114,14 +153,14 @@ export async function updateGlobalSettings(
 
   config.updatedAt = new Date().toISOString();
 
-  const container = getUsersContainer();
+  const container = getSettingsContainer();
   const { resource } = await container.items.upsert<SeasonConfig>(config);
 
   if (resource) {
-    cachedSeasonConfig = resource;
+    cachedSeasonConfig = toPublicSeasonConfig(resource);
     cachedAt = Date.now();
   } else {
-    cachedSeasonConfig = config;
+    cachedSeasonConfig = toPublicSeasonConfig(config);
     cachedAt = Date.now();
   }
 
@@ -139,11 +178,14 @@ export async function updateGlobalSettings(
  * Persist the full SeasonConfig document and refresh cache.
  */
 export async function updateSeasonConfig(config: SeasonConfig): Promise<SeasonConfig> {
-  config.updatedAt = new Date().toISOString();
-  const container = getUsersContainer();
-  const { resource } = await container.items.upsert<SeasonConfig>(config);
+  const publicConfig = toPublicSeasonConfig({
+    ...config,
+    updatedAt: new Date().toISOString(),
+  });
+  const container = getSettingsContainer();
+  const { resource } = await container.items.upsert<SeasonConfig>(publicConfig);
 
-  const saved = resource || config;
+  const saved = resource ? toPublicSeasonConfig(resource) : publicConfig;
   cachedSeasonConfig = saved;
   cachedAt = Date.now();
   return saved;
