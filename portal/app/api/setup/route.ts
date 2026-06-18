@@ -18,7 +18,7 @@ export async function POST() {
     return NextResponse.json({
       message: "Database initialized successfully",
       database: process.env.COSMOS_DATABASE || "baddybash",
-      containers: ["users", "registrations", "matches"],
+      containers: ["users", "settings", "registrations", "matches", "registrations_v2", "matches_v2"],
     });
   } catch (error: unknown) {
     console.error("Error initializing database:", error);

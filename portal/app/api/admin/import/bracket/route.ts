@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMatchesContainer } from "@/app/lib/cosmosClient";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { MatchDocument } from "@/app/lib/models";
+import { getSeasonSettings } from "@/app/lib/settings";
+import { getTournamentMatchesContainer, isTournamentV2Enabled } from "@/app/lib/tournamentData";
 
 /**
  * Update multiple matches in bulk.
@@ -21,13 +22,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { updates } = body as { updates: Partial<MatchDocument>[] };
+    const { updates, season } = body as {
+      updates: Partial<MatchDocument>[];
+      season?: string;
+    };
 
     if (!Array.isArray(updates)) {
       return NextResponse.json({ error: "Invalid updates format" }, { status: 400 });
     }
 
-    const container = getMatchesContainer();
+    const container = getTournamentMatchesContainer();
     const results = [];
     const errors = [];
 
@@ -40,12 +44,34 @@ export async function POST(request: NextRequest) {
 
       try {
         // Fetch current match to verify existence and get full object
-        const { resource: currentMatch } = await container
-          .item(update.id, update.category)
-          .read<MatchDocument>();
+        const currentMatch = isTournamentV2Enabled()
+          ? (await container.items
+              .query<MatchDocument>({
+                query: season
+                  ? "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category AND c.seasonId = @seasonId"
+                  : "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category",
+                parameters: [
+                  { name: "@id", value: update.id },
+                  { name: "@category", value: update.category },
+                  ...(season ? [{ name: "@seasonId", value: season }] : []),
+                ],
+              })
+              .fetchAll()).resources[0]
+          : (await container.item(update.id, update.category).read<MatchDocument>()).resource;
 
         if (!currentMatch) {
           errors.push({ id: update.id, error: "Match not found" });
+          continue;
+        }
+
+        if (season && currentMatch.seasonId !== season) {
+          errors.push({ id: update.id, error: "Match does not belong to the selected season" });
+          continue;
+        }
+
+        const seasonSettings = await getSeasonSettings(currentMatch.seasonId);
+        if (seasonSettings.archived) {
+          errors.push({ id: update.id, error: "Archived seasons are read-only" });
           continue;
         }
 
@@ -60,11 +86,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const status = errors.length > 0 && results.length === 0 ? 400 : 200;
+
     return NextResponse.json({ 
       message: "Bulk update processed", 
       processed: results.length,
+      error: errors[0]?.error,
       errors 
-    });
+    }, { status });
 
   } catch (error) {
     console.error("Error processing bulk import:", error);

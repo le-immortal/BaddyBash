@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment, useRef, type ReactNode } from 'react';
 import Navbar from '../components/Navbar';
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight, Lock, Search, X, Swords, Save, Undo2, Pencil, ArrowLeftRight } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
-import { Category, MatchDocument, CATEGORIES } from '../lib/models';
+import { Category, MatchDocument, CATEGORIES, SeasonEntry } from '../lib/models';
 import { useSession } from 'next-auth/react';
 
 /* ── Layout constants ──────────────────────────────────────────────── */
@@ -13,6 +13,19 @@ const SLOT_H = 110;         // Every match slot is this tall
 const CONN_W = 28;         // Width of SVG connector column between rounds
 const CARD_W = 256;        // w-64 = 256px
 const VISIBLE_ROUNDS = 4;
+
+function BracketShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen relative text-slate-100">
+      <div className="fixed inset-0 -z-10">
+        <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-slate-900/85" />
+      </div>
+      <Navbar />
+      {children}
+    </div>
+  );
+}
 
 /** Block height for a match slot at a given visible-column index. */
 function blockH(colIdx: number) { return SLOT_H * Math.pow(2, colIdx); }
@@ -34,9 +47,10 @@ interface MatchCardProps {
   onSelectWinner?: (matchId: string, playerId: string, playerName: string) => void;
   onEdit?: (match: MatchDocument) => void;
   isAdmin?: boolean;
+  readOnly?: boolean;
 }
 
-function MatchCard({ match, highlighted, advanceMode, pendingWinnerId, onSelectWinner, onEdit, isAdmin: isAdminProp }: MatchCardProps) {
+function MatchCard({ match, highlighted, advanceMode, pendingWinnerId, onSelectWinner, onEdit, isAdmin: isAdminProp, readOnly }: MatchCardProps) {
   const isBye = match.status === 'bye';
   const fmtAlias = (id: string) => id.includes('|') ? id.split('|').map(a => `@${a}`).join(' & ') : `@${id}`;
   const isLive = match.status === 'in_progress';
@@ -75,7 +89,7 @@ function MatchCard({ match, highlighted, advanceMode, pendingWinnerId, onSelectW
           {match.matchNumber ? (
             <span className="text-[9px] font-mono text-slate-500">M{match.matchNumber}</span>
           ) : <span />}
-          {isAdminProp && !advanceMode && !isBye && onEdit && (
+          {isAdminProp && !readOnly && !advanceMode && !isBye && onEdit && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(match); }}
               className="text-slate-600 hover:text-blue-400 transition-colors p-0.5"
@@ -419,6 +433,11 @@ export default function BracketPage() {
   const [bracketsVisible, setBracketsVisible] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [apiError, setApiError] = useState(false);
+  const [activeSeason, setActiveSeason] = useState('2026');
+  const [selectedSeason, setSelectedSeason] = useState('');
+  const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
+  const selectedSeasonEntry = seasons.find((season) => season.id === selectedSeason);
+  const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
 
   // Advance mode state (admin only)
   const [advanceMode, setAdvanceMode] = useState(false);
@@ -433,6 +452,7 @@ export default function BracketPage() {
   }, []);
 
   const handleSelectWinner = useCallback((matchId: string, playerId: string, playerName: string) => {
+    if (isSelectedSeasonArchived) return;
     setPendingAdvances(prev => {
       const next = new Map(prev);
       // Toggle: if same player already selected, deselect
@@ -444,7 +464,7 @@ export default function BracketPage() {
       }
       return next;
     });
-  }, []);
+  }, [isSelectedSeasonArchived]);
 
   const handleCancelAdvance = useCallback(() => {
     setPendingAdvances(new Map());
@@ -452,6 +472,10 @@ export default function BracketPage() {
   }, []);
 
   const handleSaveAdvances = useCallback(async () => {
+    if (isSelectedSeasonArchived) {
+      alert('Archived seasons are read-only.');
+      return;
+    }
     if (pendingAdvances.size === 0) return;
     setSaving(true);
     try {
@@ -464,7 +488,7 @@ export default function BracketPage() {
       const res = await fetch('/api/matches/advance', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: selectedCategory, advances }),
+        body: JSON.stringify({ category: selectedCategory, advances, seasonId: selectedSeason }),
       });
 
       if (!res.ok) {
@@ -482,23 +506,40 @@ export default function BracketPage() {
     } finally {
       setSaving(false);
     }
-  }, [pendingAdvances, selectedCategory]);
+  }, [pendingAdvances, selectedCategory, selectedSeason, isSelectedSeasonArchived]);
 
-  // Check brackets visibility
+  // Load seasons and default to the active season.
   useEffect(() => {
-    fetch('/api/settings').then(res => {
+    fetch('/api/settings?full=1').then(res => {
       if (!res.ok) { setApiError(true); return null; }
       return res.json();
     }).then(data => {
       if (!data) return;
-      setBracketsVisible(data.bracketsVisible === true);
+      if (data.seasons) {
+        const loadedSeasons = data.seasons as SeasonEntry[];
+        const nextActiveSeason = data.activeSeason || loadedSeasons[0]?.id || '2026';
+        setSeasons(loadedSeasons);
+        setActiveSeason(nextActiveSeason);
+        setSelectedSeason(nextActiveSeason);
+        const active = loadedSeasons.find((season) => season.id === nextActiveSeason);
+        setBracketsVisible(active?.bracketsVisible === true);
+      } else {
+        setSelectedSeason('2026');
+        setBracketsVisible(data.bracketsVisible === true);
+      }
     }).catch(() => setApiError(true)).finally(() => setCheckingAccess(false));
   }, []);
 
+  useEffect(() => {
+    if (!selectedSeasonEntry) return;
+    setBracketsVisible(selectedSeasonEntry.bracketsVisible === true);
+  }, [selectedSeasonEntry]);
+
   const fetchMatches = useCallback(async () => {
+    if (!selectedSeason) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      const res = await fetch(`/api/matches?category=${selectedCategory}&season=${encodeURIComponent(selectedSeason)}`);
       if (res.ok) {
         const data = await res.json();
         setMatches(data);
@@ -509,9 +550,9 @@ export default function BracketPage() {
       else { setMatches([]); setRoundOffset(0); }
     } catch { setApiError(true); }
     finally { setLoading(false); }
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedSeason]);
 
-  useEffect(() => { fetchMatches(); setPendingAdvances(new Map()); setAdvanceMode(false); }, [fetchMatches]);
+  useEffect(() => { fetchMatches(); setPendingAdvances(new Map()); setAdvanceMode(false); setEditingMatch(null); }, [fetchMatches]);
 
   // Project matches with pending advances applied locally (cascading preview)
   const projectedMatches = useMemo(() => {
@@ -617,32 +658,26 @@ export default function BracketPage() {
   // If check pending, show loader (or just wait)
   if (checkingAccess) {
     return (
-      <div className="min-h-screen relative text-slate-100">
-        <div className="fixed inset-0 -z-10">
-          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-          <div className="absolute inset-0 bg-slate-900/85" />
-        </div>
-        <Navbar />
+      <BracketShell>
         <div className="flex items-center justify-center py-32">
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         </div>
-      </div>
+      </BracketShell>
     );
   }
 
   if (apiError) {
-    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
+    return (
+      <BracketShell>
+        <ErrorScreen bare title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />
+      </BracketShell>
+    );
   }
 
   // Gate mechanism
   if (!bracketsVisible && !isAdmin) {
     return (
-        <div className="min-h-screen relative text-slate-100">
-          <div className="fixed inset-0 -z-10">
-            <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-            <div className="absolute inset-0 bg-slate-900/85" />
-          </div>
-          <Navbar />
+        <BracketShell>
           <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
               <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
                   <Lock className="w-12 h-12 text-blue-500" />
@@ -653,22 +688,38 @@ export default function BracketPage() {
                   Please check back later for the official schedule.
               </p>
           </div>
-        </div>
+        </BracketShell>
     );
   }
 
   return (
-    <div className="min-h-screen relative text-slate-100">
-      <div className="fixed inset-0 -z-10">
-        <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-        <div className="absolute inset-0 bg-slate-900/85" />
-      </div>
-      <Navbar />
+    <BracketShell>
       <div className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
-          <div className="flex items-center gap-2">
-            {isAdmin && matches.length > 0 && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
+            {selectedSeasonEntry && (
+              <p className="text-sm text-slate-400 mt-1">
+                {selectedSeasonEntry.label}{selectedSeason === activeSeason ? ' · Current season' : ' · Previous season'}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {seasons.length > 0 && (
+              <select
+                value={selectedSeason}
+                onChange={(e) => setSelectedSeason(e.target.value)}
+                className="bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm font-medium min-h-[40px]"
+                title="Select season"
+              >
+                {seasons.map((season) => (
+                  <option key={season.id} value={season.id}>
+                    {season.label}{season.archived ? ' (Archived)' : season.id === activeSeason ? ' (Current)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {isAdmin && matches.length > 0 && !isSelectedSeasonArchived && (
               <button
                 onClick={() => { if (advanceMode) { handleCancelAdvance(); } else { setAdvanceMode(true); } }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
@@ -687,6 +738,13 @@ export default function BracketPage() {
             </button>
           </div>
         </div>
+
+        {isSelectedSeasonArchived && (
+          <div className="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
+            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-amber-200">This season is archived. Fixtures are read-only.</span>
+          </div>
+        )}
 
         {/* Advance mode banner */}
         {advanceMode && (
@@ -868,6 +926,7 @@ export default function BracketPage() {
                                 onSelectWinner={handleSelectWinner}
                                 onEdit={setEditingMatch}
                                 isAdmin={isAdmin}
+                                readOnly={isSelectedSeasonArchived}
                               />
                             </div>
                           ))}
@@ -918,6 +977,6 @@ export default function BracketPage() {
           />
         )}
       </div>
-    </div>
+    </BracketShell>
   );
 }

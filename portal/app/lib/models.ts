@@ -15,6 +15,7 @@
  * - Added required `seasonId` to RegistrationDocument and MatchDocument.
  * - Registration IDs now include seasonId: `${userId}_${category}_${seasonId}`.
  * - SeasonConfig document for per-season settings and active season tracking.
+ * - `seasonCategory` supports future containers partitioned by season + category.
  */
 
 export type Category = "MS" | "WS" | "MD" | "WD" | "XD";
@@ -64,6 +65,7 @@ export interface RegistrationDocument {
   category: Category;
   status: RegistrationStatus;
   seasonId: string;       // e.g., "2026" — scopes registration to a season
+  seasonCategory?: string; // e.g., "2026#MS" — future partition key
   tournamentId?: string;  // legacy alias for seasonId (kept for backward compat)
   partnerId?: string;     // for doubles (MD, WD, XD)
   partnerName?: string;
@@ -85,6 +87,7 @@ export interface MatchDocument {
   id: string;             // UUID — not tied to round/position
   category: Category;     // partition key
   seasonId: string;       // e.g., "2026" — scopes match to a season
+  seasonCategory?: string; // e.g., "2026#MS" — future partition key
   tournamentId?: string;  // legacy alias for seasonId
   round: number;          // round number (1 = first round)
   position: number;       // position in the round (0-indexed)

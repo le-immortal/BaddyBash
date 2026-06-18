@@ -7,8 +7,11 @@ const databaseId = process.env.COSMOS_DATABASE || "baddybash";
 let client: CosmosClient;
 let database: Database;
 let usersContainer: Container;
+let settingsContainer: Container;
 let registrationsContainer: Container;
 let matchesContainer: Container;
+let registrationsV2Container: Container;
+let matchesV2Container: Container;
 
 function getClient(): CosmosClient {
   if (!client) {
@@ -31,6 +34,13 @@ export function getUsersContainer(): Container {
   return usersContainer;
 }
 
+export function getSettingsContainer(): Container {
+  if (!settingsContainer) {
+    settingsContainer = getDatabase().container("settings");
+  }
+  return settingsContainer;
+}
+
 export function getRegistrationsContainer(): Container {
   if (!registrationsContainer) {
     registrationsContainer = getDatabase().container("registrations");
@@ -43,6 +53,20 @@ export function getMatchesContainer(): Container {
     matchesContainer = getDatabase().container("matches");
   }
   return matchesContainer;
+}
+
+export function getRegistrationsV2Container(): Container {
+  if (!registrationsV2Container) {
+    registrationsV2Container = getDatabase().container("registrations_v2");
+  }
+  return registrationsV2Container;
+}
+
+export function getMatchesV2Container(): Container {
+  if (!matchesV2Container) {
+    matchesV2Container = getDatabase().container("matches_v2");
+  }
+  return matchesV2Container;
 }
 
 /**
@@ -62,6 +86,12 @@ export async function initializeDatabase(): Promise<void> {
     partitionKey: { paths: ["/id"] },
   });
 
+  // Settings container — stores singleton config docs by ID.
+  await db.containers.createIfNotExists({
+    id: "settings",
+    partitionKey: { paths: ["/id"] },
+  });
+
   // Registrations container — partitioned by userId for efficient per-user queries
   await db.containers.createIfNotExists({
     id: "registrations",
@@ -72,5 +102,16 @@ export async function initializeDatabase(): Promise<void> {
   await db.containers.createIfNotExists({
     id: "matches",
     partitionKey: { paths: ["/category"] },
+  });
+
+  // v2 tournament containers — read-aligned by season + category.
+  await db.containers.createIfNotExists({
+    id: "registrations_v2",
+    partitionKey: { paths: ["/seasonCategory"] },
+  });
+
+  await db.containers.createIfNotExists({
+    id: "matches_v2",
+    partitionKey: { paths: ["/seasonCategory"] },
   });
 }
