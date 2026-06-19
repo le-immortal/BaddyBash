@@ -443,6 +443,7 @@ function BracketPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const urlSeason = searchParams.get('season');
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
 
@@ -454,6 +455,9 @@ function BracketPageContent() {
   const [searchIndex, setSearchIndex] = useState(0);
   const bracketRef = useRef<HTMLDivElement>(null);
   const matchRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const initialUrlSeasonRef = useRef(urlSeason);
+  // Tracks whether selectedSeason was set programmatically (not from URL navigation)
+  const suppressUrlSync = useRef(false);
   const [bracketsVisible, setBracketsVisible] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [apiError, setApiError] = useState(false);
@@ -538,7 +542,7 @@ function BracketPageContent() {
     }
   }, [pendingAdvances, selectedCategory, selectedSeason, isSelectedSeasonArchived]);
 
-  // Load seasons and default to the active season.
+  // Load seasons once on mount.
   useEffect(() => {
     fetch('/api/settings?full=1').then(res => {
       if (!res.ok) { setApiError(true); return null; }
@@ -552,38 +556,37 @@ function BracketPageContent() {
         setActiveSeason(nextActiveSeason);
         const active = loadedSeasons.find((season) => season.id === nextActiveSeason);
         setBracketsVisible(active?.bracketsVisible === true);
+
+        // Set initial selected season from URL or active
+        const urlParam = initialUrlSeasonRef.current;
+        const validUrl = loadedSeasons.some((s) => s.id === urlParam);
+        const initial = validUrl ? urlParam! : nextActiveSeason;
+        setSelectedSeason(initial);
+        suppressUrlSync.current = true;
       } else {
         const fallbackSeason = getCurrentSeasonFallback();
         setActiveSeason(fallbackSeason);
-        setSelectedSeason(searchParams.get('season') || fallbackSeason);
+        setSelectedSeason(initialUrlSeasonRef.current || fallbackSeason);
         setBracketsVisible(data.bracketsVisible === true);
+        suppressUrlSync.current = true;
       }
     }).catch(() => setApiError(true)).finally(() => setCheckingAccess(false));
-  }, [searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    if (seasonOptions.length === 0) return;
-
-    const requestedSeason = searchParams.get('season');
-    const nextSeason = seasonOptions.some((season) => season.id === requestedSeason)
-      ? requestedSeason
-      : (seasonOptions.find((season) => season.id === activeSeason)?.id || seasonOptions[0]?.id || activeSeason);
-
-    if (nextSeason && nextSeason !== selectedSeason) {
-      setSelectedSeason(nextSeason);
-    }
-  }, [activeSeason, searchParams, seasonOptions, selectedSeason]);
-
+  // Sync selectedSeason → URL (only when user changes season via dropdown)
   useEffect(() => {
     if (!selectedSeason) return;
-
-    const currentSeason = searchParams.get('season');
-    if (currentSeason === selectedSeason) return;
-
+    if (suppressUrlSync.current) {
+      suppressUrlSync.current = false;
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
+    if (params.get('season') === selectedSeason) return;
     params.set('season', selectedSeason);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [pathname, router, searchParams, selectedSeason]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSeason]);
 
   useEffect(() => {
     if (!selectedSeasonEntry) return;
