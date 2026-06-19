@@ -1,12 +1,14 @@
 name: Security Checks
 
+# DISABLED — re-enable when ready for CI/CD
 on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  schedule:
-    - cron: '30 1 * * 0'
+  workflow_dispatch: {}
+  # push:
+  #   branches: [ "main", "master" ]
+  # pull_request:
+  #   branches: [ "main", "master" ]
+  # schedule:
+  #   - cron: '30 1 * * 0'
 
 jobs:
   # 1. Dependency Vulnerability Check

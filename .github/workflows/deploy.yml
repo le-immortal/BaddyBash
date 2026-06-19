@@ -1,15 +1,17 @@
 name: Build & Deploy
 
+# DISABLED — re-enable when ready for CI/CD
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'portal/**'
-      - '.github/workflows/**'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'portal/**'
+  workflow_dispatch: {}
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'portal/**'
+  #     - '.github/workflows/**'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'portal/**'
 
 env:
   AZURE_WEBAPP_NAME: baddybashapp        # App Service in test-rg
