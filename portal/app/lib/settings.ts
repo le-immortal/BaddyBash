@@ -147,7 +147,7 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
 export async function updateGlobalSettings(
   newSettings: Partial<Pick<GlobalSettings, "registrationOpen" | "bracketsVisible">>
 ): Promise<GlobalSettings> {
-  const config = await getSeasonConfig();
+  const config = structuredClone(await getSeasonConfig());
   const idx = config.seasons.findIndex((s) => s.id === config.activeSeason);
 
   if (idx === -1) {
@@ -208,7 +208,7 @@ export async function createNewSeason(
   label: string,
   archivePrevious = true
 ): Promise<SeasonConfig> {
-  const config = await getSeasonConfig();
+  const config = structuredClone(await getSeasonConfig());
 
   if (config.seasons.some((s) => s.id === seasonId)) {
     throw new Error(`Season "${seasonId}" already exists`);
