@@ -25,6 +25,9 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
       return resources[0]?.isAdmin === true;
     })();
 
+    // Suppress unhandled rejection if timeout wins the race and lookup later fails
+    lookup.catch(() => {});
+
     const fallback = new Promise<boolean>((resolve) => {
       timeout = setTimeout(() => resolve(false), adminLookupTimeoutMs);
     });
