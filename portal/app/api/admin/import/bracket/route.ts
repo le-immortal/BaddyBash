@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMatchesContainer } from "@/app/lib/cosmosClient";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { MatchDocument } from "@/app/lib/models";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import { getTournamentMatchesContainer, isTournamentV2Enabled } from "@/app/lib/tournamentData";
 
 /**
  * Update multiple matches in bulk.
@@ -21,13 +22,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { updates } = body as { updates: Partial<MatchDocument>[] };
+    const { updates, season, seasonId: bodySeasonId } = body as {
+      updates: Partial<MatchDocument>[];
+      season?: string;
+      seasonId?: string;
+    };
 
     if (!Array.isArray(updates)) {
       return NextResponse.json({ error: "Invalid updates format" }, { status: 400 });
     }
 
-    const container = getMatchesContainer();
+    const targetSeasonId = bodySeasonId || season || await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(targetSeasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Cannot modify archived season" },
+        { status: 403 }
+      );
+    }
+
+    const container = getTournamentMatchesContainer();
     const results = [];
     const errors = [];
 
@@ -38,14 +52,35 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      if (update.seasonId && update.seasonId !== targetSeasonId) {
+        errors.push({ id: update.id, error: "Imported row does not belong to the selected season" });
+        continue;
+      }
+
       try {
         // Fetch current match to verify existence and get full object
-        const { resource: currentMatch } = await container
-          .item(update.id, update.category)
-          .read<MatchDocument>();
+        const currentMatch = isTournamentV2Enabled()
+          ? (await container.items
+              .query<MatchDocument>({
+                query: targetSeasonId
+                  ? "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category AND c.seasonId = @seasonId"
+                  : "SELECT TOP 1 * FROM c WHERE c.id = @id AND c.category = @category",
+                parameters: [
+                  { name: "@id", value: update.id },
+                  { name: "@category", value: update.category },
+                  ...(targetSeasonId ? [{ name: "@seasonId", value: targetSeasonId }] : []),
+                ],
+              })
+              .fetchAll()).resources[0]
+          : (await container.item(update.id, update.category).read<MatchDocument>()).resource;
 
         if (!currentMatch) {
           errors.push({ id: update.id, error: "Match not found" });
+          continue;
+        }
+
+        if (currentMatch.seasonId !== targetSeasonId) {
+          errors.push({ id: update.id, error: "Imported row does not belong to the selected season" });
           continue;
         }
 
@@ -60,11 +95,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ 
-      message: "Bulk update processed", 
-      processed: results.length,
-      errors 
-    });
+    if (results.length === 0) {
+      return NextResponse.json(
+        { errors },
+        { status: 400 }
+      );
+    }
+
+    if (errors.length > 0) {
+      return NextResponse.json(
+        {
+          results,
+          errors,
+          updated: results.length,
+          failed: errors.length,
+        },
+        { status: 207 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        results,
+        updated: results.length,
+      },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error("Error processing bulk import:", error);

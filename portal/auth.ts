@@ -8,14 +8,45 @@ import type { OIDCConfig } from "next-auth/providers"
 const isDev = process.env.NODE_ENV === "development";
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const clientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID!;
+const adminLookupTimeoutMs = 3000;
+
+async function resolveIsAdmin(email: string): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    const lookup = (async () => {
+      const container = getUsersContainer();
+      const { resources } = await container.items
+        .query<UserDocument>({
+          query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
+          parameters: [{ name: "@email", value: email }],
+        })
+        .fetchAll();
+      return resources[0]?.isAdmin === true;
+    })();
+
+    // Suppress unhandled rejection if timeout wins the race and lookup later fails
+    lookup.catch(() => {});
+
+    const fallback = new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), adminLookupTimeoutMs);
+    });
+
+    return await Promise.race([lookup, fallback]);
+  } catch {
+    return false;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
 async function getClientAssertion(): Promise<string> {
-  console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
+  if (isDev) console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
   const credential = new ManagedIdentityCredential();
   const result = await credential.getToken("api://AzureADTokenExchange");
-  console.log("[AUTH] MI token acquired, expires:", result.expiresOnTimestamp);
+  if (isDev) console.log("[AUTH] MI token acquired, expires:", result.expiresOnTimestamp);
   return result.token;
 }
 
@@ -46,13 +77,13 @@ function EntraIDWithFIC() {
 
       // Intercept token endpoint — inject MI client assertion
       if (url.pathname.endsWith("/oauth2/v2.0/token")) {
-        console.log("[AUTH] Intercepting token endpoint, injecting MI client assertion...");
+        if (isDev) console.log("[AUTH] Intercepting token endpoint, injecting MI client assertion...");
         const assertion = await getClientAssertion();
         const body = args[1]?.body as URLSearchParams;
         body.set("client_id", clientId);
         body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
         body.set("client_assertion", assertion);
-        console.log("[AUTH] Client assertion injected, sending token request...");
+        if (isDev) console.log("[AUTH] Client assertion injected, sending token request...");
       }
 
       return fetch(...args);
@@ -94,18 +125,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user?.email || trigger === "update") {
         const email = user?.email || token.email;
         if (email) {
-          try {
-            const container = getUsersContainer();
-            const { resources } = await container.items
-              .query<UserDocument>({
-                query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
-                parameters: [{ name: "@email", value: email }],
-              })
-              .fetchAll();
-            token.isAdmin = resources[0]?.isAdmin === true;
-          } catch {
-            token.isAdmin = false;
-          }
+          token.isAdmin = await resolveIsAdmin(email);
         }
       }
       return token;

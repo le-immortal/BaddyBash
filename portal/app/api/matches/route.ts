@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getMatchesContainer, getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
+import { getUsersContainer } from "@/app/lib/cosmosClient";
 import {
   MatchDocument, RegistrationDocument, UserDocument, Category,
   isDoubles,
 } from "@/app/lib/models";
 import { requireAdmin, isAdmin } from "@/app/lib/authHelpers";
-import { auth } from "@/auth";
 import { generateSeedOrder, nextPowerOf2 } from "@/app/lib/bracketUtils";
-import { getGlobalSettings, getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { updateMatchWithAdvancement } from "@/app/lib/matchService";
+import {
+  getTournamentMatchesContainer,
+  getTournamentRegistrationsContainer,
+  isTournamentV2Enabled,
+  matchPartitionKey,
+  seasonCategoryQuery,
+  withTournamentFields,
+} from "@/app/lib/tournamentData";
 
 interface BracketParticipant {
   id: string;
@@ -85,15 +92,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-  const matchesContainer = getMatchesContainer();
+  const matchesContainer = getTournamentMatchesContainer();
+  const matchQuery = seasonCategoryQuery(seasonId, category);
   const { resources: matches } = await matchesContainer.items
-    .query<MatchDocument>({
-      query: "SELECT * FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
-      parameters: [
-        { name: "@category", value: category },
-        { name: "@seasonId", value: seasonId },
-      ],
-    })
+    .query<MatchDocument>({ query: matchQuery.query, parameters: matchQuery.parameters }, matchQuery.options)
     .fetchAll();
 
   matches.sort((a, b) => a.round - b.round || a.position - b.position);
@@ -120,9 +122,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { category, tournamentId, seeds } = body as {
+    const { category, tournamentId, season, seasonId: bodySeasonId, seeds } = body as {
       category: Category;
       tournamentId?: string;
+      season?: string;
+      seasonId?: string;
       seeds?: Record<string, number>;
     };
 
@@ -131,25 +135,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve season
-    const seasonId = tournamentId || await getActiveSeason();
+    const seasonId = bodySeasonId || season || tournamentId || await getActiveSeason();
     const seasonSettings = await getSeasonSettings(seasonId);
     if (seasonSettings.archived) {
       return NextResponse.json({ error: "Cannot generate brackets for an archived season" }, { status: 403 });
     }
 
-    const regContainer = getRegistrationsContainer();
-    const matchContainer = getMatchesContainer();
+    const regContainer = getTournamentRegistrationsContainer();
+    const matchContainer = getTournamentMatchesContainer();
     const userContainer = getUsersContainer();
 
     // 1. Fetch confirmed registrations (scoped to season)
+    const regQuery = seasonCategoryQuery(seasonId, category);
     const { resources: registrations } = await regContainer.items
-      .query<RegistrationDocument>({
-        query: "SELECT * FROM c WHERE c.category = @category AND c.status = 'confirmed' AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@category", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<RegistrationDocument>(
+        {
+          query: isTournamentV2Enabled()
+            ? "SELECT * FROM c WHERE c.seasonCategory = @seasonCategory AND c.status = 'confirmed'"
+            : "SELECT * FROM c WHERE c.category = @category AND c.status = 'confirmed' AND c.seasonId = @seasonId",
+          parameters: regQuery.parameters,
+        },
+        regQuery.options
+      )
       .fetchAll();
 
     if (registrations.length < 2) {
@@ -255,18 +262,13 @@ export async function POST(request: NextRequest) {
     const seedOrder = generateSeedOrder(bracketSize);
 
     // 5. Delete existing matches (scoped to season)
+    const existingMatchQuery = seasonCategoryQuery(seasonId, category);
     const { resources: existingMatches } = await matchContainer.items
-      .query<MatchDocument>({
-        query: "SELECT c.id, c.category FROM c WHERE c.category = @category AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@category", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<MatchDocument>({ query: existingMatchQuery.query, parameters: existingMatchQuery.parameters }, existingMatchQuery.options)
       .fetchAll();
 
     await parallelBatch(existingMatches, (m) =>
-      matchContainer.item(m.id, category).delete()
+      matchContainer.item(m.id, matchPartitionKey(m)).delete()
     );
 
     // 6. Create Matches
@@ -284,18 +286,17 @@ export async function POST(request: NextRequest) {
        const roundMatches: MatchDocument[] = [];
        
        for (let pos = 0; pos < numMatches; pos++) {
-         const match: MatchDocument = {
+        const match: MatchDocument = withTournamentFields({
             id: randomUUID(),
             category,
             seasonId,
-            tournamentId: seasonId,
             round: r,
             position: pos,
             status: 'scheduled',
             sets: [],
             createdAt: now,
             updatedAt: now,
-         };
+        });
          roundMatches.push(match);
          matchMap.set(match.id, match);
        }
@@ -442,9 +443,12 @@ export async function PATCH(request: NextRequest) {
       player1Name?: string;
       player2Id?: string;
       player2Name?: string;
+      season?: string;
+      seasonId?: string;
     };
 
-    const { matchId, category } = body;
+    const { matchId, category, season, seasonId: bodySeasonId } = body;
+    const requestedSeasonId = bodySeasonId || season;
 
     if (!matchId || !category) {
       return NextResponse.json(
@@ -453,15 +457,41 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const container = getMatchesContainer();
+    const container = getTournamentMatchesContainer();
 
-    // 1. Read the current match (partition key = category)
-    const { resource: match } = await container
-      .item(matchId, category)
-      .read<MatchDocument>();
+    // 1. Read the current match. v2 may not receive season from older clients, so query by ID.
+    const match = isTournamentV2Enabled()
+      ? (await container.items
+          .query<MatchDocument>({
+            query: requestedSeasonId
+              ? "SELECT TOP 1 * FROM c WHERE c.id = @matchId AND c.category = @category AND c.seasonId = @seasonId"
+              : "SELECT TOP 1 * FROM c WHERE c.id = @matchId AND c.category = @category",
+            parameters: [
+              { name: "@matchId", value: matchId },
+              { name: "@category", value: category },
+              ...(requestedSeasonId ? [{ name: "@seasonId", value: requestedSeasonId }] : []),
+            ],
+          })
+          .fetchAll()).resources[0]
+      : (await container.item(matchId, category).read<MatchDocument>()).resource;
 
     if (!match) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    }
+
+    if (requestedSeasonId && match.seasonId !== requestedSeasonId) {
+      return NextResponse.json(
+        { error: "Match does not belong to the selected season" },
+        { status: 400 }
+      );
+    }
+
+    const seasonSettings = await getSeasonSettings(match.seasonId || await getActiveSeason());
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Cannot modify archived season" },
+        { status: 403 }
+      );
     }
 
     // 2. Update fields

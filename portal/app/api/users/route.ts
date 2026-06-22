@@ -216,6 +216,11 @@ export async function PATCH(request: NextRequest) {
     // Trim and lowercase id for consistency
     const cleanId = String(id).trim().toLowerCase();
 
+    const { authorized } = await requireOwnerOrAdmin(cleanId);
+    if (!authorized) {
+      return NextResponse.json({ error: "Forbidden: you can only update your own profile" }, { status: 403 });
+    }
+
     // Read existing
     const { resource: existing } = await container.item(cleanId, cleanId).read<UserDocument>();
     if (!existing) {

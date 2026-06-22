@@ -35,12 +35,14 @@ export default function EditMatchModal({ match, onClose, onUpdate }: EditMatchMo
       const payload: {
         matchId: string;
         category: string;
+        seasonId?: string;
         winnerId?: string;
         winnerName?: string;
         scheduledTime?: string;
       } = {
         matchId: match.id,
         category: match.category,
+        seasonId: match.seasonId,
         scheduledTime,
       };
 

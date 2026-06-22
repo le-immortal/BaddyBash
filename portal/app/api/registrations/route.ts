@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRegistrationsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
+import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument, isDoubles, Category, makeRegistrationId } from "@/app/lib/models";
-import { getGlobalSettings, getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
 import { requireOwnerOrAdmin } from "@/app/lib/authHelpers";
 import { cacheDeleteByPrefix } from "@/app/lib/cache";
+import {
+  getTournamentRegistrationsContainer,
+  registrationPartitionKey,
+  withTournamentFields,
+} from "@/app/lib/tournamentData";
 
 const MAX_CATEGORIES = 2;
 
@@ -35,15 +40,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const container = getRegistrationsContainer();
-    
+    const container = getTournamentRegistrationsContainer();
+
     // Trim and lowercase userId for consistency
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
-    
+
     // Season scoping: use query param or active season
     const seasonParam = request.nextUrl.searchParams.get("season");
     const seasonId = seasonParam || await getActiveSeason();
-    
+
     const { resources } = await container.items
       .query<RegistrationDocument>({
         query: "SELECT * FROM c WHERE c.userId = @userId AND c.seasonId = @seasonId",
@@ -94,7 +99,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId, userName, category, partnerId, partnerName, partnerPhone, partnerTShirtSize } = body;
+    const {
+      userId,
+      userName,
+      category,
+      partnerId,
+      partnerName,
+      partnerPhone,
+      partnerTShirtSize,
+      season,
+      seasonId: requestedSeasonId,
+      tournamentId,
+    } = body;
+    const targetSeasonId = requestedSeasonId || season || tournamentId;
+
+    if (targetSeasonId && targetSeasonId !== seasonId) {
+      return NextResponse.json(
+        { error: "Registrations can only be created for the active season" },
+        { status: 400 }
+      );
+    }
 
     const { email } = session.user;
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
@@ -147,7 +171,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const container = getRegistrationsContainer();
+    const container = getTournamentRegistrationsContainer();
 
     // Server-side Max-2 check: count existing active registrations (scoped to season)
     const { resources: existing } = await container.items
@@ -237,7 +261,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create MAIN Registration
-    const registration: RegistrationDocument = {
+    const registration: RegistrationDocument = withTournamentFields({
       id: makeRegistrationId(cleanUserId, category, seasonId),
       userId: cleanUserId,
       userName: userName.trim(),
@@ -249,7 +273,7 @@ export async function POST(request: NextRequest) {
       partnerPhone: finalPartnerPhone,
       createdAt: now,
       updatedAt: now,
-    };
+    });
 
     const { resource } = await container.items.create(registration);
 
@@ -285,14 +309,15 @@ export async function POST(request: NextRequest) {
       const partnerRegId = makeRegistrationId(cleanPartnerId, category, seasonId);
       let partnerRegExists = false;
       try {
-        const { resource: existingReg } = await container.item(partnerRegId, cleanPartnerId).read<RegistrationDocument>();
+        const partnerRegPartitionKey = registrationPartitionKey({ userId: cleanPartnerId, category, seasonId });
+        const { resource: existingReg } = await container.item(partnerRegId, partnerRegPartitionKey).read<RegistrationDocument>();
         if (existingReg && existingReg.status !== 'cancelled') partnerRegExists = true;
       } catch {
         // Doesn't exist
       }
 
       if (!partnerRegExists) {
-        const partnerRegistration: RegistrationDocument = {
+        const partnerRegistration: RegistrationDocument = withTournamentFields({
           id: partnerRegId,
           userId: cleanPartnerId,
           userName: finalPartnerName || cleanPartnerId,
@@ -304,7 +329,7 @@ export async function POST(request: NextRequest) {
           partnerPhone: body.userPhone ? body.userPhone.trim() : '',
           createdAt: now,
           updatedAt: now,
-        };
+        });
         try {
           await container.items.create(partnerRegistration);
         } catch (e: unknown) {
@@ -340,6 +365,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
   const category = request.nextUrl.searchParams.get("category");
+  const seasonParam = request.nextUrl.searchParams.get("season");
 
   if (!userId || !category) {
     return NextResponse.json({ error: "userId and category are required" }, { status: 400 });
@@ -380,13 +406,12 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    // 1. Check Global Settings
+    // 1. Check season settings — registrations must be open for withdrawal
+    const activeSeasonId = await getActiveSeason();
+    const seasonId = session.user.isAdmin && seasonParam ? seasonParam : activeSeasonId;
     try {
-      const settings = await getGlobalSettings();
+      const settings = await getSeasonSettings(seasonId);
       if (settings.registrationOpen === false) {
-          // Allow admins to delete even if closed? Maybe. But for now consistency.
-          // Actually, withdrawal after close might be allowed or disallowed policy wise.
-          // Usually strict: no changes after lock.
           if (!session.user.isAdmin) {
             return NextResponse.json(
               { error: "Registrations are closed. You cannot withdraw at this time." },
@@ -398,13 +423,20 @@ export async function DELETE(request: NextRequest) {
        // Ignore
     }
 
-    const container = getRegistrationsContainer();
-    const seasonId = await getActiveSeason();
+    if (!session.user.isAdmin && seasonParam && seasonParam !== activeSeasonId) {
+      return NextResponse.json(
+        { error: "Players can only withdraw from the active season" },
+        { status: 403 }
+      );
+    }
+
+    const container = getTournamentRegistrationsContainer();
     const regId = makeRegistrationId(cleanUserId, category, seasonId);
+    const regPartitionKey = registrationPartitionKey({ userId: cleanUserId, category: category as Category, seasonId });
 
     // 2. Fetch the registration to check for partner
     try {
-      const { resource: reg } = await container.item(regId, cleanUserId).read<RegistrationDocument>();
+      const { resource: reg } = await container.item(regId, regPartitionKey).read<RegistrationDocument>();
 
       if (!reg) {
         return NextResponse.json({ error: "Registration not found" }, { status: 404 });
@@ -416,8 +448,9 @@ export async function DELETE(request: NextRequest) {
         if (reg.partnerId) {
           const cleanPartnerId = reg.partnerId;
           const partnerRegId = makeRegistrationId(cleanPartnerId, category, reg.seasonId || seasonId);
+          const partnerRegPartitionKey = registrationPartitionKey({ userId: cleanPartnerId, category: category as Category, seasonId: reg.seasonId || seasonId });
           try {
-            await container.item(partnerRegId, cleanPartnerId).delete();
+            await container.item(partnerRegId, partnerRegPartitionKey).delete();
           } catch (e: unknown) {
               const cosmosErr = e as { code?: number };
               // If 404, partner might have already cancelled or not existed
@@ -429,7 +462,7 @@ export async function DELETE(request: NextRequest) {
       }
 
       // 4. Delete user's registration
-      await container.item(regId, cleanUserId).delete();
+      await container.item(regId, regPartitionKey).delete();
 
       // Bust admin players cache (registrations changed)
       cacheDeleteByPrefix("admin-players:");

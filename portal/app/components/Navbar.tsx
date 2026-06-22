@@ -5,38 +5,34 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { User, Menu, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
 import { signInAction, signOutAction } from '@/app/lib/actions';
+import type { SeasonConfig } from '@/app/lib/models';
+import { getSeasonLabelFromConfig } from '@/app/lib/seasonLabels';
 
-export default function Navbar() {
+export default function Navbar({ seasonLabel: externalLabel }: { seasonLabel?: string } = {}) {
   const { data: session } = useSession();
-  const pathname = usePathname();
   const isAdmin = session?.user?.isAdmin === true;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
+  const [fetchedLabel, setFetchedLabel] = useState('Baddy Bash');
 
   useEffect(() => {
+    if (externalLabel) return; // skip fetch when parent provides label
     fetch('/api/settings?full=1')
       .then(r => r.ok ? r.json() : null)
-      .then(config => {
+      .then((config: SeasonConfig | null) => {
         if (!config?.seasons) return;
-        const active = config.seasons.find((s: { id: string }) => s.id === config.activeSeason);
-        if (active?.label) setSeasonLabel(active.label);
+        setFetchedLabel(getSeasonLabelFromConfig(config));
       })
       .catch(() => {});
-  }, []);
+  }, [externalLabel]);
 
-export default function Navbar() {
-  const { data: session } = useSession();
-  const pathname = usePathname();
-  const isAdmin = session?.user?.isAdmin === true;
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const seasonLabel = externalLabel || fetchedLabel;
 
   return (
     <nav className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
-          <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
+          <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
             <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
             <span>{seasonLabel}</span>
           </Link>

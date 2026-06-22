@@ -5,6 +5,7 @@ import {
   getSeasonConfig,
   updateSeasonConfig,
   createNewSeason,
+  toPublicSeasonConfig,
 } from "@/app/lib/settings";
 import { requireAdmin } from "@/app/lib/authHelpers";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     if (full) {
       const config = await getSeasonConfig();
-      return NextResponse.json(config);
+      return NextResponse.json(toPublicSeasonConfig(config));
     }
 
     // Default: backward-compat shape

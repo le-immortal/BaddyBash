@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRegistrationsContainer } from "@/app/lib/cosmosClient";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument, isDoubles, makeRegistrationId } from "@/app/lib/models";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { cacheGet, cacheSet, cacheDeleteByPrefix } from "@/app/lib/cache";
-import { getActiveSeason } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import {
+  getTournamentRegistrationsContainer,
+  isTournamentV2Enabled,
+  registrationPartitionKey,
+  seasonCategoryQuery,
+} from "@/app/lib/tournamentData";
 
 const PLAYERS_CACHE_PREFIX = "admin-players:";
 const PLAYERS_CACHE_TTL = 30_000; // 30 seconds
@@ -39,19 +44,20 @@ export async function GET(request: NextRequest) {
     }
 
     const usersContainer = getUsersContainer();
-    const registrationsContainer = getRegistrationsContainer();
+    const registrationsContainer = getTournamentRegistrationsContainer();
 
-    // Cross-partition query (registrations partitioned by userId, not category).
-    // Select only the fields we need to reduce RU cost and transfer size.
+    // v2 uses a single seasonCategory partition; legacy remains cross-partition by userId.
+    const regQuery = seasonCategoryQuery(seasonId, category as never);
     const { resources: registrations } = await registrationsContainer.items
-      .query<RegistrationDocument>({
-        query:
-          "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seasonId, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.category = @cat AND c.status != 'cancelled' AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@cat", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<RegistrationDocument>(
+        {
+          query: isTournamentV2Enabled()
+            ? "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seasonId, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.seasonCategory = @seasonCategory AND c.status != 'cancelled'"
+            : "SELECT c.id, c.userId, c.userName, c.category, c.status, c.seasonId, c.seed, c.partnerId, c.partnerName, c.partnerPhone, c.createdAt, c.updatedAt FROM c WHERE c.category = @category AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+          parameters: regQuery.parameters,
+        },
+        regQuery.options
+      )
       .fetchAll();
 
     // Collect unique userIds and batch-read user docs
@@ -125,7 +131,8 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { registrationId, userId, seed } = body;
+    const { registrationId, userId, seed, season, seasonId: bodySeasonId } = body;
+    const requestedSeasonId = bodySeasonId || season;
 
     // IMPORTANT: Allow seed to be null (unsetting a seed).
     if (!registrationId || !userId || seed === undefined) {
@@ -135,11 +142,22 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const container = getRegistrationsContainer();
+    const container = getTournamentRegistrationsContainer();
 
-    const { resource: existing } = await container
-      .item(registrationId, userId)
-      .read<RegistrationDocument>();
+    const existing = isTournamentV2Enabled()
+      ? (await container.items
+          .query<RegistrationDocument>({
+            query: requestedSeasonId
+              ? "SELECT TOP 1 * FROM c WHERE c.id = @registrationId AND c.userId = @userId AND c.seasonId = @seasonId"
+              : "SELECT TOP 1 * FROM c WHERE c.id = @registrationId AND c.userId = @userId",
+            parameters: [
+              { name: "@registrationId", value: registrationId },
+              { name: "@userId", value: userId },
+              ...(requestedSeasonId ? [{ name: "@seasonId", value: requestedSeasonId }] : []),
+            ],
+          })
+          .fetchAll()).resources[0]
+      : (await container.item(registrationId, userId).read<RegistrationDocument>()).resource;
 
     if (!existing) {
       return NextResponse.json(
@@ -148,17 +166,37 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    if (requestedSeasonId && existing.seasonId !== requestedSeasonId) {
+      return NextResponse.json(
+        { error: "Registration does not belong to the selected season" },
+        { status: 400 }
+      );
+    }
+
+    const seasonSettings = await getSeasonSettings(existing.seasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Cannot modify archived season" },
+        { status: 403 }
+      );
+    }
+
     // Duplicate seed check: no two registrations in the same category may share a seed
     if (seed) {
+      const duplicateQuery = seasonCategoryQuery(existing.seasonId, existing.category);
       const { resources: sameCat } = await container.items
-        .query<RegistrationDocument>({
-          query:
-            "SELECT c.id, c.userId, c.seed FROM c WHERE c.category = @cat AND c.seed = @seed AND c.status != 'cancelled'",
-          parameters: [
-            { name: "@cat", value: existing.category },
-            { name: "@seed", value: Number(seed) },
-          ],
-        })
+        .query<RegistrationDocument>(
+          {
+            query: isTournamentV2Enabled()
+              ? "SELECT c.id, c.userId, c.seed FROM c WHERE c.seasonCategory = @seasonCategory AND c.seed = @seed AND c.status != 'cancelled'"
+              : "SELECT c.id, c.userId, c.seed FROM c WHERE c.category = @category AND c.seed = @seed AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+            parameters: [
+              ...duplicateQuery.parameters,
+              { name: "@seed", value: Number(seed) },
+            ],
+          },
+          duplicateQuery.options
+        )
         .fetchAll();
 
       const conflict = sameCat.find((r) => r.id !== registrationId);
@@ -180,7 +218,7 @@ export async function PATCH(request: NextRequest) {
     };
 
     const { resource } = await container
-      .item(registrationId, userId)
+      .item(registrationId, registrationPartitionKey(existing))
       .replace(updated);
 
     // For doubles, sync seed to partner's registration so both sides match
@@ -188,10 +226,10 @@ export async function PATCH(request: NextRequest) {
       const partnerRegId = makeRegistrationId(existing.partnerId, existing.category, existing.seasonId);
       try {
         const { resource: partnerReg } = await container
-          .item(partnerRegId, existing.partnerId)
+          .item(partnerRegId, registrationPartitionKey({ userId: existing.partnerId, category: existing.category, seasonId: existing.seasonId }))
           .read<RegistrationDocument>();
         if (partnerReg && partnerReg.seed !== newSeedVal) {
-          await container.item(partnerRegId, existing.partnerId).replace({
+          await container.item(partnerRegId, registrationPartitionKey(partnerReg)).replace({
             ...partnerReg,
             seed: newSeedVal,
             updatedAt: now,
@@ -231,9 +269,11 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { category, seeds } = body as {
+    const { category, seeds, season, seasonId: bodySeasonId } = body as {
       category: string;
       seeds: Record<string, number | null>;
+      season?: string;
+      seasonId?: string;
     };
 
     if (!category || !seeds || typeof seeds !== 'object') {
@@ -243,20 +283,30 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const container = getRegistrationsContainer();
+    const container = getTournamentRegistrationsContainer();
 
     // Resolve season
-    const seasonId = await getActiveSeason();
+    const seasonId = season || bodySeasonId || await getActiveSeason();
+    const seasonSettings = await getSeasonSettings(seasonId);
+    if (seasonSettings.archived) {
+      return NextResponse.json(
+        { error: "Cannot modify archived season" },
+        { status: 403 }
+      );
+    }
 
     // 1. Fetch all registrations for this category + season in one query
+    const regQuery = seasonCategoryQuery(seasonId, category as never);
     const { resources: registrations } = await container.items
-      .query<RegistrationDocument>({
-        query: "SELECT * FROM c WHERE c.category = @cat AND c.status != 'cancelled' AND c.seasonId = @seasonId",
-        parameters: [
-          { name: "@cat", value: category },
-          { name: "@seasonId", value: seasonId },
-        ],
-      })
+      .query<RegistrationDocument>(
+        {
+          query: isTournamentV2Enabled()
+            ? "SELECT * FROM c WHERE c.seasonCategory = @seasonCategory AND c.status != 'cancelled'"
+            : "SELECT * FROM c WHERE c.category = @category AND c.status != 'cancelled' AND c.seasonId = @seasonId",
+          parameters: regQuery.parameters,
+        },
+        regQuery.options
+      )
       .fetchAll();
 
     // 2. Build update list — for doubles, propagate seed to BOTH partners
@@ -312,7 +362,7 @@ export async function PUT(request: NextRequest) {
       const chunk = toUpdate.slice(i, i + BATCH);
       const results = await Promise.allSettled(
         chunk.map(doc =>
-          container.item(doc.id, doc.userId).replace(doc)
+          container.item(doc.id, registrationPartitionKey(doc)).replace(doc)
         )
       );
       succeeded += results.filter(r => r.status === 'fulfilled').length;

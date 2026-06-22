@@ -4,14 +4,25 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
-import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload, CalendarPlus, Archive } from 'lucide-react';
-import { Category, MatchDocument, MatchStatus, SeasonEntry } from '../lib/models';
+import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload, CalendarPlus, Archive, CheckCircle2, CircleAlert, X } from 'lucide-react';
+import { Category, MatchDocument, MatchStatus, SeasonEntry, CATEGORIES } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
 import ErrorScreen from '../components/ErrorScreen';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { exportVisualBracket } from '../lib/bracketExcelExport';
+
+const getCurrentSeasonFallback = () => String(new Date().getFullYear());
+
+function AdminShell({ children, seasonLabel }: { children: React.ReactNode; seasonLabel?: string }) {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Navbar seasonLabel={seasonLabel} />
+      {children}
+    </div>
+  );
+}
 
 interface AdminRegistration {
   id: string;
@@ -32,6 +43,209 @@ interface AdminPlayer {
   alias?: string;
   phoneNumber?: string;
   registrations: AdminRegistration[];
+}
+
+type ExportActionType = 'players-category' | 'players-csv' | 'bracket' | 'visual-bracket';
+
+type PendingAdminAction =
+  | { type: 'export'; exportType: ExportActionType }
+  | { type: 'save-seeds'; source: 'visualizer' | 'list' }
+  | { type: 'generate-fixtures' }
+  | { type: 'toggle-registration'; nextState: boolean }
+  | { type: 'toggle-brackets'; nextState: boolean }
+  | { type: 'create-season'; seasonId: string; label: string }
+  | { type: 'import' };
+
+type ImportErrorDetail = {
+  id?: string;
+  error: string;
+};
+
+type ImportFeedback = {
+  tone: 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  errors: ImportErrorDetail[];
+};
+
+type AdminToast = {
+  id: string;
+  message: string;
+  tone: 'success' | 'error';
+};
+
+type NewSeasonFormState = {
+  seasonId: string;
+  label: string;
+  error: string | null;
+};
+
+const MODAL_FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+function ImportFeedbackPanel({ feedback }: { feedback: ImportFeedback }) {
+  const toneClasses = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    warning: 'border-amber-200 bg-amber-50 text-amber-800',
+    error: 'border-red-200 bg-red-50 text-red-800',
+  } satisfies Record<ImportFeedback['tone'], string>;
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClasses[feedback.tone]}`}>
+      <p className="text-sm font-semibold">{feedback.title}</p>
+      <p className="mt-1 text-sm">{feedback.message}</p>
+      {feedback.errors.length > 0 && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+          {feedback.errors.map((error, index) => (
+            <li key={`${error.id || 'row'}-${index}`}>
+              <span className="font-medium">{error.id || `Row ${index + 1}`}</span>: {error.error}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AdminModal({
+  open,
+  onClose,
+  titleId,
+  initialFocusRef,
+  panelClassName = 'max-w-lg',
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  titleId: string;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
+  panelClassName?: string;
+  children: React.ReactNode;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTarget = () => {
+      const nextFocus =
+        initialFocusRef?.current ||
+        panelRef.current?.querySelector<HTMLElement>(MODAL_FOCUSABLE_SELECTOR) ||
+        panelRef.current;
+      nextFocus?.focus();
+    };
+
+    const frame = window.requestAnimationFrame(focusTarget);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR);
+      if (!focusable || focusable.length === 0) {
+        event.preventDefault();
+        panelRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement?.focus();
+    };
+  }, [initialFocusRef, onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm transition-opacity duration-200"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`w-full ${panelClassName} rounded-2xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl transition-all duration-200`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: AdminToast[];
+  onDismiss: (id: string) => void;
+}) {
+  if (toasts.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[80] flex w-full max-w-sm flex-col gap-3">
+      {toasts.map((toast) => {
+        const toneClasses = toast.tone === 'success'
+          ? 'border-emerald-500/40 bg-emerald-950/95 text-emerald-50'
+          : 'border-red-500/40 bg-red-950/95 text-red-50';
+
+        return (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl transition-all duration-200 ${toneClasses}`}
+            role={toast.tone === 'error' ? 'alert' : 'status'}
+            aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
+          >
+            {toast.tone === 'success' ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+            ) : (
+              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+            )}
+            <p className="flex-1 text-sm leading-6">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() => onDismiss(toast.id)}
+              className="rounded-full p-1 text-current/70 transition hover:bg-white/10 hover:text-white"
+              aria-label="Dismiss notification"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function AdminDashboard() {
@@ -66,6 +280,15 @@ type ImportPreviewItem = {
 
 // ... inside component ...
 const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(null);
+  const [importFeedback, setImportFeedback] = useState<ImportFeedback | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAdminAction | null>(null);
+  const [toasts, setToasts] = useState<AdminToast[]>([]);
+  const [isNewSeasonModalOpen, setIsNewSeasonModalOpen] = useState(false);
+  const [newSeasonForm, setNewSeasonForm] = useState<NewSeasonFormState>({
+    seasonId: '',
+    label: '',
+    error: null,
+  });
 
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [bracketsVisible, setBracketsVisible] = useState(false);
@@ -73,11 +296,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const newSeasonIdInputRef = useRef<HTMLInputElement>(null);
+  const toastTimeoutsRef = useRef<Record<string, number>>({});
 
   // Season state
-  const [activeSeason, setActiveSeason] = useState<string>('2026');
+  const [activeSeason, setActiveSeason] = useState<string>(getCurrentSeasonFallback);
   const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
+  const selectedSeasonEntry = seasons.find(s => s.id === selectedSeason);
+  const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
+  const selectedSeasonLabel = selectedSeasonEntry?.label || `Season ${selectedSeason || activeSeason}`;
+  const activeSeasonLabel = seasons.find(s => s.id === activeSeason)?.label;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -97,55 +326,170 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       // Full SeasonConfig
       if (data.seasons) {
         setSeasons(data.seasons);
-        setActiveSeason(data.activeSeason || '2026');
-        setSelectedSeason(data.activeSeason || '2026');
-        const active = data.seasons.find((s: SeasonEntry) => s.id === data.activeSeason);
+        const resolvedSeason = data.activeSeason || data.seasons[0]?.id || getCurrentSeasonFallback();
+        setActiveSeason(resolvedSeason);
+        setSelectedSeason(resolvedSeason);
+        const active = data.seasons.find((s: SeasonEntry) => s.id === resolvedSeason);
         if (active) {
           setRegistrationOpen(active.registrationOpen !== false);
           setBracketsVisible(active.bracketsVisible === true);
         }
       } else {
         // Backward compat fallback
+        const resolvedSeason = getCurrentSeasonFallback();
+        setActiveSeason(resolvedSeason);
+        setSelectedSeason(resolvedSeason);
         setRegistrationOpen(data.registrationOpen !== false);
         setBracketsVisible(data.bracketsVisible === true);
       }
     }).catch(() => setApiError(true)).finally(() => setSettingsLoaded(true));
   }, []);
 
-  const toggleRegistration = async () => {
-    const newState = !registrationOpen;
-    if (!confirm(newState ? 'Re-open registrations?' : 'Close registrations? Users won\'t be able to sign up.')) return;
-    
+  useEffect(() => {
+    if (!selectedSeasonEntry) return;
+    setRegistrationOpen(selectedSeasonEntry.registrationOpen !== false);
+    setBracketsVisible(selectedSeasonEntry.bracketsVisible === true);
+    setSeedingMode(false);
+    setEditingMatch(null);
+    setImportPreview(null);
+    setImportFeedback(null);
+    setImporting(false);
+    setPendingAction(null);
+    setShowExportMenu(false);
+  }, [selectedSeason]);
+
+  const dismissToast = useCallback((id: string) => {
+    const timeoutId = toastTimeoutsRef.current[id];
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+      delete toastTimeoutsRef.current[id];
+    }
+
+    setToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback((message: string, tone: AdminToast['tone']) => {
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    setToasts((currentToasts) => [...currentToasts, { id, message, tone }]);
+
+    if (tone === 'success') {
+      toastTimeoutsRef.current[id] = window.setTimeout(() => {
+        dismissToast(id);
+      }, 4000);
+    }
+  }, [dismissToast]);
+
+  useEffect(() => (
+    () => {
+      Object.values(toastTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
+      toastTimeoutsRef.current = {};
+    }
+  ), []);
+
+  const closeNewSeasonModal = useCallback(() => {
+    setIsNewSeasonModalOpen(false);
+    setNewSeasonForm({ seasonId: '', label: '', error: null });
+  }, []);
+
+  const openNewSeasonModal = useCallback(() => {
+    setNewSeasonForm({ seasonId: '', label: '', error: null });
+    setIsNewSeasonModalOpen(true);
+  }, []);
+
+  const updateNewSeasonId = useCallback((seasonId: string) => {
+    setNewSeasonForm((currentForm) => {
+      const trimmedPreviousSeasonId = currentForm.seasonId.trim();
+      const previousAutoLabel = trimmedPreviousSeasonId ? `Baddy Bash ${trimmedPreviousSeasonId}` : '';
+      const shouldSyncLabel = currentForm.label.trim() === '' || currentForm.label === previousAutoLabel;
+
+      return {
+        seasonId,
+        label: shouldSyncLabel && seasonId.trim() ? `Baddy Bash ${seasonId.trim()}` : currentForm.label,
+        error: null,
+      };
+    });
+  }, []);
+
+  const requestCreateSeason = useCallback(() => {
+    const seasonId = newSeasonForm.seasonId.trim();
+    const label = newSeasonForm.label.trim();
+
+    if (!seasonId || !label) {
+      setNewSeasonForm((currentForm) => ({
+        ...currentForm,
+        error: 'Season ID and label are required.',
+      }));
+      return;
+    }
+
+    setIsNewSeasonModalOpen(false);
+    setPendingAction({ type: 'create-season', seasonId, label });
+  }, [newSeasonForm.label, newSeasonForm.seasonId]);
+
+  const updateSelectedSeasonSettings = async (updates: Partial<Pick<SeasonEntry, 'registrationOpen' | 'bracketsVisible'>>) => {
+    if (!selectedSeason) throw new Error('No season selected');
+    const updatedSeasons = seasons.map(season =>
+      season.id === selectedSeason
+        ? { ...season, ...updates }
+        : season
+    );
+
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateSeason',
+        config: {
+          id: 'SEASON_CONFIG',
+          activeSeason,
+          seasons: updatedSeasons,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to update settings');
+    }
+
+    const config = await res.json();
+    setSeasons(config.seasons);
+    setActiveSeason(config.activeSeason);
+  };
+
+  const applyRegistrationToggle = async (newState: boolean) => {
     setRegistrationOpen(newState);
     try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationOpen: newState }),
-      });
+      await updateSelectedSeasonSettings({ registrationOpen: newState });
     } catch (err) {
       console.error(err);
       setRegistrationOpen(!newState);
-      alert('Failed to update settings');
+      showToast('Failed to update settings', 'error');
     }
   };
 
-  const toggleBrackets = async () => {
-    const newState = !bracketsVisible;
-    if (!confirm(newState ? 'Publish fixtures? All users will be able to see them.' : 'Hide fixtures? They will only be visible to admins.')) return;
-    
+  const toggleRegistration = () => {
+    if (isSelectedSeasonArchived) return;
+    setPendingAction({ type: 'toggle-registration', nextState: !registrationOpen });
+  };
+
+  const applyBracketsToggle = async (newState: boolean) => {
     setBracketsVisible(newState);
     try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bracketsVisible: newState }),
-      });
+      await updateSelectedSeasonSettings({ bracketsVisible: newState });
     } catch (err) {
       console.error(err);
       setBracketsVisible(!newState);
-      alert('Failed to update settings');
+      showToast('Failed to update settings', 'error');
     }
+  };
+
+  const toggleBrackets = () => {
+    if (isSelectedSeasonArchived) return;
+    setPendingAction({ type: 'toggle-brackets', nextState: !bracketsVisible });
   };
 
 
@@ -213,6 +557,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   }, [selectedCategory, activeTab, fetchPlayers, fetchMatches]);
 
   const handleSeedChange = async (registrationId: string, userId: string, value: string) => {
+    if (isSelectedSeasonArchived) return;
+
     // Find the original seed from the players data (server state)
     const player = players.find(p => p.registrations.some(r => r.id === registrationId));
     const reg = player?.registrations.find(r => r.id === registrationId);
@@ -232,12 +578,13 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           registrationId,
           userId,
           seed: value ? Number(value) : null,
+          season: selectedSeason,
         }),
       });
       
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Failed to update seed');
+        showToast(err.error || 'Failed to update seed', 'error');
         // Revert to server value on error
         setSeedValues(p => ({ ...p, [registrationId]: serverSeed }));
       } else {
@@ -260,6 +607,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   };
 
   const handleSaveSeeds = async (source: 'visualizer' | 'list' = 'visualizer') => {
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+      return;
+    }
+
     // Build a single seed map: registrationId -> seed number
     let seedMap: Record<string, number | null>;
 
@@ -284,16 +636,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         body: JSON.stringify({
           category: selectedCategory,
           seeds: seedMap,
+          season: selectedSeason,
         }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Failed to save seeds.');
+        showToast(err.error || 'Failed to save seeds.', 'error');
       } else {
         const result = await res.json();
         if (result.failed > 0) {
-          alert(`${result.failed} of ${result.total} seed(s) failed to save.`);
+          showToast(`${result.failed} of ${result.total} seed(s) failed to save.`, 'error');
         }
       }
 
@@ -301,15 +654,27 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       await fetchPlayers();
     } catch (err) {
       console.error('Failed to save seeds:', err);
-      alert('Failed to save seeds.');
+      showToast('Failed to save seeds.', 'error');
     } finally {
       setSavingSeeds(false);
     }
   };
 
+  const requestSaveSeeds = (source: 'visualizer' | 'list' = 'visualizer') => {
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+      return;
+    }
+
+    setPendingAction({ type: 'save-seeds', source });
+  };
+
   const handleGenerateFixtures = async () => {
-    if (!seedingMode && !confirm(`Generate bracket for ${selectedCategory}? This will replace any existing bracket.`)) return;
-    
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+      return;
+    }
+     
     // Build seed map from visualizer state if active
     // For doubles, key by pairKey (deterministic sorted "userId|partnerId")
     // so the API can look up seeds regardless of which partner's registration it encounters first
@@ -344,6 +709,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           category: selectedCategory,
+          seasonId: selectedSeason,
           seeds: seedingMode ? seedMap : undefined
         }),
       });
@@ -354,20 +720,34 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         setActiveTab('matches');
       } else {
         const err = await res.json();
-        alert(`Error: ${err.error}`);
+        showToast(`Error: ${err.error}`, 'error');
       }
     } catch (err) {
       console.error('Failed to generate fixtures:', err);
-      alert('Failed to generate fixtures.');
+      showToast('Failed to generate fixtures.', 'error');
     } finally {
       setGenerating(false);
     }
   };
 
+  const requestGenerateFixtures = () => {
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+      return;
+    }
+
+    setPendingAction({ type: 'generate-fixtures' });
+  };
+
   const startSeeding = () => {
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+       return;
+    }
+
     const flatRegs = players.flatMap(p => p.registrations);
     if (flatRegs.length < 2) {
-       alert('Not enough players/teams to seed.');
+      showToast('Not enough players/teams to seed.', 'error');
        return;
     }
 
@@ -403,13 +783,6 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setSeedingMode(true);
   };
 
-  const CATEGORIES: { id: Category; name: string }[] = [
-    { id: 'MS', name: "Men's Singles" },
-    { id: 'WS', name: "Women's Singles" },
-    { id: 'MD', name: "Men's Doubles" },
-    { id: 'WD', name: "Women's Doubles" },
-    { id: 'XD', name: "Mixed Doubles" },
-  ];
 
   const handleExport = async () => {
     setShowExportMenu(false);
@@ -524,19 +897,27 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     worksheet.getRow(1).font = { bold: true };
     
     const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `BaddyBash_2026_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    saveAs(new Blob([buffer]), `BaddyBash_${selectedSeason || activeSeason}_Players_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isSelectedSeasonArchived) {
+      showToast('Archived seasons are read-only.', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
     setImporting(true);
     setImportPreview(null); // Clear previous
+    setImportFeedback(null);
 
     try {
       // 1. Fetch current matches to compare against
-      const res = await fetch(`/api/matches?category=${selectedCategory}`);
+      const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
+      const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
       if (!res.ok) throw new Error("Failed to fetch current matches");
       const currentMatches: MatchDocument[] = await res.json();
       const matchMap = new Map(currentMatches.map(m => [m.id, m]));
@@ -672,13 +1053,13 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
       setImportPreview(pendingChanges);
       if (pendingChanges.length === 0) {
-        alert("No changes detected in the file.");
+        showToast('No changes detected in the file.', 'error');
         setImporting(false);
       }
 
     } catch (err) {
       console.error(err);
-      alert("Failed to parse file: " + (err as Error).message);
+      showToast(`Failed to parse file: ${(err as Error).message}`, 'error');
       setImporting(false);
     } finally {
         if (fileInputRef.current) fileInputRef.current.value = ""; // Reset input
@@ -686,6 +1067,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   };
 
   const executeImport = async () => {
+      if (isSelectedSeasonArchived) {
+        showToast('Archived seasons are read-only.', 'error');
+        return;
+      }
       if (!importPreview || importPreview.length === 0) return;
       
       try {
@@ -707,32 +1092,81 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
              player2Id: u.player2Id,
              player2Name: u.player2Name,
              player2Seed: u.player2Seed,
+             seasonId: u.seasonId,
            };
         });
 
         const res = await fetch('/api/admin/import/bracket', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates }),
+          body: JSON.stringify({ updates, season: selectedSeason }),
         });
 
-        if (!res.ok) {
-          const err = await res.json();
-          alert(`Import failed: ${err.error || 'Unknown error'}`);
+        const result = await res.json();
+        const errors = Array.isArray(result.errors) ? result.errors as ImportErrorDetail[] : [];
+        const updated = typeof result.updated === 'number' ? result.updated : 0;
+        const failed = typeof result.failed === 'number' ? result.failed : errors.length;
+
+        if (res.status === 200) {
+          const message = `Successfully updated ${updated} match${updated === 1 ? '' : 'es'}.`;
+          setImportFeedback({
+            tone: 'success',
+            title: 'Fixtures import completed',
+            message,
+            errors: [],
+          });
+          showToast(message, 'success');
+          setImportPreview(null);
+          setImporting(false);
+          fetchMatches();
           return;
         }
 
-        const result = await res.json();
-        alert(`Successfully updated ${result.processed} matches.`);
-        
-        // Refresh and close
-        setImportPreview(null);
+        if (res.status === 207) {
+          const message = `Updated ${updated} match${updated === 1 ? '' : 'es'}, but ${failed} row${failed === 1 ? '' : 's'} failed.`;
+          setImportFeedback({
+            tone: 'warning',
+            title: 'Fixtures import partially completed',
+            message,
+            errors,
+          });
+          showToast(message, 'error');
+          setImportPreview(null);
+          setImporting(false);
+          fetchMatches();
+          return;
+        }
+
+        if (res.status === 400) {
+          const failureCount = errors.length;
+          const message = failureCount > 0
+            ? `No matches were updated. ${failureCount} row${failureCount === 1 ? '' : 's'} failed validation or update.`
+            : 'No matches were updated.';
+          setImportFeedback({
+            tone: 'error',
+            title: 'Fixtures import failed',
+            message,
+            errors,
+          });
+          setImporting(false);
+          showToast(`Import failed for ${failureCount} row${failureCount === 1 ? '' : 's'}. Review the error list for details.`, 'error');
+          return;
+        }
+
+        const fallbackMessage = result.error || 'Unknown error';
+        setImportFeedback({
+          tone: 'error',
+          title: 'Fixtures import failed',
+          message: fallbackMessage,
+          errors,
+        });
         setImporting(false);
-        fetchMatches(); // Reload grid
+        showToast(`Import failed: ${fallbackMessage}`, 'error');
 
       } catch (error) {
         console.error(error);
-        alert("Failed to execute import.");
+        setImporting(false);
+        showToast('Failed to execute import.', 'error');
       }
   };
 
@@ -740,10 +1174,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setShowExportMenu(false);
     setExporting(true);
     try {
-      const res = await fetch(`/api/matches?category=${selectedCategory}`);
-      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
+      const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
+      if (!res.ok) { showToast('No fixtures found for this category.', 'error'); return; }
       const matches: MatchDocument[] = await res.json();
-      if (matches.length === 0) { alert('No bracket generated yet for this category.'); return; }
+      if (matches.length === 0) { showToast('No fixtures generated yet for this category.', 'error'); return; }
 
       const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
       const totalRounds = Math.max(...matches.map(m => m.round));
@@ -803,11 +1238,11 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       worksheet.getRow(1).font = { bold: true };
       
       const buffer = await workbook.xlsx.writeBuffer();
-      saveAs(new Blob([buffer]), `BaddyBash_2026_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      saveAs(new Blob([buffer]), `BaddyBash_${selectedSeason || activeSeason}_Bracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
     } catch (err) {
       console.error('Failed to export bracket:', err);
-      alert('Failed to export bracket.');
+      showToast('Failed to export fixtures.', 'error');
     } finally {
       setExporting(false);
     }
@@ -817,46 +1252,200 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setShowExportMenu(false);
     setExporting(true);
     try {
-      const res = await fetch(`/api/matches?category=${selectedCategory}`);
-      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
+      const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
+      if (!res.ok) { showToast('No fixtures found for this category.', 'error'); return; }
       const data: MatchDocument[] = await res.json();
-      if (data.length === 0) { alert('No bracket generated yet for this category.'); return; }
+      if (data.length === 0) { showToast('No fixtures generated yet for this category.', 'error'); return; }
 
       const buffer = await exportVisualBracket(data, selectedCategory);
       saveAs(
         new Blob([buffer]),
-        `BaddyBash_2026_VisualBracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `BaddyBash_${selectedSeason || activeSeason}_VisualBracket_${selectedCategory}_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );
     } catch (err) {
       console.error('Failed to export visual bracket:', err);
-      alert('Failed to export visual bracket.');
+      showToast('Failed to export visual fixtures.', 'error');
     } finally {
       setExporting(false);
     }
   };
 
+  const requestExport = (exportType: ExportActionType) => {
+    setShowExportMenu(false);
+    setPendingAction({ type: 'export', exportType });
+  };
+
+  const requestImportCommit = () => {
+    if (!importPreview || importPreview.length === 0) return;
+    setPendingAction({ type: 'import' });
+  };
+
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+
+    const action = pendingAction;
+    setPendingAction(null);
+
+    if (action.type === 'toggle-registration') {
+      await applyRegistrationToggle(action.nextState);
+      return;
+    }
+
+    if (action.type === 'toggle-brackets') {
+      await applyBracketsToggle(action.nextState);
+      return;
+    }
+
+    if (action.type === 'save-seeds') {
+      await handleSaveSeeds(action.source);
+      return;
+    }
+
+    if (action.type === 'generate-fixtures') {
+      await handleGenerateFixtures();
+      return;
+    }
+
+    if (action.type === 'import') {
+      await executeImport();
+      return;
+    }
+
+    if (action.type === 'create-season') {
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'createSeason', seasonId: action.seasonId, label: action.label }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          showToast(err.error || 'Failed to create season', 'error');
+          return;
+        }
+        const config = await res.json();
+        setSeasons(config.seasons);
+        setActiveSeason(config.activeSeason);
+        setSelectedSeason(config.activeSeason);
+        showToast(`Season "${action.label}" created! Previous season has been archived.`, 'success');
+        fetchPlayers();
+      } catch {
+        showToast('Failed to create season', 'error');
+      }
+      return;
+    }
+
+    switch (action.exportType) {
+      case 'players-category':
+        await handleExport();
+        break;
+      case 'players-csv':
+        window.location.href = `/api/admin/export?season=${encodeURIComponent(selectedSeason || activeSeason)}`;
+        break;
+      case 'bracket':
+        await handleExportBracket();
+        break;
+      case 'visual-bracket':
+        await handleExportVisualBracket();
+        break;
+    }
+  };
+
+  const pendingActionDetails = pendingAction ? (() => {
+    switch (pendingAction.type) {
+      case 'toggle-registration':
+        return {
+          title: pendingAction.nextState
+            ? `Re-open registrations for ${selectedSeasonLabel}?`
+            : `Close registrations for ${selectedSeasonLabel}?`,
+          description: pendingAction.nextState
+            ? `Players will be able to sign up again for ${selectedSeasonLabel}.`
+            : `Players will no longer be able to sign up for ${selectedSeasonLabel}.`,
+          confirmLabel: pendingAction.nextState ? 'Open Registration' : 'Close Registration',
+          confirmClassName: pendingAction.nextState ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700',
+        };
+      case 'toggle-brackets':
+        return {
+          title: pendingAction.nextState
+            ? `Publish fixtures for ${selectedSeasonLabel}?`
+            : `Hide fixtures for ${selectedSeasonLabel}?`,
+          description: pendingAction.nextState
+            ? `All users will be able to view the ${selectedCategory} fixtures for ${selectedSeasonLabel}.`
+            : `Fixtures for ${selectedSeasonLabel} will only be visible to admins.`,
+          confirmLabel: pendingAction.nextState ? 'Publish Fixtures' : 'Hide Fixtures',
+          confirmClassName: pendingAction.nextState ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800',
+        };
+      case 'save-seeds':
+        return {
+          title: `Save seeds for ${selectedSeasonLabel}?`,
+          description: `This will persist the current seed order for ${CATEGORIES.find((category) => category.id === selectedCategory)?.name || selectedCategory} in ${selectedSeasonLabel}.`,
+          confirmLabel: 'Save Seeds',
+          confirmClassName: 'bg-blue-600 hover:bg-blue-700',
+        };
+      case 'generate-fixtures':
+        return {
+          title: `Generate fixtures for ${selectedSeasonLabel}?`,
+          description: `This will ${seedingMode ? 'generate' : 'replace'} the ${selectedCategory} bracket for ${selectedSeasonLabel}.`,
+          confirmLabel: 'Generate Fixtures',
+          confirmClassName: 'bg-green-600 hover:bg-green-700',
+        };
+      case 'import':
+        return {
+          title: `Import fixture changes for ${selectedSeasonLabel}?`,
+          description: `This will apply ${importPreview?.length || 0} queued match updates to ${selectedSeasonLabel}.`,
+          confirmLabel: 'Commit Import',
+          confirmClassName: 'bg-emerald-600 hover:bg-emerald-700',
+        };
+      case 'create-season':
+        return {
+          title: `Create "${pendingAction.label}"?`,
+          description: `This will create season ID ${pendingAction.seasonId} as "${pendingAction.label}" and archive the current active season.`,
+          confirmLabel: 'Create Season',
+          confirmClassName: 'bg-indigo-600 hover:bg-indigo-700',
+        };
+      case 'export': {
+        const exportLabels: Record<ExportActionType, string> = {
+          'players-category': `${selectedCategory} player list`,
+          'players-csv': 'all-player CSV export',
+          bracket: `${selectedCategory} fixtures export`,
+          'visual-bracket': `${selectedCategory} visual fixtures export`,
+        };
+
+        return {
+          title: `Export ${selectedSeasonLabel}?`,
+          description: `You are exporting the ${exportLabels[pendingAction.exportType]} for ${selectedSeasonLabel}.`,
+          confirmLabel: 'Export',
+          confirmClassName: 'bg-blue-600 hover:bg-blue-700',
+        };
+      }
+    }
+  })() : null;
+
   // Auth loading or settings not yet loaded
   if (sessionStatus === 'loading' || !settingsLoaded) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
+      <AdminShell seasonLabel={activeSeasonLabel}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           <span className="ml-3 text-slate-600">Checking access...</span>
         </div>
-      </div>
+      </AdminShell>
     );
   }
 
   if (apiError) {
-    return <ErrorScreen title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />;
+    return (
+      <AdminShell seasonLabel={activeSeasonLabel}>
+        <ErrorScreen bare title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />
+      </AdminShell>
+    );
   }
 
   // Non-admin gate
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
+      <AdminShell seasonLabel={activeSeasonLabel}>
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <ShieldAlert className="w-16 h-16 text-red-400" />
           <h1 className="text-2xl font-bold text-slate-800">Access Denied</h1>
@@ -868,13 +1457,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             Go to Dashboard
           </button>
         </div>
-      </div>
+      </AdminShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
+    <AdminShell seasonLabel={activeSeasonLabel}>
       <main className="container mx-auto py-8 px-4">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
@@ -898,31 +1486,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             )}
             {/* New Season button */}
             <button
-              onClick={async () => {
-                const year = prompt('Enter new season ID (e.g., "2027"):');
-                if (!year) return;
-                const label = prompt('Enter season label:', `Baddy Bash ${year}`);
-                if (!label) return;
-                if (!confirm(`Create "${label}" and archive the current season?`)) return;
-                try {
-                  const res = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'createSeason', seasonId: year, label }),
-                  });
-                  if (!res.ok) {
-                    const err = await res.json();
-                    alert(err.error || 'Failed to create season');
-                    return;
-                  }
-                  const config = await res.json();
-                  setSeasons(config.seasons);
-                  setActiveSeason(config.activeSeason);
-                  setSelectedSeason(config.activeSeason);
-                  alert(`Season "${label}" created! Previous season has been archived.`);
-                  fetchPlayers();
-                } catch { alert('Failed to create season'); }
-              }}
+              onClick={openNewSeasonModal}
               className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 min-h-[44px]"
               title="Create New Season"
             >
@@ -930,31 +1494,33 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               <span className="hidden sm:inline">New Season</span>
             </button>
             {/* Archived indicator */}
-            {seasons.find(s => s.id === selectedSeason)?.archived && (
-              <span className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                <Archive size={14} /> Viewing Archived Season
+            {isSelectedSeasonArchived && (
+              <span className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                <Archive size={14} /> 📦 Archived Season — Read Only
               </span>
             )}
             <button
               onClick={toggleBrackets}
+              disabled={isSelectedSeasonArchived}
               className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border min-h-[44px] ${
                 bracketsVisible 
                   ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' 
                   : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
-              }`}
-              title={bracketsVisible ? 'Hide Fixtures' : 'Publish Fixtures'}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : bracketsVisible ? 'Hide Fixtures' : 'Publish Fixtures'}
             >
               {bracketsVisible ? <Trophy size={16} /> : <Lock size={16} />}
               <span className="hidden sm:inline">{bracketsVisible ? 'Fixtures Live' : 'Fixtures Hidden'}</span>
             </button>
             <button
               onClick={toggleRegistration}
+              disabled={isSelectedSeasonArchived}
               className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium border min-h-[44px] ${
                 registrationOpen 
                   ? 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100' 
                   : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
-              }`}
-              title={registrationOpen ? 'Close Registrations' : 'Re-open Registrations'}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : registrationOpen ? 'Close Registrations' : 'Re-open Registrations'}
             >
               {registrationOpen ? <Lock size={16} /> : <Unlock size={16} />}
               <span className="hidden sm:inline">{registrationOpen ? 'Close Reg' : 'Open Reg'}</span>
@@ -981,29 +1547,29 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
               {showExportMenu && (
                 <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1">
                   <button
-                    onClick={() => { setShowExportMenu(false); handleExport(); }}
+                    onClick={() => requestExport('players-category')}
                     disabled={loading || players.length === 0}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                   >
                     📋 Players (Category)
                   </button>
                   <button
-                    onClick={() => { setShowExportMenu(false); window.location.href = '/api/admin/export'; }}
+                    onClick={() => requestExport('players-csv')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
                     🌍 All Players (CSV)
                   </button>
                   <button
-                    onClick={handleExportBracket}
+                    onClick={() => requestExport('bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
-                    🏆 Bracket / Draw
+                    🏆 Fixtures / Draw
                   </button>
                   <button
-                    onClick={handleExportVisualBracket}
+                    onClick={() => requestExport('visual-bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
-                    🎯 Visual Bracket
+                    🎯 Visual Fixtures
                   </button>
                 </div>
               )}
@@ -1020,9 +1586,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 min-h-[44px]"
-              title="Import Bracket Data"
+              disabled={importing || isSelectedSeasonArchived}
+              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1.5 hover:bg-slate-200 border border-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 min-h-[44px]"
+              title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : 'Import Bracket Data'}
             >
               <Upload size={16} />
               <span className="hidden sm:inline">Import</span>
@@ -1030,20 +1596,156 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           </div>
         </header>
 
+        {isSelectedSeasonArchived && (
+          <div className="mb-6 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-5 py-4 text-slate-800 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl" aria-hidden="true">📦</span>
+                <div>
+                  <p className="font-semibold">Archived Season — Read Only</p>
+                  <p className="text-sm text-slate-600">
+                    You are viewing <span className="font-medium">{selectedSeasonLabel}</span>. Editing, seeding, imports, and fixture generation are disabled, but exports remain available.
+                  </p>
+                </div>
+              </div>
+              <span className="self-start rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                Season context: {selectedSeason}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <AdminModal
+          open={!!pendingAction && !!pendingActionDetails}
+          onClose={() => setPendingAction(null)}
+          titleId="admin-season-action-title"
+        >
+          <div className="border-b border-slate-800 px-6 py-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Season Operation</p>
+            <h2 id="admin-season-action-title" className="mt-2 text-xl font-bold text-white">
+              {pendingActionDetails?.title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{pendingActionDetails?.description}</p>
+          </div>
+          <div className="flex justify-end gap-3 px-6 py-4">
+            <button
+              type="button"
+              onClick={() => setPendingAction(null)}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={executePendingAction}
+              className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition ${pendingActionDetails?.confirmClassName || 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              {pendingActionDetails?.confirmLabel}
+            </button>
+          </div>
+        </AdminModal>
+        
+        <AdminModal
+          open={isNewSeasonModalOpen}
+          onClose={closeNewSeasonModal}
+          titleId="new-season-modal-title"
+          initialFocusRef={newSeasonIdInputRef}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              requestCreateSeason();
+            }}
+          >
+            <div className="border-b border-slate-800 px-6 py-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-300/80">Season Setup</p>
+              <h2 id="new-season-modal-title" className="mt-2 text-xl font-bold text-white">
+                Create New Season
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Add a new active season and archive the current one once you confirm the next step.
+              </p>
+            </div>
+            <div className="space-y-5 px-6 py-5">
+              <div>
+                <label htmlFor="new-season-id" className="text-sm font-medium text-slate-200">
+                  Season ID
+                </label>
+                <input
+                  id="new-season-id"
+                  ref={newSeasonIdInputRef}
+                  type="text"
+                  value={newSeasonForm.seasonId}
+                  onChange={(event) => updateNewSeasonId(event.target.value)}
+                  placeholder="2027"
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="new-season-label" className="text-sm font-medium text-slate-200">
+                  Season label
+                </label>
+                <input
+                  id="new-season-label"
+                  type="text"
+                  value={newSeasonForm.label}
+                  onChange={(event) => setNewSeasonForm((currentForm) => ({
+                    ...currentForm,
+                    label: event.target.value,
+                    error: null,
+                  }))}
+                  placeholder="Baddy Bash 2027"
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30"
+                />
+              </div>
+              {newSeasonForm.error && (
+                <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+                  {newSeasonForm.error}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-800 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeNewSeasonModal}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              >
+                Continue
+              </button>
+            </div>
+          </form>
+        </AdminModal>
+
         {/* Import Preview Modal */}
         {importPreview && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
               <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Review Changes
-                </h2>
+                <div>
+                  <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    Review Changes
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Importing updates into <span className="font-medium text-slate-700">{selectedSeasonLabel}</span>
+                  </p>
+                </div>
                 <div className="text-sm text-slate-500">
                   {importPreview.length} matches to update
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
+                {importFeedback && (
+                  <div className="mb-4">
+                    <ImportFeedbackPanel feedback={importFeedback} />
+                  </div>
+                )}
                 {importPreview.length === 0 ? (
                   <p className="text-center text-slate-500">No changes detected.</p>
                 ) : (
@@ -1090,7 +1792,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                   Cancel
                 </button>
                 <button
-                  onClick={executeImport}
+                  onClick={requestImportCommit}
                   className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 shadow-sm"
                 >
                   Commit {importPreview.length} Changes
@@ -1133,6 +1835,12 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
             {activeTab === 'registrations' ? (
               <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                {isSelectedSeasonArchived && (
+                  <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 text-sm text-amber-700 flex items-center gap-2">
+                    <Archive size={16} />
+                    Archived seasons are read-only. Seed changes and bracket generation are disabled.
+                  </div>
+                )}
                 {seedingMode ? (
                     <div className="p-6">
                        <div className="flex justify-between items-center mb-6">
@@ -1148,17 +1856,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                              Cancel
                            </button>
                            <button 
-                             onClick={() => handleSaveSeeds('visualizer')}
-                             disabled={savingSeeds}
-                             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2"
+                             onClick={() => requestSaveSeeds('visualizer')}
+                             disabled={savingSeeds || isSelectedSeasonArchived}
+                             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-2 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                            >
                              {savingSeeds ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                              Save Seeds
                            </button>
                            <button 
-                             onClick={handleGenerateFixtures}
-                             disabled={generating}
-                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+                             onClick={requestGenerateFixtures}
+                             disabled={generating || isSelectedSeasonArchived}
+                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 disabled:bg-slate-200 disabled:text-slate-500"
                            >
                              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                              Generate Bracket
@@ -1193,16 +1901,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         })()}
                         </span>
                         <button 
-                          onClick={() => handleSaveSeeds('list')}
-                          disabled={savingSeeds || Object.keys(seedValues).length === 0}
-                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1 ml-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => requestSaveSeeds('list')}
+                          disabled={savingSeeds || isSelectedSeasonArchived || Object.keys(seedValues).length === 0}
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1 ml-4 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                         >
                           {savingSeeds ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                           Save Seeds
                         </button>
                         <button 
                           onClick={startSeeding}
-                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1"
+                          disabled={isSelectedSeasonArchived}
+                          className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                         >
                           <ArrowRight className="w-3 h-3" />
                           Seed & Generate
@@ -1344,6 +2053,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                                       className={`w-20 border rounded px-2 py-1 text-center text-sm ${isDuplicate ? 'border-red-500 bg-red-50 text-red-700' : ''}`}
                                       placeholder="-"
                                       value={val}
+                                      disabled={isSelectedSeasonArchived}
                                       onChange={(e) => setSeedValues(p => ({ ...p, [reg.id]: e.target.value }))}
                                       onBlur={() => handleSeedChange(reg.id, reg.userId, val)}
                                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -1369,6 +2079,17 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             ) : (
                 /* MATCHES SECTION */
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    {isSelectedSeasonArchived && (
+                        <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 text-sm text-amber-700 flex items-center gap-2">
+                            <Archive size={16} />
+                            Archived seasons are read-only. Bracket generation and match updates are disabled.
+                        </div>
+                    )}
+                    {importFeedback && (
+                        <div className="border-b border-slate-100 px-6 py-4">
+                            <ImportFeedbackPanel feedback={importFeedback} />
+                        </div>
+                    )}
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                         <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
                             <Swords className="w-5 h-5 text-blue-600" />
@@ -1377,10 +2098,10 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                         <div className="flex gap-2">
                             {matches.length > 0 && (
                                 <button
-                                    onClick={handleGenerateFixtures}
-                                    disabled={generating}
-                                    className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50"
-                                    title="Regenerate Bracket"
+                                    onClick={requestGenerateFixtures}
+                                    disabled={generating || isSelectedSeasonArchived}
+                                    className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 disabled:bg-slate-100 disabled:text-slate-400"
+                                    title={isSelectedSeasonArchived ? 'Archived seasons are read-only' : 'Regenerate Bracket'}
                                 >
                                     {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                                 </button>
@@ -1401,9 +2122,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                              <Trophy className="w-12 h-12 text-slate-300" />
                              <p>No matches found for this category.</p>
                              <button 
-                                onClick={handleGenerateFixtures}
-                                disabled={generating}
-                                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
+                                onClick={requestGenerateFixtures}
+                                disabled={generating || isSelectedSeasonArchived}
+                                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500 flex items-center gap-2 font-medium"
                              >
                                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                                 Generate Bracket
@@ -1462,7 +2183,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                                                 {m.status !== 'bye' && (
                                                     <button 
                                                         onClick={() => setEditingMatch(m)}
-                                                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-xs font-semibold transition-colors"
+                                                        disabled={isSelectedSeasonArchived}
+                                                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         Update
                                                     </button>
@@ -1487,6 +2209,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           </>
         )}
       </main>
-    </div>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+    </AdminShell>
   );
 }

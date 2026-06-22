@@ -26,7 +26,7 @@ const orbitron = Black_Ops_One({
 });
 
 export const metadata: Metadata = {
-  title: "Baddy Bash 2026 Portal",
+  title: "Baddy Bash Portal",
   description: "Microsoft Internal Badminton Tournament Portal",
 };
 
@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${bebasNeue.variable} ${orbitron.variable} antialiased`}
       >
