@@ -75,6 +75,8 @@ interface HistoricalSeasonData {
   resultsAvailable: boolean;
 }
 
+type UserLookupState = 'pending' | 'found' | 'missing';
+
 export default function Dashboard() {
   const { data: session, status: sessionStatus } = useSession();
   const [playerName, setPlayerName] = useState('');
@@ -89,8 +91,9 @@ export default function Dashboard() {
   const [committedCategories, setCommittedCategories] = useState<Category[]>([]);
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
   const [selection, setSelection] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userLookupDone, setUserLookupDone] = useState(false);
+  // Only show the registration form after the profile lookup explicitly confirms
+  // that no profile exists for the authenticated user.
+  const [userLookupState, setUserLookupState] = useState<UserLookupState>('pending');
   const [saving, setSaving] = useState(false);
   const [linkingAlias, setLinkingAlias] = useState(false);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
@@ -136,10 +139,9 @@ export default function Dashboard() {
   }, []);
 
   // Determine if profile is fully set up.
-  // The user is considered registered if they have an alias associated with their account.
-  // Email is used for login/lookup, but the alias is the core identity.
-  const profileSaved = !!savedAlias;
-
+  // Email is used only for lookup — the actual Cosmos user ID is always the alias.
+  const profileSaved = userLookupState === 'found' && !!savedAlias && !!resolvedUserId;
+ 
   // sessionEmail is used only for lookup — the actual Cosmos user ID is always the alias
   const sessionEmail = session?.user?.email || '';
   const userId = resolvedUserId || '';
@@ -150,7 +152,6 @@ export default function Dashboard() {
     const targetId = uid || userId;
     if (!targetId) return;
     try {
-      setLoading(true);
       const res = await fetchWithTimeout(`/api/registrations?userId=${encodeURIComponent(targetId)}`);
       if (res.ok) {
         const regs: Registration[] = await res.json();
@@ -160,15 +161,22 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch registrations:', err);
-    } finally {
-      setLoading(false);
     }
   }, [userId]);
 
   // On login: look up existing user by email — NO doc creation here
   useEffect(() => {
-    if (sessionStatus !== 'authenticated' || !session?.user) return;
+    if (sessionStatus !== 'authenticated') return;
+    if (!sessionEmail) {
+      setUserLookupState('pending');
+      return;
+    }
+
     const controller = new AbortController();
+    let active = true;
+
+    setUserLookupState('pending');
+
     const initUser = async () => {
       try {
         // Look up by email to see if this user has already set up their profile
@@ -177,6 +185,7 @@ export default function Dashboard() {
           const user = await res.json();
           // Check if we got a valid user object with required fields
           if (user && user.alias) {
+            if (!active) return;
             setSavedName(user.name);
             setSavedAlias(user.alias);
             setSavedPhone(user.phoneNumber);
@@ -186,25 +195,31 @@ export default function Dashboard() {
             setPhoneNumber(user.phoneNumber || '');
             setTShirtSize(user.tShirtSize || '');
             setResolvedUserId(user.id); // id = alias
+            setUserLookupState('found');
+            return;
           }
+          if (!active) return;
+          setUserLookupState('missing');
         } else if (res.status !== 404) {
           // 500/403/401 — service is down or auth broken
           console.error('Users API error:', res.status);
-          setApiError(true);
+          if (active) setApiError(true);
+        } else if (active) {
+          // 404 means the user has not created a profile yet.
+          setUserLookupState('missing');
         }
-        // If 404, user hasn't set up profile yet — that's fine, show the setup form
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to init user:', err);
-        setApiError(true);
-      } finally {
-        setUserLookupDone(true);
-        setLoading(false);
+        if (active) setApiError(true);
       }
     };
     initUser();
-    return () => controller.abort();
-  }, [sessionStatus, session, sessionEmail]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [sessionStatus, sessionEmail]);
 
   useEffect(() => {
     if (sessionStatus === 'authenticated' && profileSaved) {
@@ -427,7 +442,6 @@ export default function Dashboard() {
     if (!confirm(`Are you sure you want to withdraw from ${CATEGORIES.find(c => c.id === catId)?.name}?`)) return;
 
     try {
-      setLoading(true);
       const res = await fetch(`/api/registrations?userId=${encodeURIComponent(userId)}&category=${catId}`, {
         method: 'DELETE',
       });
@@ -442,8 +456,6 @@ export default function Dashboard() {
     } catch (err: unknown) {
       console.error('Withdraw failed:', err);
       alert(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -506,6 +518,7 @@ export default function Dashboard() {
         setSavedPhone(phoneNumber.trim());
         setSavedTShirtSize(tShirtSize.trim());
         setIsEditingProfile(false);
+        setUserLookupState('found');
         await fetchRegistrations(existingUser.id);
       } else {
         // No pre-existing user — create a new user with id = alias (lowercase)
@@ -534,6 +547,7 @@ export default function Dashboard() {
         setSavedPhone(phoneNumber.trim());
         setSavedTShirtSize(tShirtSize.trim());
         setIsEditingProfile(false);
+        setUserLookupState('found');
         await fetchRegistrations(cleanAlias);
       }
     } catch (err: unknown) {
@@ -602,7 +616,10 @@ export default function Dashboard() {
     );
   }
 
-  if (sessionStatus === 'loading' || !userLookupDone || !settingsLoaded) {
+  const waitingForUserLookup = sessionStatus === 'authenticated' && userLookupState === 'pending';
+  const hydratingResolvedProfile = sessionStatus === 'authenticated' && userLookupState === 'found' && !profileSaved;
+
+  if (sessionStatus === 'loading' || waitingForUserLookup || hydratingResolvedProfile || !settingsLoaded) {
     return (
       <DashboardShell>
         <div className="flex items-center justify-center py-32">
@@ -621,9 +638,9 @@ export default function Dashboard() {
     );
   }
 
-  // Subtle badminton SVG background
   // Profile-first gate: if alias/name/phone not saved, show setup form
-  if (!profileSaved || isEditingProfile) {
+  // Only show form AFTER we've explicitly confirmed the lookup result is "missing"
+  if (userLookupState === 'missing' || isEditingProfile) {
     return (
       <DashboardShell
         className="min-h-screen relative"

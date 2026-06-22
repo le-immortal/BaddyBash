@@ -32,7 +32,7 @@ export default function Navbar({ seasonLabel: externalLabel }: { seasonLabel?: s
     <nav className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
-          <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
+          <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition">
             <Image src="/microsoft-logo.svg" alt="Microsoft" width={24} height={24} />
             <span>{seasonLabel}</span>
           </Link>
