@@ -9,21 +9,24 @@ import { signInAction, signOutAction } from '@/app/lib/actions';
 import type { SeasonConfig } from '@/app/lib/models';
 import { getSeasonLabelFromConfig } from '@/app/lib/seasonLabels';
 
-export default function Navbar() {
+export default function Navbar({ seasonLabel: externalLabel }: { seasonLabel?: string } = {}) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
+  const [fetchedLabel, setFetchedLabel] = useState('Baddy Bash');
 
   useEffect(() => {
+    if (externalLabel) return; // skip fetch when parent provides label
     fetch('/api/settings?full=1')
       .then(r => r.ok ? r.json() : null)
       .then((config: SeasonConfig | null) => {
         if (!config?.seasons) return;
-        setSeasonLabel(getSeasonLabelFromConfig(config));
+        setFetchedLabel(getSeasonLabelFromConfig(config));
       })
       .catch(() => {});
-  }, []);
+  }, [externalLabel]);
+
+  const seasonLabel = externalLabel || fetchedLabel;
 
   return (
     <nav className="bg-slate-900 text-white shadow-md sticky top-0 z-50">

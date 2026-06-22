@@ -40,6 +40,7 @@ function BracketPageContent() {
     loading,
     matches,
     roundOffset,
+    seasonLabel,
     seasonOptions,
     selectedSeason,
     selectedSeasonEntry,
@@ -113,7 +114,7 @@ function BracketPageContent() {
 
   if (checkingAccess) {
     return (
-      <BracketShell>
+      <BracketShell seasonLabel={seasonLabel}>
         <div className="flex items-center justify-center py-32">
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         </div>
@@ -123,14 +124,14 @@ function BracketPageContent() {
 
   if (apiError) {
     return (
-      <BracketShell>
+      <BracketShell seasonLabel={seasonLabel}>
         <ErrorScreen bare title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />
       </BracketShell>
     );
   }
 
   return (
-    <BracketShell>
+    <BracketShell seasonLabel={seasonLabel}>
       <div className="container mx-auto py-8 px-4">
         <BracketPageHeader
           activeSeason={activeSeason}

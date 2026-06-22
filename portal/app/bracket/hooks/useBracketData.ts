@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Category, MatchDocument, SeasonEntry } from '@/app/lib/models';
 import { VISIBLE_ROUNDS, getCurrentSeasonFallback } from '../lib/bracketLayout';
+import { getSeasonLabel } from '@/app/lib/seasonLabels';
 
 export function useBracketData({ selectedCategory, isAdmin }: { selectedCategory: Category; isAdmin: boolean }) {
   const router = useRouter();
@@ -24,6 +25,8 @@ export function useBracketData({ selectedCategory, isAdmin }: { selectedCategory
   const [seasons, setSeasons] = useState<SeasonEntry[]>([]);
   const selectedSeasonEntry = seasons.find((season) => season.id === selectedSeason);
   const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
+  const activeSeasonEntry = seasons.find((s) => s.id === activeSeason);
+  const seasonLabel = activeSeasonEntry ? getSeasonLabel(activeSeasonEntry) : undefined;
   const publicSeasonOptions = useMemo(
     () => seasons.filter((season) => season.id === activeSeason || season.bracketsVisible),
     [seasons, activeSeason],
@@ -116,6 +119,7 @@ export function useBracketData({ selectedCategory, isAdmin }: { selectedCategory
     loading,
     matches,
     roundOffset,
+    seasonLabel,
     seasonOptions,
     selectedSeason,
     selectedSeasonEntry,

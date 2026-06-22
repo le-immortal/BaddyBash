@@ -866,8 +866,8 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Your Matches Section — shown when brackets are published, or always for admins */}
-        {true && (
+        {/* Your Matches Section — shown when fixtures are published, or always for admins */}
+        {(bracketsVisible || isAdmin) && (
           <>
             {/* Instructions to Players — collapsible */}
             <div className="mb-6 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400 rounded-r-lg">
