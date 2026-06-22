@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { RegistrationDocument, UserDocument, isDoubles, Category, makeRegistrationId } from "@/app/lib/models";
-import { getGlobalSettings, getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { auth } from "@/auth";
 import { requireOwnerOrAdmin } from "@/app/lib/authHelpers";
 import { cacheDeleteByPrefix } from "@/app/lib/cache";
@@ -406,13 +406,12 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    // 1. Check Global Settings
+    // 1. Check season settings — registrations must be open for withdrawal
+    const activeSeasonId = await getActiveSeason();
+    const seasonId = session.user.isAdmin && seasonParam ? seasonParam : activeSeasonId;
     try {
-      const settings = await getGlobalSettings();
+      const settings = await getSeasonSettings(seasonId);
       if (settings.registrationOpen === false) {
-          // Allow admins to delete even if closed? Maybe. But for now consistency.
-          // Actually, withdrawal after close might be allowed or disallowed policy wise.
-          // Usually strict: no changes after lock.
           if (!session.user.isAdmin) {
             return NextResponse.json(
               { error: "Registrations are closed. You cannot withdraw at this time." },
@@ -424,15 +423,14 @@ export async function DELETE(request: NextRequest) {
        // Ignore
     }
 
-    const container = getTournamentRegistrationsContainer();
-    const activeSeasonId = await getActiveSeason();
     if (!session.user.isAdmin && seasonParam && seasonParam !== activeSeasonId) {
       return NextResponse.json(
         { error: "Players can only withdraw from the active season" },
         { status: 403 }
       );
     }
-    const seasonId = session.user.isAdmin && seasonParam ? seasonParam : activeSeasonId;
+
+    const container = getTournamentRegistrationsContainer();
     const regId = makeRegistrationId(cleanUserId, category, seasonId);
     const regPartitionKey = registrationPartitionKey({ userId: cleanUserId, category: category as Category, seasonId });
 

@@ -66,3 +66,7 @@ bracket-simulation.html
 .squad
 # Local Copilot CLI config
 .copilot
+
+# PII — CLI scripts with real employee aliases
+portal/cli/resolve-aliases.ts
+portal/cli/verify-aliases-graph.ts

@@ -73,6 +73,7 @@ export function EditPlayersModal({ match, category, onClose, onSaved }: EditPlay
         body: JSON.stringify({
           matchId: match.id,
           category,
+          seasonId: match.seasonId,
           player1Id: p1Id || '',
           player1Name: p1Name || '',
           player2Id: p2Id || '',

@@ -43,10 +43,10 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
 async function getClientAssertion(): Promise<string> {
-  console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
+  if (isDev) console.log("[AUTH] Requesting MI token for api://AzureADTokenExchange...");
   const credential = new ManagedIdentityCredential();
   const result = await credential.getToken("api://AzureADTokenExchange");
-  console.log("[AUTH] MI token acquired, expires:", result.expiresOnTimestamp);
+  if (isDev) console.log("[AUTH] MI token acquired, expires:", result.expiresOnTimestamp);
   return result.token;
 }
 
@@ -77,13 +77,13 @@ function EntraIDWithFIC() {
 
       // Intercept token endpoint — inject MI client assertion
       if (url.pathname.endsWith("/oauth2/v2.0/token")) {
-        console.log("[AUTH] Intercepting token endpoint, injecting MI client assertion...");
+        if (isDev) console.log("[AUTH] Intercepting token endpoint, injecting MI client assertion...");
         const assertion = await getClientAssertion();
         const body = args[1]?.body as URLSearchParams;
         body.set("client_id", clientId);
         body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
         body.set("client_assertion", assertion);
-        console.log("[AUTH] Client assertion injected, sending token request...");
+        if (isDev) console.log("[AUTH] Client assertion injected, sending token request...");
       }
 
       return fetch(...args);

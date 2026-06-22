@@ -37,8 +37,10 @@ export function BracketPageHeader({
       <div>
         <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
         {selectedSeasonEntry && (
-          <p className="text-sm text-slate-400 mt-1">
-            {selectedSeasonEntry.label}{selectedSeason === activeSeason ? ' · Current season' : ' · Previous season'}
+          <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
+            <span className={`inline-block w-2 h-2 rounded-full ${selectedSeason === activeSeason ? 'bg-green-400' : 'bg-slate-500'}`} />
+            {selectedSeasonEntry.label}
+            {selectedSeason === activeSeason ? ' — Live' : ''}
           </p>
         )}
       </div>
@@ -55,7 +57,7 @@ export function BracketPageHeader({
             >
               {seasonOptions.map((season) => (
                 <option key={season.id} value={season.id} className="bg-slate-900">
-                  {season.label}{season.archived ? ' (Archived)' : season.id === activeSeason ? ' (Current)' : ''}
+                  {season.label}
                 </option>
               ))}
             </select>

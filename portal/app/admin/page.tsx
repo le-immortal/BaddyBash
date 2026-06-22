@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
 import { Trophy, Loader2, RefreshCw, Search, Download, ChevronDown, ShieldAlert, Swords, Lock, Unlock, ArrowRight, Upload, CalendarPlus, Archive, CheckCircle2, CircleAlert, X } from 'lucide-react';
-import { Category, MatchDocument, MatchStatus, SeasonEntry } from '../lib/models';
+import { Category, MatchDocument, MatchStatus, SeasonEntry, CATEGORIES } from '../lib/models';
 import EditMatchModal from '../components/EditMatchModal';
 import SeedingVisualizer from '../components/SeedingVisualizer';
 import ErrorScreen from '../components/ErrorScreen';
@@ -15,10 +15,10 @@ import { exportVisualBracket } from '../lib/bracketExcelExport';
 
 const getCurrentSeasonFallback = () => String(new Date().getFullYear());
 
-function AdminShell({ children }: { children: React.ReactNode }) {
+function AdminShell({ children, seasonLabel }: { children: React.ReactNode; seasonLabel?: string }) {
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar />
+      <Navbar seasonLabel={seasonLabel} />
       {children}
     </div>
   );
@@ -306,6 +306,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   const selectedSeasonEntry = seasons.find(s => s.id === selectedSeason);
   const isSelectedSeasonArchived = selectedSeasonEntry?.archived === true;
   const selectedSeasonLabel = selectedSeasonEntry?.label || `Season ${selectedSeason || activeSeason}`;
+  const activeSeasonLabel = seasons.find(s => s.id === activeSeason)?.label;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -355,7 +356,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setImporting(false);
     setPendingAction(null);
     setShowExportMenu(false);
-  }, [selectedSeasonEntry]);
+  }, [selectedSeason]);
 
   const dismissToast = useCallback((id: string) => {
     const timeoutId = toastTimeoutsRef.current[id];
@@ -782,13 +783,6 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     setSeedingMode(true);
   };
 
-  const CATEGORIES: { id: Category; name: string }[] = [
-    { id: 'MS', name: "Men's Singles" },
-    { id: 'WS', name: "Women's Singles" },
-    { id: 'MD', name: "Men's Doubles" },
-    { id: 'WD', name: "Women's Doubles" },
-    { id: 'XD', name: "Mixed Doubles" },
-  ];
 
   const handleExport = async () => {
     setShowExportMenu(false);
@@ -1431,7 +1425,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   // Auth loading or settings not yet loaded
   if (sessionStatus === 'loading' || !settingsLoaded) {
     return (
-      <AdminShell>
+      <AdminShell seasonLabel={activeSeasonLabel}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           <span className="ml-3 text-slate-600">Checking access...</span>
@@ -1442,7 +1436,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
   if (apiError) {
     return (
-      <AdminShell>
+      <AdminShell seasonLabel={activeSeasonLabel}>
         <ErrorScreen bare title="Service Unavailable" message="We could not reach our servers. This could be a temporary issue, please try again in a moment." />
       </AdminShell>
     );
@@ -1451,7 +1445,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   // Non-admin gate
   if (!isAdmin) {
     return (
-      <AdminShell>
+      <AdminShell seasonLabel={activeSeasonLabel}>
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <ShieldAlert className="w-16 h-16 text-red-400" />
           <h1 className="text-2xl font-bold text-slate-800">Access Denied</h1>
@@ -1468,7 +1462,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
   }
 
   return (
-    <AdminShell>
+    <AdminShell seasonLabel={activeSeasonLabel}>
       <main className="container mx-auto py-8 px-4">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>

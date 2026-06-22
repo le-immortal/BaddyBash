@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
-import { Category, MatchDocument, SeasonConfig, SeasonEntry } from '../lib/models';
+import { Category, MatchDocument, SeasonConfig, SeasonEntry, CATEGORIES } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
@@ -15,27 +15,21 @@ function DashboardShell({
   children,
   className = 'min-h-screen bg-slate-50',
   background,
+  seasonLabel,
 }: {
   children: ReactNode;
   className?: string;
   background?: ReactNode;
+  seasonLabel?: string;
 }) {
   return (
     <div className={className}>
       {background}
-      <Navbar />
+      <Navbar seasonLabel={seasonLabel} />
       {children}
     </div>
   );
 }
-
-const CATEGORIES: { id: Category; name: string }[] = [
-  { id: 'MS', name: "Men's Singles" },
-  { id: 'WS', name: "Women's Singles" },
-  { id: 'MD', name: "Men's Doubles" },
-  { id: 'WD', name: "Women's Doubles" },
-  { id: 'XD', name: "Mixed Doubles" },
-];
 
 const dashboardFetchTimeoutMs = 8000;
 
@@ -842,6 +836,7 @@ export default function Dashboard() {
 
   return (
     <DashboardShell
+      seasonLabel={seasonLabel}
       className="min-h-screen relative"
       background={(
         <div className="fixed inset-0 -z-10">
@@ -1269,10 +1264,10 @@ export default function Dashboard() {
                               </span>
                             </div>
 
-                            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                <h4 className="text-sm font-semibold text-slate-700">Registrations</h4>
-                                <div className="mt-3 flex flex-wrap gap-2">
+                            <div className="mt-4 space-y-4">
+                              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                                  <h4 className="text-sm font-semibold text-slate-700">Registrations</h4>
                                   {history.registrations.map((registration) => {
                                     const categoryName = CATEGORIES.find((category) => category.id === registration.category)?.name || registration.category;
                                     const partnerText = registration.partnerName ? ` · ${registration.partnerName}` : '';
