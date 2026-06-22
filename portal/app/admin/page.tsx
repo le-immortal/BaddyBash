@@ -876,7 +876,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           const message = `Successfully updated ${updated} match${updated === 1 ? '' : 'es'}.`;
           setImportFeedback({
             tone: 'success',
-            title: 'Bracket import completed',
+            title: 'Fixtures import completed',
             message,
             errors: [],
           });
@@ -891,7 +891,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
           const message = `Updated ${updated} match${updated === 1 ? '' : 'es'}, but ${failed} row${failed === 1 ? '' : 's'} failed.`;
           setImportFeedback({
             tone: 'warning',
-            title: 'Bracket import partially completed',
+            title: 'Fixtures import partially completed',
             message,
             errors,
           });
@@ -909,7 +909,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
             : 'No matches were updated.';
           setImportFeedback({
             tone: 'error',
-            title: 'Bracket import failed',
+            title: 'Fixtures import failed',
             message,
             errors,
           });
@@ -921,7 +921,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         const fallbackMessage = result.error || 'Unknown error';
         setImportFeedback({
           tone: 'error',
-          title: 'Bracket import failed',
+          title: 'Fixtures import failed',
           message: fallbackMessage,
           errors,
         });
@@ -941,9 +941,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     try {
       const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
       const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
-      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      if (!res.ok) { alert('No fixtures found for this category.'); return; }
       const matches: MatchDocument[] = await res.json();
-      if (matches.length === 0) { alert('No bracket generated yet for this category.'); return; }
+      if (matches.length === 0) { alert('No fixtures generated yet for this category.'); return; }
 
       const isDoubles = ['MD', 'WD', 'XD'].includes(selectedCategory);
       const totalRounds = Math.max(...matches.map(m => m.round));
@@ -1007,7 +1007,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
 
     } catch (err) {
       console.error('Failed to export bracket:', err);
-      alert('Failed to export bracket.');
+      alert('Failed to export fixtures.');
     } finally {
       setExporting(false);
     }
@@ -1019,9 +1019,9 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
     try {
       const seasonQ = selectedSeason ? `&season=${selectedSeason}` : '';
       const res = await fetch(`/api/matches?category=${selectedCategory}${seasonQ}`);
-      if (!res.ok) { alert('No bracket found for this category.'); return; }
+      if (!res.ok) { alert('No fixtures found for this category.'); return; }
       const data: MatchDocument[] = await res.json();
-      if (data.length === 0) { alert('No bracket generated yet for this category.'); return; }
+      if (data.length === 0) { alert('No fixtures generated yet for this category.'); return; }
 
       const buffer = await exportVisualBracket(data, selectedCategory);
       saveAs(
@@ -1030,7 +1030,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
       );
     } catch (err) {
       console.error('Failed to export visual bracket:', err);
-      alert('Failed to export visual bracket.');
+      alert('Failed to export visual fixtures.');
     } finally {
       setExporting(false);
     }
@@ -1101,7 +1101,7 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         };
       case 'import':
         return {
-          title: `Import bracket changes for ${selectedSeasonLabel}?`,
+          title: `Import fixture changes for ${selectedSeasonLabel}?`,
           description: `This will apply ${importPreview?.length || 0} queued match updates to ${selectedSeasonLabel}.`,
           confirmLabel: 'Commit Import',
           confirmClassName: 'bg-emerald-600 hover:bg-emerald-700',
@@ -1110,8 +1110,8 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
         const exportLabels: Record<ExportActionType, string> = {
           'players-category': `${selectedCategory} player list`,
           'players-csv': 'all-player CSV export',
-          bracket: `${selectedCategory} bracket export`,
-          'visual-bracket': `${selectedCategory} visual bracket export`,
+          bracket: `${selectedCategory} fixtures export`,
+          'visual-bracket': `${selectedCategory} visual fixtures export`,
         };
 
         return {
@@ -1289,13 +1289,13 @@ const [importPreview, setImportPreview] = useState<ImportPreviewItem[] | null>(n
                     onClick={() => requestExport('bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
-                    🏆 Bracket / Draw
+                    🏆 Fixtures / Draw
                   </button>
                   <button
                     onClick={() => requestExport('visual-bracket')}
                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100"
                   >
-                    🎯 Visual Bracket
+                    🎯 Visual Fixtures
                   </button>
                 </div>
               )}

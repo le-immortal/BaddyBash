@@ -888,7 +888,7 @@ export default function Dashboard() {
                     <li className="flex gap-2">
                       <span className="text-amber-500 font-bold shrink-0">•</span>
                       <span>Your scheduled matches and reporting times are listed below. You can also visit the{' '}
-                        <a href="/bracket" className="text-blue-600 hover:underline font-medium">Fixtures page</a>{' '}
+                        <a href="/fixtures" className="text-blue-600 hover:underline font-medium">Fixtures page</a>{' '}
                         to view the full tournament draw across all rounds.
                       </span>
                     </li>

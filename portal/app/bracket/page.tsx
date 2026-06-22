@@ -178,12 +178,12 @@ function BracketPageContent() {
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <span className="ml-3 text-slate-400">Loading bracket...</span>
+                <span className="ml-3 text-slate-400">Loading fixtures...</span>
               </div>
             ) : matches.length === 0 ? (
               <div className="bg-slate-800/50 p-10 rounded-xl border border-slate-700 text-center">
-                <p className="text-slate-400 text-lg">No bracket generated yet.</p>
-                <p className="text-slate-500 text-sm mt-2">Generate fixtures from the Admin Dashboard.</p>
+                <p className="text-slate-400 text-lg">No fixtures generated yet.</p>
+                <p className="text-slate-500 text-sm mt-2">Fixtures will appear here once the admin publishes the draw.</p>
               </div>
             ) : (
               <BracketGrid
