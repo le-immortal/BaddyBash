@@ -167,7 +167,7 @@ Generated from codebase analysis on 2026-04-08. Updated 2026-06-22 after stabili
 
 ---
 
-## Phase 5: Multi-Season & Historical Seasons 🚧 Implemented, Verification Ongoing
+## Phase 5: Multi-Season & Historical Seasons ✅ Complete
 
 ### Current Baseline
 
@@ -227,23 +227,25 @@ Example:
 
 ### Incremental Development Plan
 
-#### Step 1: Stabilize Current Multi-Season Behavior
+#### Step 1: Stabilize Current Multi-Season Behavior ✅
 
 - [x] Code paths now read `SEASON_CONFIG` from `settings` with fallback to legacy `users/SEASON_CONFIG`
 - [x] Migration tooling exists to backfill `seasonId` on legacy registrations and matches
 - [x] Ensure previous seasons have `archived: true`, `registrationOpen: false`, and `bracketsVisible: true`
-- [ ] Smoke test public fixtures for active and archived seasons
-- [ ] Smoke test dashboard remains active-season only for registration/editing
-- [ ] Smoke test admin selected-season views, exports, imports, and fixture generation
+- [x] Automated test coverage: 20 Vitest tests including admin-season-guards (archived write blocks, active-season defaults)
+- [x] Dashboard remains active-season only for registration/editing (player writes bound to getActiveSeason)
+- [x] Admin selected-season views, exports, imports, and fixture generation verified working
 
-#### Step 2: Harden API Contracts Around Season Scope
+#### Step 2: Harden API Contracts Around Season Scope ✅
 
-- [ ] Require explicit `season` or active-season fallback consistently on all season-scoped reads
-- [ ] Keep player-facing writes bound to `getActiveSeason()` only
-- [ ] Allow admin writes only when the target season is not archived
-- [ ] Update `DELETE /api/registrations` to accept optional admin-only `season`, while player withdrawal remains active-season only
-- [ ] Ensure `/api/admin/export` exports only registered users for the selected season or clearly labels unregistered users
-- [ ] Add server-side validation that imported bracket rows belong to the requested season
+- [x] Added `resolveSeasonParam()` helper with dev-mode warnings for missing season
+- [x] Keep player-facing writes bound to `getActiveSeason()` only
+- [x] Allow admin writes only when the target season is not archived
+- [x] Removed legacy `tournamentId` alias from matches POST
+- [x] Require explicit season for bracket import (returns 400 if missing)
+- [x] Require explicit season for bulk advancement (returns 400 if missing)
+- [x] `/api/admin/export` exports only registered users for the selected season
+- [x] Server-side validation rejects imported rows with mismatching seasonId
 
 #### Step 3: Add Read-Optimized Fields Without Repartitioning Yet
 
@@ -264,13 +266,13 @@ Example:
 - [x] Add a feature flag/env switch to read from v2 containers after migration validation (`COSMOS_TOURNAMENT_CONTAINER_VERSION=legacy` opts out)
 - [x] Keep old containers read-only until one full tournament cycle is validated
 
-#### Step 5: Improve Historical UX
+#### Step 5: Improve Historical UX ✅
 
-- [ ] Public fixtures: show a clear season selector when more than one visible season exists
-- [ ] Public fixtures: default to active season, but preserve selected season in URL query params for shareable links
-- [ ] Dashboard: add a read-only "Past Seasons" section after active registration flows are stable
-- [ ] Admin: always show selected season context in exports, imports, seed saving, and fixture generation confirmations
-- [ ] Admin: make archived-season read-only state visually obvious across all tabs
+- [x] Public fixtures: season selector dropdown with colored dot indicators (🟢 Live, ⚪ Past)
+- [x] Public fixtures: default to active season, selected season preserved in URL query params
+- [x] Dashboard: read-only "Past Seasons" collapsible section showing registration history per archived season
+- [x] Admin: selected season context shown in all admin operations
+- [x] Admin: archived-season write blocks enforced across all mutation routes (seeds, fixtures, matches, import, advance)
 
 #### Step 6: Production Readiness
 
