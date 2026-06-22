@@ -15,9 +15,9 @@ interface PartnerPost {
   id: string;
   displayName: string;
   avatar?: string;
+  alias: string;
   category: PartnerCategory;
   skillLevel: SkillLevel;
-  contactPreference: string;
   status: PartnerPostStatus;
   createdAt: string;
   isOwner: boolean;
@@ -160,7 +160,10 @@ function PartnerPostCard({
 
           <div className="mt-4 flex items-start gap-2 text-sm text-slate-300 bg-slate-950/40 rounded-lg border border-slate-800 p-3">
             <MessageCircle className="w-4 h-4 mt-0.5 text-blue-300 shrink-0" />
-            <p className="break-words">{post.contactPreference}</p>
+            <p className="break-words">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Teams alias</span>
+              <span className="ml-2 font-semibold text-blue-200">@{post.alias}</span>
+            </p>
           </div>
 
           {post.isOwner ? (
@@ -202,18 +205,25 @@ function PartnerPostCard({
 function CreatePostModal({
   submitting,
   error,
+  unavailableCategories,
+  initialCategory,
   onClose,
   onSubmit,
 }: {
   submitting: boolean;
   error: string | null;
+  unavailableCategories: ReadonlySet<PartnerCategory>;
+  initialCategory: PartnerCategory | null;
   onClose: () => void;
-  onSubmit: (payload: { category: PartnerCategory; skillLevel: SkillLevel; contactPreference: string }) => void;
+  onSubmit: (payload: { category: PartnerCategory; skillLevel: SkillLevel }) => void;
 }) {
-  const [category, setCategory] = useState<PartnerCategory>('MD');
+  const [category, setCategory] = useState<PartnerCategory>(initialCategory ?? 'MD');
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('intermediate');
-  const [contactPreference, setContactPreference] = useState('');
   const firstButtonRef = useRef<HTMLButtonElement>(null);
+  const allCategoriesUnavailable = unavailableCategories.size === categories.length;
+  const selectedCategoryUnavailable = unavailableCategories.has(category);
+  const firstFocusableCategory = initialCategory ?? categories[0];
+  const postDisabled = submitting || allCategoriesUnavailable || selectedCategoryUnavailable;
 
   useEffect(() => {
     const focusTimer = window.setTimeout(() => firstButtonRef.current?.focus(), 0);
@@ -240,7 +250,7 @@ function CreatePostModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
           <div>
             <h2 id="create-partner-post-title" className="text-xl font-bold text-white">Post that I&apos;m looking</h2>
-            <p className="mt-1 text-sm text-slate-400">Share how other players can reach you for doubles.</p>
+            <p className="mt-1 text-sm text-slate-400">Choose your doubles category and skill level.</p>
           </div>
           <button
             type="button"
@@ -257,28 +267,41 @@ function CreatePostModal({
           className="space-y-5 px-5 py-5"
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmit({ category, skillLevel, contactPreference });
+            if (postDisabled) return;
+            onSubmit({ category, skillLevel });
           }}
         >
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Category</legend>
             <div className="flex flex-wrap gap-2">
-              {categories.map((item, index) => (
-                <button
-                  key={item}
-                  ref={index === 0 ? firstButtonRef : undefined}
-                  type="button"
-                  aria-pressed={category === item}
-                  onClick={() => setCategory(item)}
-                  className={clsx(
-                    'px-4 py-2 rounded-full text-sm font-semibold border transition-colors',
-                    category === item ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
+              {categories.map((item) => {
+                const alreadyPosted = unavailableCategories.has(item);
+
+                return (
+                  <button
+                    key={item}
+                    ref={item === firstFocusableCategory ? firstButtonRef : undefined}
+                    type="button"
+                    aria-pressed={category === item}
+                    disabled={alreadyPosted || submitting}
+                    onClick={() => setCategory(item)}
+                    className={clsx(
+                      'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                      alreadyPosted && 'cursor-not-allowed opacity-45',
+                      !alreadyPosted && category === item && 'border-blue-500 bg-blue-600 text-white',
+                      !alreadyPosted && category !== item && 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500',
+                      alreadyPosted && 'border-slate-700 bg-slate-800 text-slate-500'
+                    )}
+                  >
+                    <span>{item}</span>
+                    {alreadyPosted && <span className="ml-1 text-[10px] font-medium">(already posted)</span>}
+                  </button>
+                );
+              })}
             </div>
+            {allCategoriesUnavailable && (
+              <p className="mt-2 text-sm text-amber-200">You already have open posts in every category.</p>
+            )}
           </fieldset>
 
           <fieldset>
@@ -301,19 +324,6 @@ function CreatePostModal({
             </div>
           </fieldset>
 
-          <div>
-            <label htmlFor="contactPreference" className="text-xs font-semibold uppercase tracking-wide text-slate-400">How to reach you</label>
-            <input
-              id="contactPreference"
-              type="text"
-              maxLength={200}
-              value={contactPreference}
-              onChange={(event) => setContactPreference(event.target.value)}
-              placeholder="e.g. Teams: @youralias"
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
-          </div>
-
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200" role="alert">
               {error}
@@ -331,7 +341,7 @@ function CreatePostModal({
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={postDisabled}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -363,8 +373,7 @@ export default function PartnerBoardPage() {
     setPageError(null);
 
     try {
-      const queryParts = selectedCategory === 'All' ? [] : [`category=${encodeURIComponent(selectedCategory)}`];
-      const buildUrl = (status: PartnerPostStatus) => `/api/partner-posts?${[...queryParts, `status=${status}`].join('&')}`;
+      const buildUrl = (status: PartnerPostStatus) => `/api/partner-posts?status=${status}`;
       const statuses: PartnerPostStatus[] = showMine ? ['open', 'closed'] : ['open'];
       const responses = await Promise.all(statuses.map(status => fetchWithTimeout(buildUrl(status))));
 
@@ -385,7 +394,7 @@ export default function PartnerBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionStatus, selectedCategory, showMine]);
+  }, [sessionStatus, showMine]);
 
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
@@ -400,12 +409,20 @@ export default function PartnerBoardPage() {
     return [...filtered].sort((a, b) => Number(b.isOwner) - Number(a.isOwner) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [posts, selectedCategory]);
 
-  const handleCreatePost = async (payload: { category: PartnerCategory; skillLevel: SkillLevel; contactPreference: string }) => {
+  const ownerOpenCategories = useMemo(() => {
+    return new Set<PartnerCategory>(
+      posts
+        .filter(post => post.isOwner && post.status === 'open')
+        .map(post => post.category)
+    );
+  }, [posts]);
+
+  const firstAvailableCategory = useMemo(() => {
+    return categories.find(category => !ownerOpenCategories.has(category)) ?? null;
+  }, [ownerOpenCategories]);
+
+  const handleCreatePost = async (payload: { category: PartnerCategory; skillLevel: SkillLevel }) => {
     setModalError(null);
-    if (!payload.contactPreference.trim()) {
-      setModalError('Please share how partners can reach you.');
-      return;
-    }
 
     setSubmitting(true);
     try {
@@ -416,7 +433,13 @@ export default function PartnerBoardPage() {
       });
 
       if (!res.ok) {
-        throw new Error(await readApiError(res));
+        const message = await readApiError(res);
+        if (res.status === 409) {
+          setModalError(message);
+          return;
+        }
+
+        throw new Error(message);
       }
 
       setModalOpen(false);
@@ -493,7 +516,7 @@ export default function PartnerBoardPage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">Partner Board</p>
             <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Find a doubles partner</h1>
-            <p className="mt-3 max-w-2xl text-slate-300">Browse players looking for MD, WD, or XD partners and share how teammates can reach you.</p>
+            <p className="mt-3 max-w-2xl text-slate-300">Browse players looking for MD, WD, or XD partners and post your own search.</p>
           </div>
           <button
             type="button"
@@ -578,6 +601,8 @@ export default function PartnerBoardPage() {
         <CreatePostModal
           submitting={submitting}
           error={modalError}
+          unavailableCategories={ownerOpenCategories}
+          initialCategory={firstAvailableCategory}
           onClose={() => {
             if (!submitting) setModalOpen(false);
           }}

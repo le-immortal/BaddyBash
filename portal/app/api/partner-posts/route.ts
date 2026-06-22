@@ -8,7 +8,6 @@ import {
   isPartnerPostCategory,
   isPartnerPostStatus,
   isSkillLevel,
-  normalizeContactPreference,
   getSessionUserByEmail,
   toPartnerPostResponse,
 } from "@/app/lib/partnerPosts";
@@ -45,14 +44,14 @@ export async function GET(request: NextRequest) {
     const container = getPartnerPostsContainer();
     const query = categoryParam
       ? {
-          query: "SELECT c.id, c.userId, c.displayName, c.avatar, c.category, c.skillLevel, c.contactPreference, c.status, c.createdAt, c.updatedAt FROM c WHERE c.seasonCategory = @seasonCategory AND c.status = @status ORDER BY c.createdAt DESC",
+          query: "SELECT c.id, c.userId, c.displayName, c.avatar, c.category, c.skillLevel, c.alias, c.status, c.createdAt, c.updatedAt FROM c WHERE c.seasonCategory = @seasonCategory AND c.status = @status ORDER BY c.createdAt DESC",
           parameters: [
             { name: "@seasonCategory", value: makeSeasonCategory(seasonId, categoryParam) },
             { name: "@status", value: statusParam },
           ],
         }
       : {
-          query: "SELECT c.id, c.userId, c.displayName, c.avatar, c.category, c.skillLevel, c.contactPreference, c.status, c.createdAt, c.updatedAt FROM c WHERE c.seasonId = @seasonId AND c.status = @status ORDER BY c.createdAt DESC",
+          query: "SELECT c.id, c.userId, c.displayName, c.avatar, c.category, c.skillLevel, c.alias, c.status, c.createdAt, c.updatedAt FROM c WHERE c.seasonId = @seasonId AND c.status = @status ORDER BY c.createdAt DESC",
           parameters: [
             { name: "@seasonId", value: seasonId },
             { name: "@status", value: statusParam },
@@ -103,8 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { category, skillLevel, contactPreference } = body;
-    const cleanContactPreference = normalizeContactPreference(contactPreference);
+    const { category, skillLevel } = body;
 
     if (!isPartnerPostCategory(category)) {
       return NextResponse.json({ error: "category must be one of MD, WD, XD" }, { status: 400 });
@@ -113,13 +111,6 @@ export async function POST(request: NextRequest) {
     if (!isSkillLevel(skillLevel)) {
       return NextResponse.json(
         { error: "skillLevel must be beginner, intermediate, or advanced" },
-        { status: 400 }
-      );
-    }
-
-    if (!cleanContactPreference) {
-      return NextResponse.json(
-        { error: "contactPreference is required and must be 200 characters or less" },
         { status: 400 }
       );
     }
@@ -136,14 +127,21 @@ export async function POST(request: NextRequest) {
         throw error;
       });
 
+    if (existing?.status === "open") {
+      return NextResponse.json(
+        { error: "You already have an open post in this category. Close it before posting again." },
+        { status: 409 }
+      );
+    }
+
     const post: PartnerPostDocument = {
       id,
       userId: currentUser.id,
       displayName: currentUser.name,
       ...(currentUser.avatar ? { avatar: currentUser.avatar } : {}),
+      alias: currentUser.alias,
       category,
       skillLevel,
-      contactPreference: cleanContactPreference,
       status: "open",
       seasonId,
       seasonCategory: makeSeasonCategory(seasonId, category),

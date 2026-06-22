@@ -58,9 +58,9 @@ describe("partner board posts", () => {
     userId: "alice",
     displayName: "Alice Archer",
     avatar: "https://example.com/alice.png",
+    alias: "alice",
     category: "MD",
     skillLevel: "intermediate",
-    contactPreference: "Teams chat",
     status: "open",
     seasonId: "2027",
     seasonCategory: "2027#MD",
@@ -71,9 +71,9 @@ describe("partner board posts", () => {
     id: "bob_XD_2027",
     userId: "bob",
     displayName: "Bob Blocker",
+    alias: "bob",
     category: "XD",
     skillLevel: "advanced",
-    contactPreference: "Ping me on Teams",
     status: "open",
     seasonId: "2027",
     seasonCategory: "2027#XD",
@@ -120,9 +120,8 @@ describe("partner board posts", () => {
   });
 
   it.each([
-    ["singles category", { category: "MS", skillLevel: "beginner", contactPreference: "Teams" }, "category must be one of MD, WD, XD"],
-    ["invalid skillLevel", { category: "MD", skillLevel: "expert", contactPreference: "Teams" }, "skillLevel must be beginner, intermediate, or advanced"],
-    ["empty contactPreference", { category: "MD", skillLevel: "beginner", contactPreference: "   " }, "contactPreference is required and must be 200 characters or less"],
+    ["singles category", { category: "MS", skillLevel: "beginner" }, "category must be one of MD, WD, XD"],
+    ["invalid skillLevel", { category: "MD", skillLevel: "expert" }, "skillLevel must be beginner, intermediate, or advanced"],
   ])("rejects POST with %s", async (_caseName, body, error) => {
     const response = await POST(createNextRequest("http://localhost/api/partner-posts", body));
 
@@ -138,7 +137,6 @@ describe("partner board posts", () => {
       createNextRequest("http://localhost/api/partner-posts", {
         category: "MD",
         skillLevel: "beginner",
-        contactPreference: "Teams",
       })
     );
 
@@ -161,7 +159,6 @@ describe("partner board posts", () => {
       createNextRequest("http://localhost/api/partner-posts", {
         category: "MD",
         skillLevel: "beginner",
-        contactPreference: "Teams",
       })
     );
 
@@ -172,14 +169,68 @@ describe("partner board posts", () => {
     expect(partnerPostsContainer.upsert).not.toHaveBeenCalled();
   });
 
-  it("sets server-controlled fields and reposts with the deterministic id", async () => {
+  it("returns 409 when an open partner post already exists for the category and season", async () => {
+    partnerPostsContainer.pointRead.mockResolvedValueOnce({ resource: alicePost });
+
+    const response = await POST(
+      createNextRequest("http://localhost/api/partner-posts", {
+        category: "MD",
+        skillLevel: "advanced",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    expect(partnerPostsContainer.item).toHaveBeenCalledWith(makePartnerPostId("alice", "MD", "2027"), "2027#MD");
+    expect(partnerPostsContainer.upsert).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      error: "You already have an open post in this category. Close it before posting again.",
+    });
+  });
+
+  it("re-opens a closed partner post with the deterministic id", async () => {
+    const closedPost: PartnerPostDocument = {
+      ...alicePost,
+      status: "closed",
+      updatedAt: "2027-06-03T00:00:00.000Z",
+    };
+    partnerPostsContainer.pointRead.mockResolvedValueOnce({ resource: closedPost });
+
+    const response = await POST(
+      createNextRequest("http://localhost/api/partner-posts", {
+        category: "MD",
+        skillLevel: "advanced",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(partnerPostsContainer.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "alice_MD_2027",
+        status: "open",
+        skillLevel: "advanced",
+        createdAt: closedPost.createdAt,
+      })
+    );
+    expect(await response.json()).toEqual({
+      seasonId: "2027",
+      post: expect.objectContaining({
+        id: "alice_MD_2027",
+        status: "open",
+        skillLevel: "advanced",
+        isOwner: true,
+      }),
+    });
+  });
+
+  it("sets server-controlled fields when creating with the deterministic id", async () => {
     partnerPostsContainer.pointRead.mockRejectedValueOnce({ code: 404 });
 
     const response = await POST(
       createNextRequest("http://localhost/api/partner-posts", {
         category: "MD",
         skillLevel: "advanced",
-        contactPreference: "  Teams only  ",
+        alias: "mallory",
+        contactPreference: "client-supplied contact must be ignored",
         userId: "mallory",
         displayName: "Mallory",
         status: "closed",
@@ -196,39 +247,27 @@ describe("partner board posts", () => {
         userId: "alice",
         displayName: "Alice Archer",
         avatar: "https://example.com/alice.png",
+        alias: "alice",
         category: "MD",
         skillLevel: "advanced",
-        contactPreference: "Teams only",
         status: "open",
         seasonId: "2027",
         seasonCategory: "2027#MD",
       })
     );
+    const savedPost = partnerPostsContainer.upsert.mock.calls[0]?.[0] as PartnerPostDocument & Record<string, unknown>;
+    expect(savedPost.alias).toBe("alice");
+    expect(savedPost.contactPreference).toBeUndefined();
     expect(await response.json()).toEqual({
       seasonId: "2027",
       post: expect.objectContaining({
         id: "alice_MD_2027",
         displayName: "Alice Archer",
+        alias: "alice",
         status: "open",
         isOwner: true,
       }),
     });
-
-    await POST(
-      createNextRequest("http://localhost/api/partner-posts", {
-        category: "MD",
-        skillLevel: "beginner",
-        contactPreference: "Email okay",
-      })
-    );
-
-    expect(partnerPostsContainer.item).toHaveBeenLastCalledWith(makePartnerPostId("alice", "MD", "2027"), "2027#MD");
-    expect(partnerPostsContainer.upsert).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        id: "alice_MD_2027",
-        createdAt: alicePost.createdAt,
-      })
-    );
   });
 
   it("GET returns only open active-season posts by default and sanitizes the response", async () => {
@@ -267,7 +306,7 @@ describe("partner board posts", () => {
           avatar: "https://example.com/alice.png",
           category: "MD",
           skillLevel: "intermediate",
-          contactPreference: "Teams chat",
+          alias: "alice",
           status: "open",
           createdAt: "2027-06-01T00:00:00.000Z",
           isOwner: true,
@@ -277,7 +316,7 @@ describe("partner board posts", () => {
           displayName: "Bob Blocker",
           category: "XD",
           skillLevel: "advanced",
-          contactPreference: "Ping me on Teams",
+          alias: "bob",
           status: "open",
           createdAt: "2027-06-02T00:00:00.000Z",
           isOwner: false,
@@ -363,7 +402,7 @@ describe("partner board posts", () => {
       createNextRequest("http://localhost/api/partner-posts/alice_MD_2027", {
         status: "closed",
         skillLevel: "advanced",
-        contactPreference: " Updated Teams preference ",
+        contactPreference: "ignored update",
       }),
       { params: Promise.resolve({ id: "alice_MD_2027" }) }
     );
@@ -376,7 +415,7 @@ describe("partner board posts", () => {
         userId: "alice",
         status: "closed",
         skillLevel: "advanced",
-        contactPreference: "Updated Teams preference",
+        alias: "alice",
       })
     );
     expect(await response.json()).toEqual({
@@ -385,7 +424,7 @@ describe("partner board posts", () => {
         id: "alice_MD_2027",
         status: "closed",
         skillLevel: "advanced",
-        contactPreference: "Updated Teams preference",
+        alias: "alice",
         isOwner: true,
       }),
     });

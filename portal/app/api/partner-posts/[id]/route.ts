@@ -7,7 +7,6 @@ import {
   getSessionUserByEmail,
   isPartnerPostStatus,
   isSkillLevel,
-  normalizeContactPreference,
   parsePartnerPostId,
   readPartnerPostById,
   toPartnerPostResponse,
@@ -78,7 +77,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (authorized.response) return authorized.response;
 
     const body = await request.json();
-    const updates: Partial<Pick<PartnerPostDocument, "status" | "skillLevel" | "contactPreference">> = {};
+    const updates: Partial<Pick<PartnerPostDocument, "status" | "skillLevel">> = {};
 
     if ("status" in body) {
       if (!isPartnerPostStatus(body.status)) {
@@ -97,20 +96,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       updates.skillLevel = body.skillLevel;
     }
 
-    if ("contactPreference" in body) {
-      const cleanContactPreference = normalizeContactPreference(body.contactPreference);
-      if (!cleanContactPreference) {
-        return NextResponse.json(
-          { error: "contactPreference is required and must be 200 characters or less" },
-          { status: 400 }
-        );
-      }
-      updates.contactPreference = cleanContactPreference;
-    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: "At least one of status, skillLevel, or contactPreference is required" },
+        { error: "At least one of status or skillLevel is required" },
         { status: 400 }
       );
     }

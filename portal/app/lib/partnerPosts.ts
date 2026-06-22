@@ -11,15 +11,13 @@ import type {
 export const DOUBLES_PARTNER_POST_CATEGORIES: Category[] = ["MD", "WD", "XD"];
 export const SKILL_LEVELS: SkillLevel[] = ["beginner", "intermediate", "advanced"];
 export const PARTNER_POST_STATUSES: PartnerPostStatus[] = ["open", "closed"];
-export const MAX_CONTACT_PREFERENCE_LENGTH = 200;
-
 export interface PartnerPostResponse {
   id: string;
   displayName: string;
   avatar?: string;
   category: Category;
   skillLevel: SkillLevel;
-  contactPreference: string;
+  alias: string;
   status: PartnerPostStatus;
   createdAt: string;
   isOwner: boolean;
@@ -37,15 +35,6 @@ export function isPartnerPostStatus(value: unknown): value is PartnerPostStatus 
   return typeof value === "string" && PARTNER_POST_STATUSES.includes(value as PartnerPostStatus);
 }
 
-export function normalizeContactPreference(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > MAX_CONTACT_PREFERENCE_LENGTH) return null;
-
-  return trimmed;
-}
-
 export function toPartnerPostResponse(
   post: PartnerPostDocument,
   requesterUserId: string
@@ -56,7 +45,7 @@ export function toPartnerPostResponse(
     ...(post.avatar ? { avatar: post.avatar } : {}),
     category: post.category,
     skillLevel: post.skillLevel,
-    contactPreference: post.contactPreference,
+    alias: post.alias,
     status: post.status,
     createdAt: post.createdAt,
     isOwner: post.userId === requesterUserId,

@@ -90,9 +90,9 @@ export interface PartnerPostDocument {
   userId: string;          // author; set from session, never from client
   displayName: string;     // snapshot of author name
   avatar?: string;         // snapshot of author avatar
+  alias: string;           // snapshot of author Microsoft alias
   category: Category;      // MD | WD | XD only
   skillLevel: SkillLevel;
-  contactPreference: string;
   status: PartnerPostStatus;
   seasonId: string;
   seasonCategory: string;  // `${seasonId}#${category}`
