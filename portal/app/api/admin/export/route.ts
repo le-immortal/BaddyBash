@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsersContainer } from "@/app/lib/cosmosClient";
 import { requireAdmin } from "@/app/lib/authHelpers";
 import { UserDocument, RegistrationDocument } from "@/app/lib/models";
-import { getActiveSeason } from "@/app/lib/settings";
+import { resolveSeasonParam } from "@/app/lib/settings";
 import { getTournamentRegistrationsContainer } from "@/app/lib/tournamentData";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const seasonParam = request.nextUrl.searchParams.get("season");
-    const seasonId = seasonParam || await getActiveSeason();
+    const seasonId = await resolveSeasonParam(seasonParam, 'admin');
 
     const usersContainer = getUsersContainer();
     const regsContainer = getTournamentRegistrationsContainer();

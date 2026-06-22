@@ -32,6 +32,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid updates format" }, { status: 400 });
     }
 
+    if (!season && !bodySeasonId) {
+      return NextResponse.json(
+        { error: "season parameter is required for bracket import" },
+        { status: 400 }
+      );
+    }
     const targetSeasonId = bodySeasonId || season || await getActiveSeason();
     const seasonSettings = await getSeasonSettings(targetSeasonId);
     if (seasonSettings.archived) {

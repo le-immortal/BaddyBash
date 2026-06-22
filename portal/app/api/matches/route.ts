@@ -122,9 +122,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { category, tournamentId, season, seasonId: bodySeasonId, seeds } = body as {
+    const { category, season, seasonId: bodySeasonId, seeds } = body as {
       category: Category;
-      tournamentId?: string;
       season?: string;
       seasonId?: string;
       seeds?: Record<string, number>;
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve season
-    const seasonId = bodySeasonId || season || tournamentId || await getActiveSeason();
+    const seasonId = bodySeasonId || season || await getActiveSeason();
     const seasonSettings = await getSeasonSettings(seasonId);
     if (seasonSettings.archived) {
       return NextResponse.json({ error: "Cannot generate brackets for an archived season" }, { status: 403 });

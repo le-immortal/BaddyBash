@@ -41,6 +41,13 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    if (!season && !bodySeasonId) {
+      return NextResponse.json(
+        { error: "season parameter is required for bulk advancement" },
+        { status: 400 }
+      );
+    }
+
     const container = getTournamentMatchesContainer();
 
     // Resolve season

@@ -132,6 +132,23 @@ export async function getActiveSeason(): Promise<string> {
   return config.activeSeason;
 }
 
+/**
+ * Resolve season from request params. For admin routes, logs a warning if
+ * falling back to active season (helps catch missing season params in clients).
+ * Always returns a valid seasonId.
+ */
+export async function resolveSeasonParam(
+  seasonParam: string | null | undefined,
+  context: 'admin' | 'player' = 'player'
+): Promise<string> {
+  if (seasonParam) return seasonParam;
+  const active = await getActiveSeason();
+  if (context === 'admin' && process.env.NODE_ENV === 'development') {
+    console.warn(`[season-scope] Admin route missing explicit season param, defaulting to active: ${active}`);
+  }
+  return active;
+}
+
 // ── Backward-compat shim: getGlobalSettings / updateGlobalSettings ───────────
 // These proxy to the active season entry so existing frontend code keeps working.
 
