@@ -90,6 +90,7 @@ export default function Dashboard() {
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
   const [selection, setSelection] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userLookupDone, setUserLookupDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [linkingAlias, setLinkingAlias] = useState(false);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export default function Dashboard() {
         console.error('Failed to init user:', err);
         setApiError(true);
       } finally {
+        setUserLookupDone(true);
         setLoading(false);
       }
     };
@@ -600,7 +602,7 @@ export default function Dashboard() {
     );
   }
 
-  if (sessionStatus === 'loading' || loading || !settingsLoaded) {
+  if (sessionStatus === 'loading' || !userLookupDone || !settingsLoaded) {
     return (
       <DashboardShell>
         <div className="flex items-center justify-center py-32">
