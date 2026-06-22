@@ -78,6 +78,15 @@ export function getPartnerPostsContainer(): Container {
   return partnerPostsContainer;
 }
 
+export async function ensurePartnerPostsContainer(): Promise<Container> {
+  const { container } = await getDatabase().containers.createIfNotExists({
+    id: PARTNER_POSTS_CONTAINER_ID,
+    partitionKey: { paths: ["/seasonCategory"] },
+  });
+  partnerPostsContainer = container;
+  return partnerPostsContainer;
+}
+
 /**
  * Initialize the database and containers if they don't exist.
  * Call this once on first request or via a setup script.
@@ -125,8 +134,5 @@ export async function initializeDatabase(): Promise<void> {
   });
 
   // Partner board posts — one post per user/category/season.
-  await db.containers.createIfNotExists({
-    id: PARTNER_POSTS_CONTAINER_ID,
-    partitionKey: { paths: ["/seasonCategory"] },
-  });
+  await ensurePartnerPostsContainer();
 }

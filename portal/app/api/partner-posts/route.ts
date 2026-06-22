@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPartnerPostsContainer } from "@/app/lib/cosmosClient";
+import { ensurePartnerPostsContainer, getPartnerPostsContainer } from "@/app/lib/cosmosClient";
 import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { makeSeasonCategory } from "@/app/lib/tournamentData";
 import { makePartnerPostId, type PartnerPostDocument } from "@/app/lib/models";
@@ -12,6 +12,11 @@ import {
   getSessionUserByEmail,
   toPartnerPostResponse,
 } from "@/app/lib/partnerPosts";
+
+function isCosmosNotFound(error: unknown): boolean {
+  const cosmosError = error as { code?: unknown; statusCode?: unknown };
+  return cosmosError.code === 404 || cosmosError.statusCode === 404;
+}
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -54,12 +59,17 @@ export async function GET(request: NextRequest) {
           ],
         };
 
-    const { resources } = await container.items
+    const resources = await container.items
       .query<PartnerPostDocument>(
         query,
         categoryParam ? { partitionKey: makeSeasonCategory(seasonId, categoryParam) } : undefined
       )
-      .fetchAll();
+      .fetchAll()
+      .then((result) => result.resources)
+      .catch((error) => {
+        if (isCosmosNotFound(error)) return [];
+        throw error;
+      });
 
     return NextResponse.json({
       seasonId,
@@ -122,8 +132,7 @@ export async function POST(request: NextRequest) {
       .read<PartnerPostDocument>()
       .then((response) => response.resource)
       .catch((error) => {
-        const cosmosError = error as { code?: number; statusCode?: number };
-        if (cosmosError.code === 404 || cosmosError.statusCode === 404) return null;
+        if (isCosmosNotFound(error)) return null;
         throw error;
       });
 
@@ -142,7 +151,14 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    const { resource } = await container.items.upsert<PartnerPostDocument>(post);
+    const { resource } = await container.items
+      .upsert<PartnerPostDocument>(post)
+      .catch(async (error) => {
+        if (!isCosmosNotFound(error)) throw error;
+
+        const readyContainer = await ensurePartnerPostsContainer();
+        return readyContainer.items.upsert<PartnerPostDocument>(post);
+      });
     const saved = resource ?? post;
 
     return NextResponse.json(

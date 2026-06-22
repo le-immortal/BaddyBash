@@ -286,6 +286,20 @@ describe("partner board posts", () => {
     });
   });
 
+  it("GET returns an empty list when the partner_posts container is missing", async () => {
+    partnerPostsContainer.query.mockReturnValue({
+      fetchAll: vi.fn().mockRejectedValue({ code: 404, substatus: 0 }),
+    });
+
+    const response = await GET(createNextRequest("http://localhost/api/partner-posts"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      seasonId: "2027",
+      posts: [],
+    });
+  });
+
   it("returns 403 when a non-owner non-admin patches another user's post", async () => {
     partnerPostsContainer.pointRead.mockResolvedValue({ resource: bobPost });
 
