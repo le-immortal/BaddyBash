@@ -1,6 +1,6 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Updated 2026-06-18 after doc cleanup and verification refresh. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-22 after stabilization branch merge to main. Cross-referenced against [PRD.md](PRD.md).
 
 **Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
@@ -153,6 +153,20 @@ Generated from codebase analysis on 2026-04-08. Updated 2026-06-18 after doc cle
 
 ---
 
+## Phase 4.5: UX & Performance Hardening ✅ Complete (2026-06-22)
+
+- [x] Naming unification: all user-facing "Bracket" text → "Fixtures" (internal code names unchanged)
+- [x] Modals: replaced all 35+ `alert()`/`confirm()`/`prompt()` calls with styled modals and toast system (success auto-dismiss, error persistent)
+- [x] Dashboard flash fix: tri-state user lookup (`pending | found | missing`) — form only renders on explicit `missing`
+- [x] Performance: deduplicated `/api/settings?full=1` calls (4→1 in prod) via `seasonLabel` prop on Navbar
+- [x] Performance: gated "Your Matches" section behind `bracketsVisible || isAdmin`
+- [x] Fixtures dropdown: removed "(Archived)"/"(Current)" suffixes, added colored dot indicators (🟢 Live, ⚪ Past)
+- [x] Code review fixes: useEffect dependency bug, missing seasonId in PATCH, CATEGORIES dedup, auth console.logs gated behind isDev, registrations DELETE consistency
+- [x] Security: PII files purged from entire git history (employee aliases, user data backups)
+- [x] Test suite: expanded from 3 → 20 tests (6 test files), all passing
+
+---
+
 ## Phase 5: Multi-Season & Historical Seasons 🚧 Implemented, Verification Ongoing
 
 ### Current Baseline
@@ -278,7 +292,7 @@ Example:
 ### Current Validation Notes
 
 - `npm run lint --quiet` passes.
-- `npm run test` passes with 3 Vitest smoke tests.
+- `npm run test` passes with 20 Vitest tests across 6 test files (API routes, smoke, season guards).
 - `npm run build` compiles/type-checks, but the Windows/OneDrive standalone copy step is still an environment-specific failure.
 - `npx --no-install tsc --noEmit --pretty false` still fails in some files; treat that as a known pre-existing issue, not a verified green check.
 - Historical migration notes recorded live Cosmos v2 counts and backfill status, but those runtime data checks were not re-verified in this doc-refresh session.
@@ -340,7 +354,7 @@ Example:
 | Real-time updates (WebSocket/SignalR) | §6 Tech Arch | Polling only — manual refresh buttons |
 | Partner email/SMS notifications | FR-04 | Auto-create only, no notification sent |
 | Waitlist / overflow logic | §9 Open Questions | Not built |
-| Automated tests | — | Limited coverage only: 3 Vitest smoke tests; no broad integration or E2E suite |
+| Automated tests | — | 20 Vitest unit/API tests passing; no E2E browser suite |
 
 | Mobile responsiveness audit | — | Desktop-first, no mobile-specific work |
 | Gender validation from directory | §9 Open Questions | Relies on manual category selection |
