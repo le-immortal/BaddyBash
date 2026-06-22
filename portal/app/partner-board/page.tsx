@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
-import { Loader2, Mail, MessageCircle, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { Loader2, Mail, MessageCircle, Plus, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import ErrorScreen from '../components/ErrorScreen';
 import type { Category, PartnerPostStatus, SkillLevel } from '../lib/models';
@@ -26,6 +26,17 @@ interface PartnerPost {
 interface PartnerPostsResponse {
   seasonId: string;
   posts: PartnerPost[];
+}
+
+interface PartnerPostHistoryItem {
+  seasonId: string;
+  category: PartnerCategory;
+  stage: string;
+}
+
+interface PartnerPostHistoryResponse {
+  category: PartnerCategory;
+  history: PartnerPostHistoryItem[];
 }
 
 const categories: PartnerCategory[] = ['MD', 'WD', 'XD'];
@@ -80,6 +91,10 @@ function categoryBadgeClass(category: PartnerCategory) {
   }
 }
 
+function isPodiumStage(stage: string) {
+  return stage === 'Champion' || stage === 'Runner-up';
+}
+
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), fetchTimeoutMs);
@@ -101,6 +116,51 @@ async function readApiError(res: Response) {
   } catch {
     return `Request failed with status ${res.status}`;
   }
+}
+
+function PostHistory({ postId }: { postId: string }) {
+  const [history, setHistory] = useState<PartnerPostHistoryItem[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchWithTimeout(`/api/partner-posts/${encodeURIComponent(postId)}/history`)
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const data = await res.json() as PartnerPostHistoryResponse;
+        return data.history;
+      })
+      .then((items) => {
+        if (!cancelled) setHistory(items);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [postId]);
+
+  return (
+    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
+      <p className="font-semibold uppercase tracking-wide text-slate-500">Tournament history</p>
+      {history === null ? (
+        <p className="mt-1 text-slate-500">Loading history…</p>
+      ) : history.length === 0 ? (
+        <p className="mt-1 text-slate-500">No past tournaments</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1">
+          {history.map(item => (
+            <li key={`${item.seasonId}-${item.stage}`} className="flex items-center gap-1.5">
+              {isPodiumStage(item.stage) && <Trophy className="h-3 w-3 text-amber-300" aria-hidden="true" />}
+              <span>{item.seasonId} · {item.stage}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function PartnerPostCard({
@@ -165,6 +225,8 @@ function PartnerPostCard({
               <span className="ml-2 font-semibold text-blue-200">@{post.alias}</span>
             </p>
           </div>
+
+          <PostHistory postId={post.id} />
 
           {post.isOwner ? (
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
