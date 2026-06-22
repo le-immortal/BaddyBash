@@ -3,6 +3,7 @@ import { CosmosClient, Database, Container } from "@azure/cosmos";
 const endpoint = process.env.COSMOS_ENDPOINT!;
 const key = process.env.COSMOS_KEY!;
 const databaseId = process.env.COSMOS_DATABASE || "baddybash";
+export const PARTNER_POSTS_CONTAINER_ID = "partner_posts";
 
 let client: CosmosClient;
 let database: Database;
@@ -12,6 +13,7 @@ let registrationsContainer: Container;
 let matchesContainer: Container;
 let registrationsV2Container: Container;
 let matchesV2Container: Container;
+let partnerPostsContainer: Container;
 
 function getClient(): CosmosClient {
   if (!client) {
@@ -69,6 +71,13 @@ export function getMatchesV2Container(): Container {
   return matchesV2Container;
 }
 
+export function getPartnerPostsContainer(): Container {
+  if (!partnerPostsContainer) {
+    partnerPostsContainer = getDatabase().container(PARTNER_POSTS_CONTAINER_ID);
+  }
+  return partnerPostsContainer;
+}
+
 /**
  * Initialize the database and containers if they don't exist.
  * Call this once on first request or via a setup script.
@@ -112,6 +121,12 @@ export async function initializeDatabase(): Promise<void> {
 
   await db.containers.createIfNotExists({
     id: "matches_v2",
+    partitionKey: { paths: ["/seasonCategory"] },
+  });
+
+  // Partner board posts — one post per user/category/season.
+  await db.containers.createIfNotExists({
+    id: PARTNER_POSTS_CONTAINER_ID,
     partitionKey: { paths: ["/seasonCategory"] },
   });
 }

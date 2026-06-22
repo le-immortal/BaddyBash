@@ -53,6 +53,9 @@ export default function Navbar({ seasonLabel: externalLabel }: { seasonLabel?: s
             {session?.user && (
               <Link href="/fixtures" className="hover:text-gray-300">Fixtures</Link>
             )}
+            {session?.user && (
+              <Link href="/partner-board" className="hover:text-gray-300">Find a Partner</Link>
+            )}
             {isAdmin && (
               <Link href="/admin" className="hover:text-gray-300 text-sm bg-slate-800 px-3 py-1 rounded">Admin</Link>
             )}
@@ -100,6 +103,15 @@ export default function Navbar({ seasonLabel: externalLabel }: { seasonLabel?: s
                 className="block py-2 px-4 rounded hover:bg-slate-800 transition"
               >
                 Fixtures
+              </Link>
+            )}
+            {session?.user && (
+              <Link 
+                href="/partner-board" 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block py-2 px-4 rounded hover:bg-slate-800 transition"
+              >
+                Find a Partner
               </Link>
             )}
             {isAdmin && (
