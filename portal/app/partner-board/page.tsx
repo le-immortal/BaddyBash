@@ -421,6 +421,12 @@ export default function PartnerBoardPage() {
     return categories.find(category => !ownerOpenCategories.has(category)) ?? null;
   }, [ownerOpenCategories]);
 
+  const postButtonDisabled = ownerOpenCategories.size === categories.length;
+  const openCreateModal = () => {
+    setModalError(null);
+    setModalOpen(true);
+  };
+
   const handleCreatePost = async (payload: { category: PartnerCategory; skillLevel: SkillLevel }) => {
     setModalError(null);
 
@@ -514,20 +520,17 @@ export default function PartnerBoardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">Partner Board</p>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Find a doubles partner</h1>
-            <p className="mt-3 max-w-2xl text-slate-300">Browse players looking for MD, WD, or XD partners and post your own search.</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">Teammate Finder</p>
+            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Teammate Finder</h1>
+            <p className="mt-3 max-w-2xl text-slate-300">Find a doubles partner for MD, WD, or XD and post your own search.</p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              setModalError(null);
-              setModalOpen(true);
-            }}
+            onClick={openCreateModal}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-500"
           >
             <Plus className="w-4 h-4" />
-            Post that I&apos;m looking
+            Post
           </button>
         </div>
 
@@ -581,6 +584,18 @@ export default function PartnerBoardPage() {
             <UserRound className="mx-auto mb-4 h-12 w-12 text-slate-500" />
             <h2 className="text-2xl font-bold text-white">No one&apos;s looking yet — be the first to post.</h2>
             <p className="mt-2 text-sm text-slate-400">Create a quick partner post for MD, WD, or XD.</p>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              disabled={postButtonDisabled}
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              Post
+            </button>
+            {postButtonDisabled && (
+              <p className="mt-3 text-sm text-amber-200">You already have open posts in every category.</p>
+            )}
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
