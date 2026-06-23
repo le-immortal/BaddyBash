@@ -386,6 +386,7 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 - [x] `PATCH /api/users` never accepts name/alias/email changes from the dashboard path; 404 → `POST` fallback rebuilds the doc from session-sourced identity, preserving `createdAt`
 - [x] Registration-freeze fix: phone + t-shirt size stay saveable when registration is closed (personal logistics, not bracket data) so onboarding can always complete; only identity (`name`) changes are locked
 - [x] Render-loop guardrail honored: onboarding gate (`isOnboarded = !!savedTShirtSize`) is render-derived, not an effect; the login lookup effect depends only on `[sessionStatus, sessionEmail]`
+- [x] **Ownership fix**: a user always owns the record whose `id` equals their own alias (email local-part), so `requireOwnerOrAdmin` + the registration POST/DELETE checks authorize self **without** requiring a pre-existing Cosmos doc — first-time users (provisioning is skipped for dev/GitHub logins, best-effort in prod) and mixed-case Entra emails no longer hit a spurious 403 before the dashboard's 404→POST create fallback. All email lookups are now case-insensitive (`LOWER(c.email)`); `POST /api/users` is hardened so non-admins can only upsert their own record
 
 ### Tests / Review
 - [x] **74 Vitest tests passing** (+9: `__tests__/api/users-search.test.ts`, `__tests__/api/registration-partner-guard.test.ts`; +2: `__tests__/api/users-onboarding.test.ts` — PATCH preserves identity while updating phone/t-shirt, POST preserves `createdAt`)
