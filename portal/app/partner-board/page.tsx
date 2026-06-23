@@ -484,6 +484,15 @@ export default function PartnerBoardPage() {
   }, [ownerOpenCategories]);
 
   const postButtonDisabled = ownerOpenCategories.size === categories.length;
+  const handleModeChange = (mine: boolean) => {
+    if (showMine === mine) {
+      return;
+    }
+    if (mine) {
+      setSelectedCategory('All');
+    }
+    setShowMine(mine);
+  };
   const openCreateModal = () => {
     setModalError(null);
     setModalOpen(true);
@@ -597,34 +606,59 @@ export default function PartnerBoardPage() {
         </div>
 
         <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap gap-2" aria-label="Filter partner posts by category">
-              {(['All', ...categories] as CategoryFilter[]).map(item => (
-                <button
-                  key={item}
-                  type="button"
-                  aria-pressed={selectedCategory === item}
-                  onClick={() => setSelectedCategory(item)}
-                  className={clsx(
-                    'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-                    selectedCategory === item ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              aria-pressed={showMine}
-              onClick={() => setShowMine(value => !value)}
-              className={clsx(
-                'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-                showMine ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
-              )}
+          <div className="flex flex-col gap-4">
+            <div
+              role="group"
+              aria-label="View mode"
+              className="inline-flex w-fit rounded-lg border border-slate-700 bg-slate-900 p-1"
             >
-              My Posts
-            </button>
+              {([
+                { label: 'Browse', mine: false },
+                { label: 'My Posts', mine: true },
+              ] as const).map(option => {
+                const active = showMine === option.mine;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => handleModeChange(option.mine)}
+                    className={clsx(
+                      'rounded-md border px-4 py-2 text-sm font-semibold transition-colors',
+                      active
+                        ? 'border-blue-500 bg-blue-600 text-white'
+                        : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white'
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex min-h-[2.75rem] flex-wrap items-center gap-2">
+              {showMine ? (
+                <p className="text-sm text-slate-400" aria-live="polite">
+                  Showing your posts · open &amp; closed
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2" aria-label="Filter partner posts by category">
+                  {(['All', ...categories] as CategoryFilter[]).map(item => (
+                    <button
+                      key={item}
+                      type="button"
+                      aria-pressed={selectedCategory === item}
+                      onClick={() => setSelectedCategory(item)}
+                      className={clsx(
+                        'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                        selectedCategory === item ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -644,8 +678,17 @@ export default function PartnerBoardPage() {
         ) : visiblePosts.length === 0 ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-20 text-center shadow-sm">
             <UserRound className="mx-auto mb-4 h-12 w-12 text-slate-500" />
-            <h2 className="text-2xl font-bold text-white">No one&apos;s looking yet — be the first to post.</h2>
-            <p className="mt-2 text-sm text-slate-400">Create a quick partner post for MD, WD, or XD.</p>
+            {showMine ? (
+              <>
+                <h2 className="text-2xl font-bold text-white">You haven&apos;t posted yet</h2>
+                <p className="mt-2 text-sm text-slate-400">Create a post for MD, WD, or XD.</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-white">No one&apos;s looking yet — be the first to post.</h2>
+                <p className="mt-2 text-sm text-slate-400">Create a quick partner post for MD, WD, or XD.</p>
+              </>
+            )}
             <button
               type="button"
               onClick={openCreateModal}
