@@ -24,6 +24,10 @@ export type RegistrationStatus = "confirmed" | "cancelled";
 
 export type MatchStatus = "scheduled" | "in_progress" | "completed" | "bye";
 
+export type SkillLevel = "beginner" | "intermediate" | "advanced";
+
+export type PartnerPostStatus = "open" | "closed";
+
 /**
  * A single set score in a badminton match.
  * Standard rules: first to 21, win by 2, cap at 30.
@@ -71,6 +75,27 @@ export interface RegistrationDocument {
   partnerName?: string;
   partnerPhone?: string;
   seed?: number;          // admin-assigned seed ranking
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Partner board post document — stored in the `partner_posts` container.
+ * Partition key: /seasonCategory
+ *
+ * One document per user/category/season. Reposting upserts the same document.
+ */
+export interface PartnerPostDocument {
+  id: string;              // `${userId}_${category}_${seasonId}`
+  userId: string;          // author; set from session, never from client
+  displayName: string;     // snapshot of author name
+  avatar?: string;         // snapshot of author avatar
+  alias: string;           // snapshot of author Microsoft alias
+  category: Category;      // MD | WD | XD only
+  skillLevel: SkillLevel;
+  status: PartnerPostStatus;
+  seasonId: string;
+  seasonCategory: string;  // `${seasonId}#${category}`
   createdAt: string;
   updatedAt: string;
 }
@@ -170,6 +195,14 @@ export function isDoubles(category: Category): boolean {
  * Format: `${userId}_${category}_${seasonId}`
  */
 export function makeRegistrationId(userId: string, category: string, seasonId: string): string {
+  return `${userId}_${category}_${seasonId}`;
+}
+
+/**
+ * Build a deterministic partner board post document ID.
+ * Format: `${userId}_${category}_${seasonId}`
+ */
+export function makePartnerPostId(userId: string, category: string, seasonId: string): string {
   return `${userId}_${category}_${seasonId}`;
 }
 

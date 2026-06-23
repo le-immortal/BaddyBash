@@ -16,6 +16,7 @@
 
 import ExcelJS from 'exceljs';
 import { MatchDocument, Category, CATEGORIES } from './models';
+import { getRoundName } from './bracketRoundNames';
 
 // ── Configuration ─────────────────────────────────────────────────────
 /** Max first-round matches per sheet. Must be a power of 2. */
@@ -61,14 +62,6 @@ function matchP2Row(ri: number, mi: number): number {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
-function getRoundName(round: number, totalRounds: number): string {
-  const fromEnd = totalRounds - round;
-  if (fromEnd === 0) return 'Final';
-  if (fromEnd === 1) return 'Semis';
-  if (fromEnd === 2) return 'Quarters';
-  return `Round ${round}`;
-}
-
 function formatEntry(
   name: string | undefined,
   seed: number | undefined,
