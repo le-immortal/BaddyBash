@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import { Loader2, Mail, MessageCircle, Plus, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -418,6 +419,7 @@ function CreatePostModal({
 
 export default function PartnerBoardPage() {
   const { status: sessionStatus } = useSession();
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('All');
   const [showMine, setShowMine] = useState(false);
   const [posts, setPosts] = useState<PartnerPost[]>([]);
@@ -427,6 +429,23 @@ export default function PartnerBoardPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionPostId, setActionPostId] = useState<string | null>(null);
+
+  // When the API reports the signed-in user has no profile yet (404 "User
+  // profile not found"), send them to the dashboard to complete onboarding
+  // rather than showing a dead-end error on the Teammate Finder.
+  const redirectIfNoProfile = useCallback(async (res: Response): Promise<boolean> => {
+    if (res.status !== 404) return false;
+    try {
+      const body = await res.clone().json() as { error?: string };
+      if (body.error === 'User profile not found') {
+        router.push('/dashboard');
+        return true;
+      }
+    } catch {
+      // Not JSON / unreadable — fall through to normal error handling.
+    }
+    return false;
+  }, [router]);
 
   const fetchPosts = useCallback(async () => {
     if (sessionStatus !== 'authenticated') return;
@@ -441,6 +460,7 @@ export default function PartnerBoardPage() {
 
       const failed = responses.find(res => !res.ok);
       if (failed) {
+        if (await redirectIfNoProfile(failed)) return;
         throw new Error(await readApiError(failed));
       }
 
@@ -456,7 +476,7 @@ export default function PartnerBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionStatus, showMine]);
+  }, [sessionStatus, showMine, redirectIfNoProfile]);
 
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
@@ -510,6 +530,7 @@ export default function PartnerBoardPage() {
       });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         const message = await readApiError(res);
         if (res.status === 409) {
           setModalError(message);
@@ -539,6 +560,7 @@ export default function PartnerBoardPage() {
       });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         throw new Error(await readApiError(res));
       }
 
@@ -557,6 +579,7 @@ export default function PartnerBoardPage() {
       const res = await fetchWithTimeout(`/api/partner-posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         throw new Error(await readApiError(res));
       }
 
