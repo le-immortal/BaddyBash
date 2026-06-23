@@ -1,6 +1,6 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Updated 2026-06-22 after stabilization branch merge to main. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Teammate Finder (partner board) feature — PR #25. Cross-referenced against [PRD.md](PRD.md).
 
 **Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
@@ -314,6 +314,44 @@ Example:
 
 ---
 
+## Phase 7: Teammate Finder (Partner Board) ✅ Complete — PR #25
+
+A season-scoped "looking for a doubles partner" board with a **Teammate Finder** navbar link. Doubles-only (MD/WD/XD).
+
+### Data Model
+- [x] `PartnerPostDocument` in `app/lib/models.ts` — deterministic id `${userId}_${category}_${seasonId}` (one open post per user/category/season), partition key `/seasonCategory` (`${seasonId}#${category}`)
+- [x] Fields: `userId`, `alias`, `displayName`, `avatar?`, `category`, `skillLevel` (beginner/intermediate/advanced, self-declared), `status` (open/closed), `seasonId`, `createdAt` — **no free-text** note/message/contact fields (content-safety: minimal attack surface)
+- [x] `partner_posts` container in `cosmosClient.ts` (+ `ensurePartnerPostsContainer`, `initializeDatabase`); added to `POST /api/setup`
+
+### API Routes
+| Endpoint | Methods | Auth | Purpose |
+|----------|---------|------|---------|
+| `/api/partner-posts` | GET, POST | Authenticated | Browse (season-scoped, graceful empty on missing container) / create (active-season guard, 409 on duplicate open post, self-heals missing container, alias from session) |
+| `/api/partner-posts/[id]` | PATCH, DELETE | Owner or Admin | Update status/skill or delete; active-season guard + owner/admin IDOR guard |
+| `/api/partner-posts/[id]/history` | GET | Authenticated | Poster's tournament history across **all categories** — resolves userId server-side, **never leaks userId/email/phone** |
+| `/api/players/[userId]/tournament-history` | GET | Authenticated | Category-scoped furthest-stage-per-season lookup (public bracket-derived) |
+
+### UI (`app/partner-board/page.tsx`)
+- [x] Browse board with category + skill filters, "my posts" view
+- [x] Create modal (category + skill dropdowns only); disables already-posted categories; surfaces 409
+- [x] Post cards: avatar, `@alias`, skill/category badges, owner controls (close/delete), empty-state Post button
+- [x] Per-card tournament history via `<PostHistory>` child (effect keyed on `[postId]` only — no searchParams/router loop), shows `seasonId · category · stage` across all categories (MS/WS/MD/WD/XD)
+- [x] "Teammate Finder" link in `components/Navbar.tsx` (desktop + mobile)
+
+### Performance / Privacy
+- [x] In-memory TTL (5 min) cache with in-flight Promise dedup around immutable past-season bracket reads (`app/lib/playerHistory.ts`) — collapses N redundant Cosmos reads per board load to 1; failed reads evicted (no poisoning)
+- [x] Reviewer-approved: **Stark APPROVED** (correctness/architecture), **Rai 🟢 GREEN** (privacy — only public alias + public bracket-derived results exposed; no PII)
+
+### Tests
+- [x] 63 Vitest unit/API tests passing (`__tests__/api/partner-posts.test.ts`, `__tests__/api/player-history.test.ts`)
+
+### Open advisories (non-blocking)
+- [ ] Document the tournament-history disclosure in board help text (Rai A1)
+- [ ] `/api/players/[userId]/tournament-history` allows alias enumeration — consider rate-limiting / restricting to active posters (Stark A2 / Rai A3); remove if unused by UI
+- [ ] ETag/optimistic concurrency on PATCH (Stark A1); avatar CSS URL hardening (Stark A4)
+
+---
+
 ## CLI Tooling ✅ Complete
 
 | Script | Purpose |
@@ -356,7 +394,7 @@ Example:
 | Real-time updates (WebSocket/SignalR) | §6 Tech Arch | Polling only — manual refresh buttons |
 | Partner email/SMS notifications | FR-04 | Auto-create only, no notification sent |
 | Waitlist / overflow logic | §9 Open Questions | Not built |
-| Automated tests | — | 20 Vitest unit/API tests passing; no E2E browser suite |
+| Automated tests | — | 63 Vitest unit/API tests passing; no E2E browser suite |
 
 | Mobile responsiveness audit | — | Desktop-first, no mobile-specific work |
 | Gender validation from directory | §9 Open Questions | Relies on manual category selection |
