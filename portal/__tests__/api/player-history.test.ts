@@ -5,7 +5,7 @@ import { GET as GETPartnerPostHistory } from "@/app/api/partner-posts/[id]/histo
 import { GET } from "@/app/api/players/[userId]/tournament-history/route";
 import { getPartnerPostsContainer } from "@/app/lib/cosmosClient";
 import type { PartnerPostDocument } from "@/app/lib/models";
-import { computePlayerSeasonStage, getPlayerTournamentHistory, __clearPlayerHistoryCache } from "@/app/lib/playerHistory";
+import { computePlayerSeasonStage, getPlayerTournamentHistory, getPlayerAllCategoriesTournamentHistory, __clearPlayerHistoryCache } from "@/app/lib/playerHistory";
 import { getTournamentMatchesContainer } from "@/app/lib/tournamentData";
 import { getSeasonConfig } from "@/app/lib/settings";
 import { auth } from "@/auth";
@@ -159,6 +159,103 @@ describe("season#category bracket read cache", () => {
 
     // Both seasons resolve to [] and are cached, so only one query per season.
     expect(matchesContainer.query).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("getPlayerAllCategoriesTournamentHistory", () => {
+  const matchesContainer = createMockContainer();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    matchesContainer.query.mockReset();
+    __clearPlayerHistoryCache();
+
+    vi.mocked(getTournamentMatchesContainer).mockReturnValue(matchesContainer.container as never);
+    vi.mocked(getSeasonConfig).mockResolvedValue({
+      id: "SEASON_CONFIG",
+      activeSeason: "2026",
+      seasons: [
+        { id: "2024", label: "Baddy Bash 2024", registrationOpen: false, bracketsVisible: true, archived: true },
+        { id: "2025", label: "Baddy Bash 2025", registrationOpen: false, bracketsVisible: true, archived: true },
+        { id: "2026", label: "Baddy Bash 2026", registrationOpen: true, bracketsVisible: false, archived: false },
+      ],
+    });
+  });
+
+  function seedMultiCategoryQuery() {
+    matchesContainer.query.mockImplementation((spec: { parameters?: Array<{ name: string; value: unknown }> }) => {
+      const seasonCategory = getQueryParameterValue(spec.parameters, "@seasonCategory");
+      // 2025: alice plays MS (Runner-up) and MD (Champion).
+      if (seasonCategory === "2025#MS") {
+        return createFetchAllResult([
+          match({ seasonId: "2025", category: "MS", round: 1, position: 0 }),
+          match({ seasonId: "2025", category: "MS", round: 2, position: 0, player1Id: "alice", player2Id: "carol", winnerId: "carol" }),
+          match({ seasonId: "2025", category: "MS", round: 3, position: 0 }),
+        ]);
+      }
+      if (seasonCategory === "2025#MD") {
+        return createFetchAllResult([
+          match({ seasonId: "2025", category: "MD", round: 1, position: 0 }),
+          match({ seasonId: "2025", category: "MD", round: 2, position: 0 }),
+          match({ seasonId: "2025", category: "MD", round: 3, position: 0, player1Id: "alice", player2Id: "carol", winnerId: "alice" }),
+        ]);
+      }
+      // 2024: alice plays XD only (Runner-up).
+      if (seasonCategory === "2024#XD") {
+        return createFetchAllResult([
+          match({ seasonId: "2024", category: "XD", round: 1, position: 0 }),
+          match({ seasonId: "2024", category: "XD", round: 2, position: 0, player1Id: "alice", player2Id: "carol", winnerId: "carol" }),
+        ]);
+      }
+      return createFetchAllResult([]);
+    });
+  }
+
+  it("returns one entry per (season, category) with a stage, ordered recent-season-first then MS/WS/MD/WD/XD", async () => {
+    seedMultiCategoryQuery();
+
+    const history = await getPlayerAllCategoriesTournamentHistory("alice");
+
+    expect(history).toEqual([
+      { seasonId: "2025", category: "MS", stage: "Semifinalist" },
+      { seasonId: "2025", category: "MD", stage: "Champion" },
+      { seasonId: "2024", category: "XD", stage: "Runner-up" },
+    ]);
+  });
+
+  it("omits categories with no participation", async () => {
+    seedMultiCategoryQuery();
+
+    const history = await getPlayerAllCategoriesTournamentHistory("alice");
+
+    // No WS / WD entries, and 2024 only has XD.
+    expect(history.some((entry) => entry.category === "WS")).toBe(false);
+    expect(history.some((entry) => entry.category === "WD")).toBe(false);
+    expect(history.filter((entry) => entry.seasonId === "2024")).toEqual([
+      { seasonId: "2024", category: "XD", stage: "Runner-up" },
+    ]);
+  });
+
+  it("queries each season#category at most once even when multiple posters request all-categories history", async () => {
+    seedMultiCategoryQuery();
+
+    await getPlayerAllCategoriesTournamentHistory("alice");
+    await getPlayerAllCategoriesTournamentHistory("bob");
+
+    // 2 past seasons × 5 categories = 10 distinct partitions, each read once and shared.
+    expect(matchesContainer.query).toHaveBeenCalledTimes(10);
+  });
+
+  it("shares a single in-flight read across concurrent all-categories callers", async () => {
+    seedMultiCategoryQuery();
+
+    await Promise.all([
+      getPlayerAllCategoriesTournamentHistory("alice"),
+      getPlayerAllCategoriesTournamentHistory("bob"),
+      getPlayerAllCategoriesTournamentHistory("carol"),
+    ]);
+
+    expect(matchesContainer.query).toHaveBeenCalledTimes(10);
   });
 });
 
@@ -384,7 +481,7 @@ describe("GET /api/players/[userId]/tournament-history", () => {
       expect(await response.json()).toEqual({ error: "Partner post not found" });
     });
 
-    it("returns the post author's history without exposing userId", async () => {
+    it("returns the post author's all-categories history without exposing userId", async () => {
       matchesContainer.query.mockImplementation((spec: { parameters?: Array<{ name: string; value: unknown }> }) => {
         const seasonCategory = getQueryParameterValue(spec.parameters, "@seasonCategory");
         if (seasonCategory === "2025#MD") {
@@ -402,18 +499,36 @@ describe("GET /api/players/[userId]/tournament-history", () => {
             }),
           ]);
         }
-        return createFetchAllResult([
-          match({ seasonId: "2024", category: "MD", round: 1, position: 0 }),
-          match({
-            seasonId: "2024",
-            category: "MD",
-            round: 2,
-            position: 0,
-            player1Id: "alice",
-            player2Id: "carol",
-            winnerId: "carol",
-          }),
-        ]);
+        if (seasonCategory === "2025#MS") {
+          return createFetchAllResult([
+            match({ seasonId: "2025", category: "MS", round: 1, position: 0 }),
+            match({
+              seasonId: "2025",
+              category: "MS",
+              round: 2,
+              position: 0,
+              player1Id: "alice",
+              player2Id: "carol",
+              winnerId: "carol",
+            }),
+            match({ seasonId: "2025", category: "MS", round: 3, position: 0 }),
+          ]);
+        }
+        if (seasonCategory === "2024#XD") {
+          return createFetchAllResult([
+            match({ seasonId: "2024", category: "XD", round: 1, position: 0 }),
+            match({
+              seasonId: "2024",
+              category: "XD",
+              round: 2,
+              position: 0,
+              player1Id: "alice",
+              player2Id: "carol",
+              winnerId: "carol",
+            }),
+          ]);
+        }
+        return createFetchAllResult([]);
       });
 
       const response = await GETPartnerPostHistory(
@@ -425,12 +540,14 @@ describe("GET /api/players/[userId]/tournament-history", () => {
 
       expect(response.status).toBe(200);
       expect(partnerPostsContainer.item).toHaveBeenCalledWith("alice_MD_2026", "2026#MD");
-      expect(matchesContainer.query).toHaveBeenCalledTimes(2);
+      // 2 past seasons × 5 categories = 10 bracket reads.
+      expect(matchesContainer.query).toHaveBeenCalledTimes(10);
       expect(body).toEqual({
         category: "MD",
         history: [
+          { seasonId: "2025", category: "MS", stage: "Semifinalist" },
           { seasonId: "2025", category: "MD", stage: "Champion" },
-          { seasonId: "2024", category: "MD", stage: "Runner-up" },
+          { seasonId: "2024", category: "XD", stage: "Runner-up" },
         ],
       });
       expect(JSON.stringify(body)).not.toContain("userId");

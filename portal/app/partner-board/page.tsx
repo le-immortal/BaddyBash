@@ -152,9 +152,9 @@ function PostHistory({ postId }: { postId: string }) {
       ) : (
         <ul className="mt-1.5 space-y-1">
           {history.map(item => (
-            <li key={`${item.seasonId}-${item.stage}`} className="flex items-center gap-1.5">
+            <li key={`${item.seasonId}-${item.category}-${item.stage}`} className="flex items-center gap-1.5">
               {isPodiumStage(item.stage) && <Trophy className="h-3 w-3 text-amber-300" aria-hidden="true" />}
-              <span>{item.seasonId} · {item.stage}</span>
+              <span>{item.seasonId} · {item.category} · {item.stage}</span>
             </li>
           ))}
         </ul>

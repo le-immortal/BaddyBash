@@ -14,6 +14,7 @@ export interface PlayerTournamentHistoryEntry {
 }
 
 const DOUBLES_CATEGORIES: Category[] = ["MD", "WD", "XD"];
+const ALL_CATEGORIES: Category[] = ["MS", "WS", "MD", "WD", "XD"];
 
 export function isPartnerBoardCategory(category: string | null): category is Category {
   return !!category && DOUBLES_CATEGORIES.includes(category as Category);
@@ -176,6 +177,30 @@ export async function getPlayerTournamentHistory(
     const stage = computePlayerSeasonStage(matches, userId);
     if (stage) {
       history.push({ seasonId, category, stage });
+    }
+  }
+
+  return history;
+}
+
+export async function getPlayerAllCategoriesTournamentHistory(
+  userId: string
+): Promise<PlayerTournamentHistoryEntry[]> {
+  const config = await getSeasonConfig();
+  const pastSeasonIds = config.seasons
+    .map((season) => season.id)
+    .filter((seasonId) => seasonId !== config.activeSeason)
+    .sort(sortSeasonIdsDesc);
+
+  const history: PlayerTournamentHistoryEntry[] = [];
+
+  for (const seasonId of pastSeasonIds) {
+    for (const category of ALL_CATEGORIES) {
+      const matches = await getSeasonCategoryMatchesCached(seasonId, category);
+      const stage = computePlayerSeasonStage(matches, userId);
+      if (stage) {
+        history.push({ seasonId, category, stage });
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPlayerTournamentHistory } from "@/app/lib/playerHistory";
+import { getPlayerAllCategoriesTournamentHistory } from "@/app/lib/playerHistory";
 import { readPartnerPostById } from "@/app/lib/partnerPosts";
 
 interface RouteContext {
@@ -21,7 +21,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Partner post not found" }, { status: 404 });
     }
 
-    const history = await getPlayerTournamentHistory(post.userId, post.category).catch((error) => {
+    const history = await getPlayerAllCategoriesTournamentHistory(post.userId).catch((error) => {
       console.error("Error fetching partner post history:", error);
       return [];
     });
