@@ -593,7 +593,9 @@ export default function Dashboard() {
 
     setSaving(true);
     try {
-      // POST each selected category
+      // POST each selected category, tracking which ones actually succeeded so a
+      // failure doesn't wipe the user's inline error or their remaining input.
+      const succeeded = new Set<string>();
       for (const catId of selection) {
         const body: Record<string, string> = {
           userId,
@@ -626,13 +628,26 @@ export default function Dashboard() {
           }
           break;
         }
+        succeeded.add(catId);
       }
 
-      // Refresh registrations
-      setSelection([]);
-      setPartners({});
-      setPartnerErrors({});
-      await fetchRegistrations();
+      // Only clear the categories that actually registered — keep the failed one
+      // (with its inline error) and any not-yet-attempted ones so the user can fix
+      // and retry without re-entering everything. Refresh to reflect partial saves.
+      if (succeeded.size > 0) {
+        setSelection(prev => prev.filter(catId => !succeeded.has(catId)));
+        setPartners(prev => {
+          const next = { ...prev };
+          succeeded.forEach(catId => delete next[catId]);
+          return next;
+        });
+        setPartnerErrors(prev => {
+          const next = { ...prev };
+          succeeded.forEach(catId => delete next[catId]);
+          return next;
+        });
+        await fetchRegistrations();
+      }
     } catch (err) {
       console.error('Save failed:', err);
       alert('An error occurred while saving. Please try again.');
