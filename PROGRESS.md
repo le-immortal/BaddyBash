@@ -402,6 +402,13 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 - [x] `handleWithdraw`/`handleSave` split into a `request*` opener (sets `confirmDialog`) + a `perform*` executor run on confirm; a shared `runConfirm` drives the modal's busy state
 - [x] Reusable components are shared so future pages can drop the native dialogs too; gates green (tsc 0, 77 tests, lint clean), dashboard route serves 200 with no runtime errors
 
+### Teammate Finder N+1 fix — fold history into the list call (`api/partner-posts/route.ts`, `lib/partnerPosts.ts`, `partner-board/page.tsx`)
+- [x] Each partner-post card rendered its own `<PostHistory>` that fired a separate `GET /api/partner-posts/{id}/history` on mount → **N+1** (4 visible posts = 4 history calls on top of the list call)
+- [x] `GET /api/partner-posts` now resolves each poster's all-categories tournament history server-side (parallel `Promise.all`, per-post `.catch`→`[]`) and attaches it as `post.history` in the **single** list response; per-season match reads stay memoized in `getSeasonCategoryMatchesCached`, so resolving many posters does the shared reads once
+- [x] `PartnerPostResponse.history` added (privacy-safe — only `{seasonId, category, stage}`, never `userId`); `toPartnerPostResponse` takes an optional `history` (default `[]`)
+- [x] Frontend `PostHistory` is now presentational (takes `history` prop, no `useEffect`/fetch/loading state); the standalone `[id]/history` endpoint is retained (still tested) but no longer called by the board
+- [x] +2 tests (79 total): list folds each poster's history with exactly one resolution per post; a failed history lookup still returns the post with `history: []`
+
 ---
 
 ## CLI Tooling ✅ Complete

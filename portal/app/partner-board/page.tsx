@@ -22,6 +22,7 @@ interface PartnerPost {
   status: PartnerPostStatus;
   createdAt: string;
   isOwner: boolean;
+  history: PartnerPostHistoryItem[];
 }
 
 interface PartnerPostsResponse {
@@ -33,11 +34,6 @@ interface PartnerPostHistoryItem {
   seasonId: string;
   category: PartnerCategory;
   stage: string;
-}
-
-interface PartnerPostHistoryResponse {
-  category: PartnerCategory;
-  history: PartnerPostHistoryItem[];
 }
 
 const categories: PartnerCategory[] = ['MD', 'WD', 'XD'];
@@ -119,36 +115,11 @@ async function readApiError(res: Response) {
   }
 }
 
-function PostHistory({ postId }: { postId: string }) {
-  const [history, setHistory] = useState<PartnerPostHistoryItem[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchWithTimeout(`/api/partner-posts/${encodeURIComponent(postId)}/history`)
-      .then(async (res) => {
-        if (!res.ok) return [];
-        const data = await res.json() as PartnerPostHistoryResponse;
-        return data.history;
-      })
-      .then((items) => {
-        if (!cancelled) setHistory(items);
-      })
-      .catch(() => {
-        if (!cancelled) setHistory([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [postId]);
-
+function PostHistory({ history }: { history: PartnerPostHistoryItem[] }) {
   return (
     <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
       <p className="font-semibold uppercase tracking-wide text-slate-500">Tournament history</p>
-      {history === null ? (
-        <p className="mt-1 text-slate-500">Loading history…</p>
-      ) : history.length === 0 ? (
+      {history.length === 0 ? (
         <p className="mt-1 text-slate-500">No past tournaments</p>
       ) : (
         <ul className="mt-1.5 space-y-1">
@@ -227,7 +198,7 @@ function PartnerPostCard({
             </p>
           </div>
 
-          <PostHistory postId={post.id} />
+          <PostHistory history={post.history} />
 
           {post.isOwner ? (
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
