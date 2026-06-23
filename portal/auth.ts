@@ -18,8 +18,8 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
       const container = getUsersContainer();
       const { resources } = await container.items
         .query<UserDocument>({
-          query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
-          parameters: [{ name: "@email", value: email }],
+          query: "SELECT c.isAdmin FROM c WHERE LOWER(c.email) = @email",
+          parameters: [{ name: "@email", value: String(email).trim().toLowerCase() }],
         })
         .fetchAll();
       return resources[0]?.isAdmin === true;

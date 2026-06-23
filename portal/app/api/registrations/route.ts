@@ -133,17 +133,26 @@ export async function POST(request: NextRequest) {
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
     
     // Admins can register on behalf of anyone (if needed for support)
-    if (!session.user.isAdmin) { 
-        const usersContainer = getUsersContainer();
-        const { resources: [userDoc] } = await usersContainer.items
-          .query<UserDocument>({
-            query: "SELECT * FROM c WHERE c.email = @email",
-            parameters: [{ name: "@email", value: email }]
-          })
-          .fetchAll();
+    if (!session.user.isAdmin) {
+        // A user always owns the registration whose userId equals their own alias
+        // (email local-part). Short-circuit on that so first-time users who are
+        // not yet provisioned into Cosmos (and mixed-case emails) aren't blocked.
+        const sessionAlias = String(email || '').trim().toLowerCase().replace(/@.*$/, '');
+        let ownsTarget = !!sessionAlias && cleanUserId === sessionAlias;
+
+        if (!ownsTarget) {
+            const usersContainer = getUsersContainer();
+            const { resources: [userDoc] } = await usersContainer.items
+              .query<UserDocument>({
+                query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
+                parameters: [{ name: "@email", value: String(email || '').trim().toLowerCase() }]
+              })
+              .fetchAll();
+            ownsTarget = !!userDoc && userDoc.id === cleanUserId;
+        }
 
         // If the logged-in user's ID (alias) doesn't match the requested userId, block it.
-        if (!userDoc || userDoc.id !== cleanUserId) {
+        if (!ownsTarget) {
             return NextResponse.json(
               { error: "Unauthorized: You can only register for yourself." },
               { status: 403 }
@@ -411,17 +420,24 @@ export async function DELETE(request: NextRequest) {
     
     // Admins can delete on behalf of anyone
     if (!session.user.isAdmin) {
-      const usersContainer = getUsersContainer();
       try {
-        const { resources: [userDoc] } = await usersContainer.items
-          .query<UserDocument>({
-            query: "SELECT * FROM c WHERE c.email = @email",
-            parameters: [{ name: "@email", value: email }]
-          })
-          .fetchAll();
+        // Self-ownership short-circuit (handles not-yet-provisioned + mixed-case emails).
+        const sessionAlias = String(email || '').trim().toLowerCase().replace(/@.*$/, '');
+        let ownsTarget = !!sessionAlias && cleanUserId === sessionAlias;
+
+        if (!ownsTarget) {
+          const usersContainer = getUsersContainer();
+          const { resources: [userDoc] } = await usersContainer.items
+            .query<UserDocument>({
+              query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
+              parameters: [{ name: "@email", value: String(email || '').trim().toLowerCase() }]
+            })
+            .fetchAll();
+          ownsTarget = !!userDoc && userDoc.id === cleanUserId;
+        }
 
         // If the logged-in user's ID (alias) doesn't match the target userId, block it.
-        if (!userDoc || userDoc.id !== cleanUserId) {
+        if (!ownsTarget) {
             return NextResponse.json(
               { error: "Unauthorized: You can only cancel your own registrations." },
               { status: 403 }
