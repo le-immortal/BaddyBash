@@ -8,6 +8,8 @@ import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument, SeasonConfig, SeasonEntry, CATEGORIES } from '../lib/models';
 import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown, Trophy, CheckCircle } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
+import { useToasts, ToastStack } from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 import Image from 'next/image';
 import { getSeasonLabel, getSeasonLabelFromConfig } from '../lib/seasonLabels';
 
@@ -89,6 +91,27 @@ export default function Dashboard() {
   const [userLookupState, setUserLookupState] = useState<UserLookupState>('pending');
   const [saving, setSaving] = useState(false);
   const [linkingAlias, setLinkingAlias] = useState(false);
+  const { toasts, showToast, dismissToast } = useToasts();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    lines: string[];
+    confirmLabel: string;
+    tone: 'primary' | 'danger';
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const runConfirm = async () => {
+    if (!confirmDialog) return;
+    const action = confirmDialog.onConfirm;
+    setConfirmBusy(true);
+    try {
+      await action();
+    } finally {
+      setConfirmBusy(false);
+      setConfirmDialog(null);
+    }
+  };
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -465,10 +488,19 @@ export default function Dashboard() {
     setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
   };
   
-  const handleWithdraw = async (catId: Category) => {
+  const handleWithdraw = (catId: Category) => {
     if (!registrationOpen) return;
-    if (!confirm(`Are you sure you want to withdraw from ${CATEGORIES.find(c => c.id === catId)?.name}?`)) return;
+    const categoryName = CATEGORIES.find(c => c.id === catId)?.name;
+    setConfirmDialog({
+      title: 'Withdraw registration',
+      lines: [`Are you sure you want to withdraw from ${categoryName}?`],
+      confirmLabel: 'Withdraw',
+      tone: 'danger',
+      onConfirm: () => performWithdraw(catId),
+    });
+  };
 
+  const performWithdraw = async (catId: Category) => {
     try {
       const res = await fetch(`/api/registrations?userId=${encodeURIComponent(userId)}&category=${catId}`, {
         method: 'DELETE',
@@ -483,7 +515,7 @@ export default function Dashboard() {
       await fetchRegistrations();
     } catch (err: unknown) {
       console.error('Withdraw failed:', err);
-      alert(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.');
+      showToast(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.', 'error');
     }
   };
 
@@ -502,7 +534,7 @@ export default function Dashboard() {
   const handleSaveProfile = async () => {
     // T-shirt size is required — it doubles as the onboarding-complete signal.
     if (!tShirtSize.trim()) {
-      alert('Please select your t-shirt size.');
+      showToast('Please select your t-shirt size.', 'error');
       return;
     }
     setLinkingAlias(true);
@@ -569,13 +601,13 @@ export default function Dashboard() {
     } catch (err: unknown) {
       console.error('Profile save failed:', err);
       const msg = err instanceof Error ? err.message : 'Failed to save profile. Please try again.';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setLinkingAlias(false);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!isSelectionValid) return;
 
     // Name each partner being locked so users confirm the right person.
@@ -586,11 +618,19 @@ export default function Dashboard() {
         const label = p?.name?.trim() || p?.alias || '';
         return `${catId} → ${label} (@${p?.alias || ''})`;
       });
-    const confirmMessage = doublesLines.length
-      ? `You're locking in these partners:\n\n${doublesLines.join('\n')}\n\nPartners are matched by their account — make sure each is correct. Continue?`
-      : 'Are you sure you want to confirm these registrations?';
-    if (!confirm(confirmMessage)) return;
+    const lines = doublesLines.length
+      ? ["You're locking in these partners:", ...doublesLines, 'Partners are matched by their account — make sure each is correct.']
+      : ['Are you sure you want to confirm these registrations?'];
+    setConfirmDialog({
+      title: 'Confirm registration',
+      lines,
+      confirmLabel: 'Confirm',
+      tone: 'primary',
+      onConfirm: () => performSave(),
+    });
+  };
 
+  const performSave = async () => {
     setSaving(true);
     try {
       // POST each selected category, tracking which ones actually succeeded so a
@@ -624,7 +664,7 @@ export default function Dashboard() {
               [catId]: err.message || 'This partner needs to sign in to BaddyBash before you can register them.',
             }));
           } else {
-            alert(`Failed to register for ${catId}: ${err.error}`);
+            showToast(`Failed to register for ${catId}: ${err.error}`, 'error');
           }
           break;
         }
@@ -650,7 +690,7 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Save failed:', err);
-      alert('An error occurred while saving. Please try again.');
+      showToast('An error occurred while saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -788,6 +828,17 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
+        <ToastStack toasts={toasts} onDismiss={dismissToast} />
+        <ConfirmModal
+          open={!!confirmDialog}
+          title={confirmDialog?.title || ''}
+          lines={confirmDialog?.lines || []}
+          confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+          tone={confirmDialog?.tone || 'primary'}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={() => setConfirmDialog(null)}
+        />
       </DashboardShell>
     );
   }
@@ -1303,6 +1354,17 @@ export default function Dashboard() {
           </section>
         )}
       </main>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmModal
+        open={!!confirmDialog}
+        title={confirmDialog?.title || ''}
+        lines={confirmDialog?.lines || []}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        tone={confirmDialog?.tone || 'primary'}
+        loading={confirmBusy}
+        onConfirm={runConfirm}
+        onClose={() => setConfirmDialog(null)}
+      />
     </DashboardShell>
   );
 }

@@ -395,7 +395,12 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 
 ### Out of scope (separate follow-up)
 - [ ] Merge/cleanup of **existing** ghost accounts already in the DB (admin tool to reassign a ghost's registrations to the real user, keyed on the `isClaimed` predicate)
-- [ ] **Canonical identity for one human with multiple emails/aliases** (needs design). Today `id = alias = email-local-part` → one human with two corporate addresses (e.g. `abhinav.sharma@` alias `abhinav.sharma` **and** `sharmaabh@` alias `sharmaabh`) becomes two separate accounts (risking double-registration / dual partner-pickability). Likely the common case is one Entra account with multiple proxy SMTP addresses sharing a stable `oid`/UPN — capture & persist `oid`+`preferred_username` (currently discarded in `auth.ts` `profile()`) and key identity on `oid`. Must also reconcile **legacy accounts from prior seasons** whose alias/email don't match the current derivation rule, and handle genuinely-separate accounts via explicit account-linking. Shares scope with the ghost-account merge tool above.
+### UI polish — native dialogs → modal/toast (`dashboard/page.tsx`, `components/Toast.tsx` NEW, `components/ConfirmModal.tsx` NEW)
+- [x] Replaced all blocking native `alert()`/`confirm()` in the player dashboard with the in-app pattern already used by the admin dashboard
+- [x] `useToasts()` hook + `<ToastStack>` (NEW `components/Toast.tsx`) — error toasts persist until dismissed, success toasts auto-dismiss (4s); replaces 5 `alert()` calls (withdraw failure, t-shirt-required, profile-save failure, per-category register failure, generic save failure)
+- [x] `<ConfirmModal>` (NEW `components/ConfirmModal.tsx`) — accessible dialog (focus-trap, Esc/backdrop close, focus restore) replacing the 2 `confirm()` calls (withdraw confirm, lock-in-partners confirm); the partner list renders as styled rows instead of a `\n`-joined string
+- [x] `handleWithdraw`/`handleSave` split into a `request*` opener (sets `confirmDialog`) + a `perform*` executor run on confirm; a shared `runConfirm` drives the modal's busy state
+- [x] Reusable components are shared so future pages can drop the native dialogs too; gates green (tsc 0, 77 tests, lint clean), dashboard route serves 200 with no runtime errors
 
 ---
 
