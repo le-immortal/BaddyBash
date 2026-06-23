@@ -1,6 +1,6 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Duplicate-Account Prevention feature (partner must exist) — Phase 8. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Duplicate-Account Prevention feature (partner must exist) + profile-form login-autofill rework (read-only identity, required-t-shirt onboarding) — Phase 8. Cross-referenced against [PRD.md](PRD.md).
 
 **Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
@@ -41,8 +41,8 @@ Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Dup
 | `/api/setup` | POST | Admin | Initialize Cosmos DB containers, including `settings`, `registrations_v2`, `matches_v2` |
 
 ### Player Dashboard (`app/dashboard/page.tsx`)
-- [x] Profile-first gate (name, alias, phone, t-shirt size)
-- [x] Alias locked after first save; name/phone/t-shirt editable
+- [x] One-time onboarding gate: identity (name, alias, email) auto-filled read-only from login (Entra); only **t-shirt size (required)** + phone (optional) collected
+- [x] Onboarding completion signaled by presence of a saved t-shirt size — no separate flag; users with a size are never re-prompted
 - [x] Category selection cards (MS, WS, MD, WD, XD)
 - [x] Max-2 categories enforced (client + server)
 - [x] Gender constraints (MS disables WS, etc.)
@@ -358,9 +358,9 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 
 ### Provision-on-login (`auth.ts`)
 - [x] `provisionUser(email, name)` idempotently upserts a `UserDocument` in the `signIn` callback (after the `@microsoft.com` gate), keyed by `id = alias = email local-part`
-- [x] On an existing doc, refreshes **only** `email`/`claimedAt`/`updatedAt` — **never** clobbers `name`/`phoneNumber`/`tShirtSize`/`alias`/`isAdmin` (preserves completed profiles; auto-claims prior `email:''` placeholders)
+- [x] On an existing doc, refreshes **only** `email`/`updatedAt` — **never** clobbers `name`/`phoneNumber`/`tShirtSize`/`alias`/`isAdmin` (preserves completed profiles; auto-claims prior `email:''` placeholders)
 - [x] Best-effort: Cosmos failures (incl. the 409 concurrent-first-login race) are swallowed so login never breaks
-- [x] New optional `claimedAt?: string` on `UserDocument` (first real sign-in timestamp)
+- [x] Identity (`name`) sourced from the Entra display name at provision time — `name` is always populated, no per-field "is the profile complete?" heuristic needed
 
 ### Registration guard (`app/api/registrations/route.ts`)
 - [x] `isClaimedUser()` predicate = `email` non-empty `&& endsWith('@microsoft.com')` (placeholders have `email === ''`)
@@ -379,8 +379,16 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 - [x] Submit confirmation names each partner being locked; obsolete "which alias?" Teams guide retired on the normal path
 - [x] Debounced search effect depends only on `[query]` (React render-loop guardrail honored)
 
+### Profile-form login-autofill rework (`dashboard/page.tsx`, `api/users/route.ts`, `auth.ts`, `lib/models.ts`)
+- [x] Name/alias/email are **read-only, auto-filled from the login session** (Entra) — users never type identity fields; eliminates alias/name drift and typo'd ghosts at the source
+- [x] One-time onboarding prompt collects **only t-shirt size (required) + phone (optional)**; Save is disabled until a t-shirt size is chosen
+- [x] Onboarding "done" signal = presence of a saved `tShirtSize` (a natural tournament must-have) — **no `onboardedAt`/`claimedAt`/`profileComplete` flags**; all three removed end-to-end
+- [x] `PATCH /api/users` never accepts name/alias/email changes from the dashboard path; 404 → `POST` fallback rebuilds the doc from session-sourced identity, preserving `createdAt`
+- [x] Registration-freeze fix: phone + t-shirt size stay saveable when registration is closed (personal logistics, not bracket data) so onboarding can always complete; only identity (`name`) changes are locked
+- [x] Render-loop guardrail honored: onboarding gate (`isOnboarded = !!savedTShirtSize`) is render-derived, not an effect; the login lookup effect depends only on `[sessionStatus, sessionEmail]`
+
 ### Tests / Review
-- [x] **72 Vitest tests passing** (+9: `__tests__/api/users-search.test.ts`, `__tests__/api/registration-partner-guard.test.ts`)
+- [x] **74 Vitest tests passing** (+9: `__tests__/api/users-search.test.ts`, `__tests__/api/registration-partner-guard.test.ts`; +2: `__tests__/api/users-onboarding.test.ts` — PATCH preserves identity while updating phone/t-shirt, POST preserves `createdAt`)
 - [x] **Stark ✅ APPROVE** (traced POST end-to-end: impossible for a non-admin to create a ghost; provisionUser never clobbers profiles; search injection-safe; no React loops)
 - [x] **Rai 🟢 GREEN** (no PII beyond already-org-visible alias/name; enumeration well-bounded; copy non-judgmental)
 

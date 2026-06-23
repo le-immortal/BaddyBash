@@ -69,7 +69,6 @@ async function provisionUser(email: string, name?: string | null): Promise<void>
         name: (name && String(name).trim()) || alias,
         phoneNumber: '',
         isAdmin: false,
-        claimedAt: now,
         createdAt: now,
         updatedAt: now,
       };
@@ -85,11 +84,10 @@ async function provisionUser(email: string, name?: string | null): Promise<void>
     }
 
     // Existing doc (possibly a placeholder with email:''). Only claim/refresh the
-    // email + timestamps. NEVER overwrite name, phoneNumber, tShirtSize, alias, or isAdmin.
+    // email. NEVER overwrite name, phoneNumber, tShirtSize, alias, or isAdmin.
     const updated: UserDocument = {
       ...existing,
       email: cleanEmail,
-      claimedAt: existing.claimedAt || now,
       updatedAt: now,
     };
     await container.item(alias, alias).replace(updated);

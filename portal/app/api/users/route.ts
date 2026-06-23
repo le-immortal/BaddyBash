@@ -258,13 +258,16 @@ export async function PATCH(request: NextRequest) {
     // Strip isAdmin from updates — only settable via direct DB access
     delete cleanUpdates.isAdmin;
 
-    // If registration is closed, restrict profile updates — but allow initial linking
+    // If registration is closed, restrict identity changes — but allow initial
+    // linking and personal logistics. Phone number and t-shirt size are personal
+    // logistics (not bracket-affecting), and t-shirt size is the required one-time
+    // onboarding signal, so they must remain saveable regardless of the
+    // registration window — otherwise a user could never complete onboarding (or
+    // would be re-prompted forever) during a registration freeze.
     const settings = await getGlobalSettings();
     const isLinking = !existing.email && cleanUpdates.email; // first-time claim of a pre-created stub
     if (!settings.registrationOpen && !isLinking) {
       delete cleanUpdates.name;
-      delete cleanUpdates.phoneNumber;
-      delete cleanUpdates.tShirtSize;
     }
 
     const updated: UserDocument = {

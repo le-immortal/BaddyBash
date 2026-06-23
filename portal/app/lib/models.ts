@@ -51,7 +51,6 @@ export interface UserDocument {
   phoneNumber: string;
   tShirtSize?: string;    // S, M, L, XL, XXL
   isAdmin?: boolean;
-  claimedAt?: string;     // ISO date — first time the real owner signed in (provisioned)
   createdAt: string;      // ISO date
   updatedAt: string;
 }
