@@ -40,6 +40,64 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
   }
 }
 
+// Provision-on-login: idempotently upsert a real, pickable user record so that
+// every colleague who signs in once becomes selectable as a doubles partner.
+// Best-effort — any Cosmos failure is logged and swallowed so login never breaks.
+async function provisionUser(email: string, name?: string | null): Promise<void> {
+  try {
+    const alias = String(email).trim().toLowerCase().replace(/@.*$/, '');
+    if (!alias) return;
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const now = new Date().toISOString();
+    const container = getUsersContainer();
+
+    let existing: UserDocument | undefined;
+    try {
+      const { resource } = await container.item(alias, alias).read<UserDocument>();
+      existing = resource;
+    } catch {
+      // User doesn't exist yet — treat as new
+    }
+
+    if (!existing) {
+      // New real account
+      const user: UserDocument = {
+        id: alias,
+        alias,
+        email: cleanEmail,
+        name: (name && String(name).trim()) || alias,
+        phoneNumber: '',
+        isAdmin: false,
+        claimedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+      try {
+        await container.items.create(user);
+      } catch (createErr) {
+        // Concurrent first-login race (e.g. two tabs): another request created
+        // the record first. The existing doc is authoritative — nothing to do.
+        const code = (createErr as { code?: number })?.code;
+        if (code !== 409) throw createErr;
+      }
+      return;
+    }
+
+    // Existing doc (possibly a placeholder with email:''). Only claim/refresh the
+    // email + timestamps. NEVER overwrite name, phoneNumber, tShirtSize, alias, or isAdmin.
+    const updated: UserDocument = {
+      ...existing,
+      email: cleanEmail,
+      claimedAt: existing.claimedAt || now,
+      updatedAt: now,
+    };
+    await container.item(alias, alias).replace(updated);
+  } catch (error) {
+    console.error("[AUTH] provisionUser failed (non-fatal):", error);
+  }
+}
+
 // Acquire a Managed Identity token to use as client_assertion
 // for Federated Identity Credential auth with Entra ID
 async function getClientAssertion(): Promise<string> {
@@ -118,6 +176,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!user.email.endsWith('@microsoft.com')) {
         return false;
       }
+
+      // Provision-on-login: idempotently make this colleague a real, pickable user.
+      // Best-effort — never block login on a Cosmos failure.
+      await provisionUser(user.email, user.name);
+
       return true;
     },
     async jwt({ token, user, trigger }) {

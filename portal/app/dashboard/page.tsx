@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument, SeasonConfig, SeasonEntry, CATEGORIES } from '../lib/models';
-import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
+import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown, Trophy, CheckCircle } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
 import Image from 'next/image';
 import { getSeasonLabel, getSeasonLabelFromConfig } from '../lib/seasonLabels';
@@ -81,7 +81,8 @@ export default function Dashboard() {
   const [savedAlias, setSavedAlias] = useState<string | null>(null);
   const [savedPhone, setSavedPhone] = useState<string | null>(null);
   const [savedTShirtSize, setSavedTShirtSize] = useState<string | null>(null);
-  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string }>>({}); 
+  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string, selected?: boolean, profileComplete?: boolean, manual?: boolean }>>({}); 
+  const [partnerErrors, setPartnerErrors] = useState<Record<string, string>>({});
   const [committedCategories, setCommittedCategories] = useState<Category[]>([]);
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
   const [selection, setSelection] = useState<Category[]>([]);
@@ -429,6 +430,41 @@ export default function Dashboard() {
       ...prev,
       [catId]: { ...prev[catId], [field]: value },
     }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  // Picker selected a verified, real member. `selected` gates submission.
+  const handlePartnerSelect = (catId: string, partner: { alias: string; name: string; profileComplete: boolean }) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: {
+        name: partner.name,
+        alias: partner.alias,
+        phone: '',
+        tShirtSize: '',
+        selected: true,
+        profileComplete: partner.profileComplete,
+        manual: false,
+      },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  const handlePartnerClear = (catId: string) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: { name: '', alias: '', phone: '', tShirtSize: '', selected: false, profileComplete: false, manual: false },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  // Admin-only manual override of the picker (unverified partner).
+  const handleAdminManualMode = (catId: string, manual: boolean) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: { ...(prev[catId] || { name: '', alias: '', phone: '', tShirtSize: '' }), manual, selected: false },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
   };
   
   const handleWithdraw = async (catId: Category) => {
@@ -458,7 +494,11 @@ export default function Dashboard() {
   const isSelectionValid = selection.every(catId => {
     if (!isDoubles(catId)) return true;
     const p = partners[catId];
-    return p && p.name?.trim().length > 0 && p.alias?.trim().length > 0;
+    if (!p) return false;
+    // Admin manual override: legacy free-text requires name + alias.
+    if (p.manual) return p.name?.trim().length > 0 && p.alias?.trim().length > 0;
+    // Normal path: a real partner must have been SELECTED from the picker.
+    return p.selected === true && p.alias?.trim().length > 0;
   });
 
   const handleSaveProfile = async () => {
@@ -557,7 +597,18 @@ export default function Dashboard() {
   const handleSave = async () => {
     if (!isSelectionValid) return;
 
-    if (!confirm('Are you sure you want to confirm these registrations?')) return;
+    // Name each partner being locked so users confirm the right person.
+    const doublesLines = selection
+      .filter(isDoubles)
+      .map(catId => {
+        const p = partners[catId];
+        const label = p?.name?.trim() || p?.alias || '';
+        return `${catId} → ${label} (@${p?.alias || ''})`;
+      });
+    const confirmMessage = doublesLines.length
+      ? `You're locking in these partners:\n\n${doublesLines.join('\n')}\n\nPartners are matched by their account — make sure each is correct. Continue?`
+      : 'Are you sure you want to confirm these registrations?';
+    if (!confirm(confirmMessage)) return;
 
     setSaving(true);
     try {
@@ -583,7 +634,15 @@ export default function Dashboard() {
         });
         if (!res.ok) {
           const err = await res.json();
-          alert(`Failed to register for ${catId}: ${err.error}`);
+          // Surface an unsigned-partner rejection inline on the card.
+          if (err.error === 'PARTNER_NOT_FOUND') {
+            setPartnerErrors(prev => ({
+              ...prev,
+              [catId]: err.message || 'This partner needs to sign in to BaddyBash before you can register them.',
+            }));
+          } else {
+            alert(`Failed to register for ${catId}: ${err.error}`);
+          }
           break;
         }
       }
@@ -591,6 +650,7 @@ export default function Dashboard() {
       // Refresh registrations
       setSelection([]);
       setPartners({});
+      setPartnerErrors({});
       await fetchRegistrations();
     } catch (err) {
       console.error('Save failed:', err);
@@ -1130,8 +1190,15 @@ export default function Dashboard() {
             <div className="relative z-10">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-semibold text-slate-800">My Registrations</h2>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 shadow-sm ring-1 ring-blue-100">
+                  <Trophy className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold leading-tight text-slate-800">My Registrations</h2>
+                  <p className="text-xs font-medium text-slate-500">Pick your categories and lock in your spots</p>
+                </div>
+                <span className={`ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-500' : 'bg-blue-500'}`} aria-hidden="true" />
                   {totalCount} / {maxSelections} Slots Used
                 </span>
               </div>
@@ -1139,16 +1206,16 @@ export default function Dashboard() {
                 <button
                   onClick={handleSave}
                   disabled={!isSelectionValid || saving || !registrationOpen}
-                  className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-all text-sm ${
+                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-bold shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
                     isSelectionValid && !saving && registrationOpen
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow'
+                      : 'cursor-not-allowed bg-slate-200 text-slate-400'
                   }`}
                 >
                   {saving ? (
                     <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
                   ) : (
-                    `Save Changes (${selection.length})`
+                    <><CheckCircle className="h-4 w-4" /> Save Changes ({selection.length})</>
                   )}
                 </button>
               )}
@@ -1195,10 +1262,17 @@ export default function Dashboard() {
                     partnerAlias={isCommitted ? committedReg?.partnerId || '' : partners[category.id]?.alias || ''}
                     partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
                     partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
+                    partnerSelected={partners[category.id]?.selected || false}
+                    partnerProfileComplete={partners[category.id]?.profileComplete || false}
+                    partnerError={partnerErrors[category.id]}
+                    isAdmin={isAdmin}
                     onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
                     onAliasChange={(val) => handlePartnerChange(category.id, 'alias', val)}
                     onPhoneChange={(val) => handlePartnerChange(category.id, 'phone', val)}
                     onTShirtSizeChange={(val) => handlePartnerChange(category.id, 'tShirtSize', val)}
+                    onPartnerSelect={(p) => handlePartnerSelect(category.id, p)}
+                    onPartnerClear={() => handlePartnerClear(category.id)}
+                    onAdminManualModeChange={(manual) => handleAdminManualMode(category.id, manual)}
                     disabled={isDisabled}
                     onSelect={handleSelect}
                     onDeselect={handleDeselect}

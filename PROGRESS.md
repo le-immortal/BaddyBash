@@ -1,6 +1,6 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Teammate Finder (partner board) feature — PR #25. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Duplicate-Account Prevention feature (partner must exist) — Phase 8. Cross-referenced against [PRD.md](PRD.md).
 
 **Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
@@ -349,6 +349,43 @@ A season-scoped "looking for a doubles partner" board with a **Teammate Finder**
 - [ ] Document the tournament-history disclosure in board help text (Rai A1)
 - [ ] `/api/players/[userId]/tournament-history` allows alias enumeration — consider rate-limiting / restricting to active posters (Stark A2 / Rai A3); remove if unused by UI
 - [ ] ETag/optimistic concurrency on PATCH (Stark A1); avatar CSS URL hardening (Stark A4)
+
+---
+
+## Phase 8: Duplicate-Account Prevention (Partner Must Exist) ✅ Complete
+
+Eliminates the duplicate/ghost-account class of bug: doubles registration previously took a **free-text partner alias** and auto-created a placeholder user (`email: ''`) + a confirmed registration. A typo'd alias produced an orphan ghost, and the real partner later signed in → a **second account**. Fix: you can only pick a doubles partner who has already signed in to the site at least once.
+
+### Provision-on-login (`auth.ts`)
+- [x] `provisionUser(email, name)` idempotently upserts a `UserDocument` in the `signIn` callback (after the `@microsoft.com` gate), keyed by `id = alias = email local-part`
+- [x] On an existing doc, refreshes **only** `email`/`claimedAt`/`updatedAt` — **never** clobbers `name`/`phoneNumber`/`tShirtSize`/`alias`/`isAdmin` (preserves completed profiles; auto-claims prior `email:''` placeholders)
+- [x] Best-effort: Cosmos failures (incl. the 409 concurrent-first-login race) are swallowed so login never breaks
+- [x] New optional `claimedAt?: string` on `UserDocument` (first real sign-in timestamp)
+
+### Registration guard (`app/api/registrations/route.ts`)
+- [x] `isClaimedUser()` predicate = `email` non-empty `&& endsWith('@microsoft.com')` (placeholders have `email === ''`)
+- [x] Doubles POST returns **400 `PARTNER_NOT_FOUND`** when the partner isn't claimed **and** the requester isn't an admin — *before* any partner write
+- [x] Placeholder creation now **gated behind `isAdmin`** — admin manual-override for unsigned partners is retained; non-admins can never create a ghost
+
+### Partner search (`app/api/users/search/route.ts`, NEW)
+- [x] `GET /api/users/search?q=&limit=8` — any signed-in session; `q` < 2 chars → empty; claimed-only; `STARTSWITH(alias)` OR case-insensitive `CONTAINS(name)`; excludes requester; parameterized; capped (≤10), fixed `OFFSET 0` (no walk-the-directory pagination)
+- [x] Privacy-minimal response `{ results: [{ alias, name, profileComplete }] }` — projects a computed `hasPhone` boolean so **no email/phone ever leaves Cosmos**
+
+### Picker UI (`app/components/PartnerPicker.tsx` NEW + `RegistrationCard.tsx` / `dashboard/page.tsx`)
+- [x] Accessible typeahead combobox (`role="combobox"`/`listbox`/`option`, keyboard nav, `aria-live` status) replacing the free-text alias input
+- [x] Selected → "✓ Verified member" chip with auto-filled read-only name; empty-profile partners still registerable ("from alias" tag)
+- [x] **No-match** = amber "ask your partner to sign in once first" block + Copy-invite (hard stop for regular users)
+- [x] Admin-only collapsed "⚙ Add an unregistered partner manually" override (reuses legacy free-text form)
+- [x] Submit confirmation names each partner being locked; obsolete "which alias?" Teams guide retired on the normal path
+- [x] Debounced search effect depends only on `[query]` (React render-loop guardrail honored)
+
+### Tests / Review
+- [x] **72 Vitest tests passing** (+9: `__tests__/api/users-search.test.ts`, `__tests__/api/registration-partner-guard.test.ts`)
+- [x] **Stark ✅ APPROVE** (traced POST end-to-end: impossible for a non-admin to create a ghost; provisionUser never clobbers profiles; search injection-safe; no React loops)
+- [x] **Rai 🟢 GREEN** (no PII beyond already-org-visible alias/name; enumeration well-bounded; copy non-judgmental)
+
+### Out of scope (separate follow-up)
+- [ ] Merge/cleanup of **existing** ghost accounts already in the DB (admin tool to reassign a ghost's registrations to the real user, keyed on the `isClaimed` predicate)
 
 ---
 
