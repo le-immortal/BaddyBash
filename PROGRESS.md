@@ -395,6 +395,7 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 
 ### Out of scope (separate follow-up)
 - [ ] Merge/cleanup of **existing** ghost accounts already in the DB (admin tool to reassign a ghost's registrations to the real user, keyed on the `isClaimed` predicate)
+- [ ] **Canonical identity for one human with multiple emails/aliases** (needs design). Today `id = alias = email-local-part` → one human with two corporate addresses (e.g. `abhinav.sharma@` alias `abhinav.sharma` **and** `sharmaabh@` alias `sharmaabh`) becomes two separate accounts (risking double-registration / dual partner-pickability). Likely the common case is one Entra account with multiple proxy SMTP addresses sharing a stable `oid`/UPN — capture & persist `oid`+`preferred_username` (currently discarded in `auth.ts` `profile()`) and key identity on `oid`. Must also reconcile **legacy accounts from prior seasons** whose alias/email don't match the current derivation rule, and handle genuinely-separate accounts via explicit account-linking. Shares scope with the ghost-account merge tool above.
 
 ---
 
