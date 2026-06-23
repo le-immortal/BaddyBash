@@ -148,7 +148,7 @@ function BracketPageContent() {
           onRefresh={fetchMatches}
         />
 
-        {isSelectedSeasonArchived && <ArchivedSeasonBanner />}
+        {isSelectedSeasonArchived && isAdmin && <ArchivedSeasonBanner />}
         {advanceMode && <AdvanceModeBanner />}
 
         {!bracketsVisible && !isAdmin ? (
