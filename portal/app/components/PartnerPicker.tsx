@@ -6,7 +6,6 @@ import clsx from 'clsx';
 export interface PartnerOption {
   alias: string;
   name: string;
-  profileComplete: boolean;
 }
 
 interface PartnerPickerProps {
@@ -147,7 +146,6 @@ export default function PartnerPicker({
 
   // ---- Selected (verified member) state ----
   if (selected) {
-    const fromAlias = selected.name.trim().toLowerCase() === selected.alias.trim().toLowerCase();
     return (
       <div>
         <label className="text-xs font-medium text-slate-500 uppercase">Partner</label>
@@ -158,11 +156,6 @@ export default function PartnerPicker({
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1 truncate text-sm font-semibold text-slate-800">
               {selected.name || selected.alias}
-              {fromAlias && (
-                <span className="rounded bg-slate-200 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">
-                  from alias
-                </span>
-              )}
             </p>
             <p className="flex items-center gap-1 truncate text-xs text-slate-500">
               <Check className="h-3 w-3 text-green-600" strokeWidth={3} /> Verified member · @{selected.alias}
@@ -177,11 +170,6 @@ export default function PartnerPicker({
             <X className="h-4 w-4" />
           </button>
         </div>
-        {fromAlias && (
-          <p className="mt-1 text-[10px] text-slate-400">
-            This partner hasn&apos;t completed their profile yet — they can fill in their details after signing in. You can still register.
-          </p>
-        )}
         {submitError && (
           <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">{submitError}</p>
         )}

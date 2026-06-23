@@ -369,11 +369,11 @@ Eliminates the duplicate/ghost-account class of bug: doubles registration previo
 
 ### Partner search (`app/api/users/search/route.ts`, NEW)
 - [x] `GET /api/users/search?q=&limit=8` — any signed-in session; `q` < 2 chars → empty; claimed-only; `STARTSWITH(alias)` OR case-insensitive `CONTAINS(name)`; excludes requester; parameterized; capped (≤10), fixed `OFFSET 0` (no walk-the-directory pagination)
-- [x] Privacy-minimal response `{ results: [{ alias, name, profileComplete }] }` — projects a computed `hasPhone` boolean so **no email/phone ever leaves Cosmos**
+- [x] Privacy-minimal response `{ results: [{ alias, name }] }` — selects only alias + name (Entra display name), so **no email/phone ever leaves Cosmos**
 
 ### Picker UI (`app/components/PartnerPicker.tsx` NEW + `RegistrationCard.tsx` / `dashboard/page.tsx`)
 - [x] Accessible typeahead combobox (`role="combobox"`/`listbox`/`option`, keyboard nav, `aria-live` status) replacing the free-text alias input
-- [x] Selected → "✓ Verified member" chip with auto-filled read-only name; empty-profile partners still registerable ("from alias" tag)
+- [x] Selected → "✓ Verified member" chip with auto-filled read-only name (`name` comes from the Entra display name set at provision-on-login)
 - [x] **No-match** = amber "ask your partner to sign in once first" block + Copy-invite (hard stop for regular users)
 - [x] Admin-only collapsed "⚙ Add an unregistered partner manually" override (reuses legacy free-text form)
 - [x] Submit confirmation names each partner being locked; obsolete "which alias?" Teams guide retired on the normal path

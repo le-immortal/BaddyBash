@@ -13,7 +13,7 @@ const MIN_QUERY_LENGTH = 2;
  * Returns privacy-minimal results for CLAIMED users (those who have signed in
  * at least once — `email` is a non-empty `@microsoft.com` address).
  *
- * Response shape: { results: [{ alias, name, profileComplete }] }
+ * Response shape: { results: [{ alias, name }] }
  * Never exposes email or phoneNumber.
  */
 export async function GET(request: NextRequest) {
@@ -43,13 +43,10 @@ export async function GET(request: NextRequest) {
 
     // CLAIMED users only, matching alias-startsWith OR name-contains (case-insensitive).
     // All user input is parameterized — never interpolated into the query string.
-    // Project a computed `hasPhone` boolean rather than selecting phoneNumber so
-    // no contact PII ever leaves Cosmos into the response objects (defense-in-depth
-    // against a future spread refactor leaking phone numbers).
     const { resources } = await container.items
-      .query<{ alias?: string; name?: string; hasPhone?: boolean }>({
+      .query<{ alias?: string; name?: string }>({
         query:
-          "SELECT c.alias, c.name, (IS_DEFINED(c.phoneNumber) AND c.phoneNumber != '') AS hasPhone FROM c " +
+          "SELECT c.alias, c.name FROM c " +
           "WHERE c.email != '' AND ENDSWITH(c.email, '@microsoft.com') " +
           "AND c.id != @self " +
           "AND (STARTSWITH(c.alias, @qLower) OR CONTAINS(c.name, @q, true)) " +
@@ -66,12 +63,9 @@ export async function GET(request: NextRequest) {
     const results = resources.map((u) => {
       const alias = u.alias ?? "";
       const name = (u.name ?? "").trim();
-      const hasRealName = name.length > 0 && name.toLowerCase() !== alias.toLowerCase();
-      const hasPhone = u.hasPhone === true;
       return {
         alias,
         name: name || alias,
-        profileComplete: hasRealName && hasPhone,
       };
     });
 

@@ -13,7 +13,6 @@ interface RegistrationCardProps {
   partnerPhone?: string;
   partnerTShirtSize?: string;
   partnerSelected?: boolean;
-  partnerProfileComplete?: boolean;
   partnerError?: string;
   isAdmin?: boolean;
   onNameChange?: (val: string) => void;
@@ -48,7 +47,6 @@ export default function RegistrationCard({
   partnerPhone,
   partnerTShirtSize,
   partnerSelected,
-  partnerProfileComplete,
   partnerError,
   isAdmin = false,
   onNameChange,
@@ -159,7 +157,6 @@ export default function RegistrationCard({
                     ? {
                         alias: partnerAlias,
                         name: partnerName || partnerAlias,
-                        profileComplete: partnerProfileComplete ?? false,
                       }
                     : null
                 }

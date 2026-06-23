@@ -46,8 +46,8 @@ describe("GET /api/users/search", () => {
   it("returns privacy-minimal results and never exposes email or phoneNumber", async () => {
     usersContainer.query.mockReturnValue(
       createFetchAllResult([
-        { alias: "bob", name: "Bob Smith", hasPhone: true, email: "bob@microsoft.com" },
-        { alias: "bobby", name: "bobby", hasPhone: false, email: "bobby@microsoft.com" },
+        { alias: "bob", name: "Bob Smith", email: "bob@microsoft.com" },
+        { alias: "bobby", name: "bobby", email: "bobby@microsoft.com" },
       ])
     );
 
@@ -56,15 +56,14 @@ describe("GET /api/users/search", () => {
     const body = await response.json();
     expect(body).toEqual({
       results: [
-        { alias: "bob", name: "Bob Smith", profileComplete: true },
-        { alias: "bobby", name: "bobby", profileComplete: false },
+        { alias: "bob", name: "Bob Smith" },
+        { alias: "bobby", name: "bobby" },
       ],
     });
     // Ensure no leaked fields
     for (const r of body.results) {
       expect(r).not.toHaveProperty("email");
       expect(r).not.toHaveProperty("phoneNumber");
-      expect(r).not.toHaveProperty("hasPhone");
     }
   });
 

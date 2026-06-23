@@ -81,7 +81,7 @@ export default function Dashboard() {
   const [savedAlias, setSavedAlias] = useState<string | null>(null);
   const [savedPhone, setSavedPhone] = useState<string | null>(null);
   const [savedTShirtSize, setSavedTShirtSize] = useState<string | null>(null);
-  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string, selected?: boolean, profileComplete?: boolean, manual?: boolean }>>({}); 
+  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string, selected?: boolean, manual?: boolean }>>({}); 
   const [partnerErrors, setPartnerErrors] = useState<Record<string, string>>({});
   const [committedCategories, setCommittedCategories] = useState<Category[]>([]);
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
@@ -434,7 +434,7 @@ export default function Dashboard() {
   };
 
   // Picker selected a verified, real member. `selected` gates submission.
-  const handlePartnerSelect = (catId: string, partner: { alias: string; name: string; profileComplete: boolean }) => {
+  const handlePartnerSelect = (catId: string, partner: { alias: string; name: string }) => {
     setPartners(prev => ({
       ...prev,
       [catId]: {
@@ -443,7 +443,6 @@ export default function Dashboard() {
         phone: '',
         tShirtSize: '',
         selected: true,
-        profileComplete: partner.profileComplete,
         manual: false,
       },
     }));
@@ -453,7 +452,7 @@ export default function Dashboard() {
   const handlePartnerClear = (catId: string) => {
     setPartners(prev => ({
       ...prev,
-      [catId]: { name: '', alias: '', phone: '', tShirtSize: '', selected: false, profileComplete: false, manual: false },
+      [catId]: { name: '', alias: '', phone: '', tShirtSize: '', selected: false, manual: false },
     }));
     setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
   };
@@ -1263,7 +1262,6 @@ export default function Dashboard() {
                     partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
                     partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
                     partnerSelected={partners[category.id]?.selected || false}
-                    partnerProfileComplete={partners[category.id]?.profileComplete || false}
                     partnerError={partnerErrors[category.id]}
                     isAdmin={isAdmin}
                     onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
