@@ -18,8 +18,8 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
       const container = getUsersContainer();
       const { resources } = await container.items
         .query<UserDocument>({
-          query: "SELECT c.isAdmin FROM c WHERE c.email = @email",
-          parameters: [{ name: "@email", value: email }],
+          query: "SELECT c.isAdmin FROM c WHERE LOWER(c.email) = @email",
+          parameters: [{ name: "@email", value: String(email).trim().toLowerCase() }],
         })
         .fetchAll();
       return resources[0]?.isAdmin === true;
@@ -37,6 +37,62 @@ async function resolveIsAdmin(email: string): Promise<boolean> {
     return false;
   } finally {
     if (timeout) clearTimeout(timeout);
+  }
+}
+
+// Provision-on-login: idempotently upsert a real, pickable user record so that
+// every colleague who signs in once becomes selectable as a doubles partner.
+// Best-effort — any Cosmos failure is logged and swallowed so login never breaks.
+async function provisionUser(email: string, name?: string | null): Promise<void> {
+  try {
+    const alias = String(email).trim().toLowerCase().replace(/@.*$/, '');
+    if (!alias) return;
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const now = new Date().toISOString();
+    const container = getUsersContainer();
+
+    let existing: UserDocument | undefined;
+    try {
+      const { resource } = await container.item(alias, alias).read<UserDocument>();
+      existing = resource;
+    } catch {
+      // User doesn't exist yet — treat as new
+    }
+
+    if (!existing) {
+      // New real account
+      const user: UserDocument = {
+        id: alias,
+        alias,
+        email: cleanEmail,
+        name: (name && String(name).trim()) || alias,
+        phoneNumber: '',
+        isAdmin: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      try {
+        await container.items.create(user);
+      } catch (createErr) {
+        // Concurrent first-login race (e.g. two tabs): another request created
+        // the record first. The existing doc is authoritative — nothing to do.
+        const code = (createErr as { code?: number })?.code;
+        if (code !== 409) throw createErr;
+      }
+      return;
+    }
+
+    // Existing doc (possibly a placeholder with email:''). Only claim/refresh the
+    // email. NEVER overwrite name, phoneNumber, tShirtSize, alias, or isAdmin.
+    const updated: UserDocument = {
+      ...existing,
+      email: cleanEmail,
+      updatedAt: now,
+    };
+    await container.item(alias, alias).replace(updated);
+  } catch (error) {
+    console.error("[AUTH] provisionUser failed (non-fatal):", error);
   }
 }
 
@@ -118,6 +174,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!user.email.endsWith('@microsoft.com')) {
         return false;
       }
+
+      // Provision-on-login: idempotently make this colleague a real, pickable user.
+      // Best-effort — never block login on a Cosmos failure.
+      await provisionUser(user.email, user.name);
+
       return true;
     },
     async jwt({ token, user, trigger }) {

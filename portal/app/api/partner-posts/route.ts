@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensurePartnerPostsContainer, getPartnerPostsContainer } from "@/app/lib/cosmosClient";
 import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
 import { makeSeasonCategory } from "@/app/lib/tournamentData";
+import { getPlayerAllCategoriesTournamentHistory } from "@/app/lib/playerHistory";
 import { makePartnerPostId, type PartnerPostDocument } from "@/app/lib/models";
 import { auth } from "@/auth";
 import {
@@ -70,9 +71,24 @@ export async function GET(request: NextRequest) {
         throw error;
       });
 
+    // Fold each poster's tournament history into the list response so the client
+    // makes a SINGLE request instead of an extra per-post /history call (N+1).
+    // Per-season match reads are memoized in getSeasonCategoryMatchesCached, so
+    // resolving many posters here only does the shared reads once.
+    const histories = await Promise.all(
+      resources.map((post) =>
+        getPlayerAllCategoriesTournamentHistory(post.userId).catch((historyError) => {
+          console.error("Error fetching partner post history:", historyError);
+          return [];
+        })
+      )
+    );
+
     return NextResponse.json({
       seasonId,
-      posts: resources.map((post) => toPartnerPostResponse(post, currentUser.id)),
+      posts: resources.map((post, index) =>
+        toPartnerPostResponse(post, currentUser.id, histories[index])
+      ),
     });
   } catch (error) {
     console.error("Error fetching partner posts:", error);

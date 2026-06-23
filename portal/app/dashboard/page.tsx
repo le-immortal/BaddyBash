@@ -6,8 +6,10 @@ import Navbar from '../components/Navbar';
 import RegistrationCard from '../components/RegistrationCard';
 import ScheduleMatchCard from '../components/ScheduleMatchCard';
 import { Category, MatchDocument, SeasonConfig, SeasonEntry, CATEGORIES } from '../lib/models';
-import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown } from 'lucide-react';
+import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown, Trophy, CheckCircle } from 'lucide-react';
 import ErrorScreen from '../components/ErrorScreen';
+import { useToasts, ToastStack } from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 import Image from 'next/image';
 import { getSeasonLabel, getSeasonLabelFromConfig } from '../lib/seasonLabels';
 
@@ -73,15 +75,14 @@ type UserLookupState = 'pending' | 'found' | 'missing';
 
 export default function Dashboard() {
   const { data: session, status: sessionStatus } = useSession();
-  const [playerName, setPlayerName] = useState('');
-  const [alias, setAlias] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [tShirtSize, setTShirtSize] = useState('');
   const [savedName, setSavedName] = useState<string | null>(null);
   const [savedAlias, setSavedAlias] = useState<string | null>(null);
   const [savedPhone, setSavedPhone] = useState<string | null>(null);
   const [savedTShirtSize, setSavedTShirtSize] = useState<string | null>(null);
-  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string }>>({}); 
+  const [partners, setPartners] = useState<Record<string, { name: string, alias: string, phone: string, tShirtSize: string, selected?: boolean, manual?: boolean }>>({});
+  const [partnerErrors, setPartnerErrors] = useState<Record<string, string>>({});
   const [committedCategories, setCommittedCategories] = useState<Category[]>([]);
   const [committedRegistrations, setCommittedRegistrations] = useState<Registration[]>([]);
   const [selection, setSelection] = useState<Category[]>([]);
@@ -90,6 +91,27 @@ export default function Dashboard() {
   const [userLookupState, setUserLookupState] = useState<UserLookupState>('pending');
   const [saving, setSaving] = useState(false);
   const [linkingAlias, setLinkingAlias] = useState(false);
+  const { toasts, showToast, dismissToast } = useToasts();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    lines: string[];
+    confirmLabel: string;
+    tone: 'primary' | 'danger';
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const runConfirm = async () => {
+    if (!confirmDialog) return;
+    const action = confirmDialog.onConfirm;
+    setConfirmBusy(true);
+    try {
+      await action();
+    } finally {
+      setConfirmBusy(false);
+      setConfirmDialog(null);
+    }
+  };
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -100,8 +122,6 @@ export default function Dashboard() {
   const [totalRoundsMap, setTotalRoundsMap] = useState<Record<string, number>>({});
   const [apiError, setApiError] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [aliasWarning, setAliasWarning] = useState(false);
-  const [aliasGuideOpen, setAliasGuideOpen] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(true);
   const [seasonLabel, setSeasonLabel] = useState('Baddy Bash');
   const [seasonConfig, setSeasonConfig] = useState<SeasonConfig | null>(null);
@@ -135,6 +155,11 @@ export default function Dashboard() {
   // Determine if profile is fully set up.
   // Email is used only for lookup — the actual Cosmos user ID is always the alias.
   const profileSaved = userLookupState === 'found' && !!savedAlias && !!resolvedUserId;
+
+  // The user has completed the one-time onboarding prompt once they have a
+  // t-shirt size on record. A t-shirt size is a required tournament field, so
+  // its presence cleanly signals "onboarded" — no separate flag needed.
+  const isOnboarded = !!savedTShirtSize;
  
   // sessionEmail is used only for lookup — the actual Cosmos user ID is always the alias
   const sessionEmail = session?.user?.email || '';
@@ -184,8 +209,6 @@ export default function Dashboard() {
             setSavedAlias(user.alias);
             setSavedPhone(user.phoneNumber);
             setSavedTShirtSize(user.tShirtSize || null);
-            setPlayerName(user.name);
-            setAlias(user.alias);
             setPhoneNumber(user.phoneNumber || '');
             setTShirtSize(user.tShirtSize || '');
             setResolvedUserId(user.id); // id = alias
@@ -429,12 +452,55 @@ export default function Dashboard() {
       ...prev,
       [catId]: { ...prev[catId], [field]: value },
     }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  // Picker selected a verified, real member. `selected` gates submission.
+  const handlePartnerSelect = (catId: string, partner: { alias: string; name: string }) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: {
+        name: partner.name,
+        alias: partner.alias,
+        phone: '',
+        tShirtSize: '',
+        selected: true,
+        manual: false,
+      },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  const handlePartnerClear = (catId: string) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: { name: '', alias: '', phone: '', tShirtSize: '', selected: false, manual: false },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
+  };
+
+  // Admin-only manual override of the picker (unverified partner).
+  const handleAdminManualMode = (catId: string, manual: boolean) => {
+    setPartners(prev => ({
+      ...prev,
+      [catId]: { ...(prev[catId] || { name: '', alias: '', phone: '', tShirtSize: '' }), manual, selected: false },
+    }));
+    setPartnerErrors(prev => (prev[catId] ? { ...prev, [catId]: '' } : prev));
   };
   
-  const handleWithdraw = async (catId: Category) => {
+  const handleWithdraw = (catId: Category) => {
     if (!registrationOpen) return;
-    if (!confirm(`Are you sure you want to withdraw from ${CATEGORIES.find(c => c.id === catId)?.name}?`)) return;
+    const categoryName = CATEGORIES.find(c => c.id === catId)?.name;
+    setConfirmDialog({
+      title: 'Withdraw registration',
+      lines: [`Are you sure you want to withdraw from ${categoryName}?`],
+      confirmLabel: 'Withdraw',
+      tone: 'danger',
+      onConfirm: () => performWithdraw(catId),
+    });
+  };
 
+  const performWithdraw = async (catId: Category) => {
     try {
       const res = await fetch(`/api/registrations?userId=${encodeURIComponent(userId)}&category=${catId}`, {
         method: 'DELETE',
@@ -449,7 +515,7 @@ export default function Dashboard() {
       await fetchRegistrations();
     } catch (err: unknown) {
       console.error('Withdraw failed:', err);
-      alert(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.');
+      showToast(err instanceof Error ? err.message : 'Failed to withdraw. Please try again.', 'error');
     }
   };
 
@@ -458,70 +524,54 @@ export default function Dashboard() {
   const isSelectionValid = selection.every(catId => {
     if (!isDoubles(catId)) return true;
     const p = partners[catId];
-    return p && p.name?.trim().length > 0 && p.alias?.trim().length > 0;
+    if (!p) return false;
+    // Admin manual override: legacy free-text requires name + alias.
+    if (p.manual) return p.name?.trim().length > 0 && p.alias?.trim().length > 0;
+    // Normal path: a real partner must have been SELECTED from the picker.
+    return p.selected === true && p.alias?.trim().length > 0;
   });
 
   const handleSaveProfile = async () => {
-    if (!playerName.trim()) {
-      alert('Please enter your name.');
+    // T-shirt size is required — it doubles as the onboarding-complete signal.
+    if (!tShirtSize.trim()) {
+      showToast('Please select your t-shirt size.', 'error');
       return;
     }
-    if (!alias.trim()) {
-      alert('Please enter your Microsoft alias.');
-      return;
-    }
-    /* Phone number is optional
-    if (!phoneNumber.trim()) {
-      alert('Please enter your phone number.');
-      return;
-    }
-    */
-
     setLinkingAlias(true);
+    // The user's own id/alias is always derived from their login — never the form.
+    const cleanAlias = resolvedUserId || String(session?.user?.email || '').trim().toLowerCase().replace(/@.*$/, '');
     try {
-      // Trim, lowercase, and strip @domain suffix from alias for consistency
-      const cleanAlias = alias.trim().toLowerCase().replace(/@.*$/, '');
-      
-      // Check if a user with this alias already exists (pre-created by a partner)
-      const aliasRes = await fetch(`/api/users?alias=${encodeURIComponent(cleanAlias)}`);
+      // PATCH updates only phone/t-shirt; name/email/alias are owned
+      // by login/provisioning and must never be sent from the form.
+      const patchRes = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: cleanAlias,
+          phoneNumber: phoneNumber.trim(),
+          tShirtSize: tShirtSize.trim(),
+        }),
+      });
 
-      if (aliasRes.ok) {
-        const existingUser = await aliasRes.json();
-        // Found a pre-created user (partner registered them) — link email/avatar to it
-        const linkRes = await fetch('/api/users', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: existingUser.id,
-            name: playerName.trim(),
-            email: session?.user?.email || '',
-            avatar: session?.user?.image || undefined,
-            phoneNumber: phoneNumber.trim(),
-            tShirtSize: tShirtSize.trim(),
-          }),
-        });
-        
-        if (!linkRes.ok) {
-          const errData = await linkRes.json();
-          throw new Error(errData.error || 'Failed to update profile.');
-        }
-
-        setResolvedUserId(existingUser.id);
-        setSavedName(playerName.trim());
-        setSavedAlias(cleanAlias);
+      if (patchRes.ok) {
+        const result = await patchRes.json();
+        setResolvedUserId(result.id || cleanAlias);
         setSavedPhone(phoneNumber.trim());
         setSavedTShirtSize(tShirtSize.trim());
+        setSavedName(result.name || savedName || session?.user?.name || '');
+        setSavedAlias(result.alias || cleanAlias);
         setIsEditingProfile(false);
         setUserLookupState('found');
-        await fetchRegistrations(existingUser.id);
-      } else {
-        // No pre-existing user — create a new user with id = alias (lowercase)
+        await fetchRegistrations(cleanAlias);
+      } else if (patchRes.status === 404) {
+        // Record missing — provisioning somehow didn't run. Create it from the
+        // SESSION (never from form inputs) as a fallback.
         const createRes = await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: cleanAlias,
-            name: playerName.trim(),
+            name: session?.user?.name || cleanAlias,
             email: session?.user?.email || '',
             alias: cleanAlias,
             phoneNumber: phoneNumber.trim(),
@@ -531,37 +581,61 @@ export default function Dashboard() {
         });
 
         if (!createRes.ok) {
-           const errData = await createRes.json();
-           throw new Error(errData.error || 'Failed to create profile.');
+          const errData = await createRes.json();
+          throw new Error(errData.error || 'Failed to create profile.');
         }
 
-        setResolvedUserId(cleanAlias);
-        setSavedName(playerName.trim());
-        setSavedAlias(cleanAlias);
+        const result = await createRes.json();
+        setResolvedUserId(result.id || cleanAlias);
         setSavedPhone(phoneNumber.trim());
         setSavedTShirtSize(tShirtSize.trim());
+        setSavedName(result.name || session?.user?.name || cleanAlias);
+        setSavedAlias(result.alias || cleanAlias);
         setIsEditingProfile(false);
         setUserLookupState('found');
         await fetchRegistrations(cleanAlias);
+      } else {
+        const errData = await patchRes.json();
+        throw new Error(errData.error || 'Failed to update profile.');
       }
     } catch (err: unknown) {
       console.error('Profile save failed:', err);
-      // Better error handling
-      const msg = err instanceof Error ? err.message : 'Failed to save profile. Please check if the alias is already in use by another email.';
-      alert(msg);
+      const msg = err instanceof Error ? err.message : 'Failed to save profile. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setLinkingAlias(false);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!isSelectionValid) return;
 
-    if (!confirm('Are you sure you want to confirm these registrations?')) return;
+    // Name each partner being locked so users confirm the right person.
+    const doublesLines = selection
+      .filter(isDoubles)
+      .map(catId => {
+        const p = partners[catId];
+        const label = p?.name?.trim() || p?.alias || '';
+        return `${catId} → ${label} (@${p?.alias || ''})`;
+      });
+    const lines = doublesLines.length
+      ? ["You're locking in these partners:", ...doublesLines, 'Partners are matched by their account — make sure each is correct.']
+      : ['Are you sure you want to confirm these registrations?'];
+    setConfirmDialog({
+      title: 'Confirm registration',
+      lines,
+      confirmLabel: 'Confirm',
+      tone: 'primary',
+      onConfirm: () => performSave(),
+    });
+  };
 
+  const performSave = async () => {
     setSaving(true);
     try {
-      // POST each selected category
+      // POST each selected category, tracking which ones actually succeeded so a
+      // failure doesn't wipe the user's inline error or their remaining input.
+      const succeeded = new Set<string>();
       for (const catId of selection) {
         const body: Record<string, string> = {
           userId,
@@ -583,18 +657,40 @@ export default function Dashboard() {
         });
         if (!res.ok) {
           const err = await res.json();
-          alert(`Failed to register for ${catId}: ${err.error}`);
+          // Surface an unsigned-partner rejection inline on the card.
+          if (err.error === 'PARTNER_NOT_FOUND') {
+            setPartnerErrors(prev => ({
+              ...prev,
+              [catId]: err.message || 'This partner needs to sign in to BaddyBash before you can register them.',
+            }));
+          } else {
+            showToast(`Failed to register for ${catId}: ${err.error}`, 'error');
+          }
           break;
         }
+        succeeded.add(catId);
       }
 
-      // Refresh registrations
-      setSelection([]);
-      setPartners({});
-      await fetchRegistrations();
+      // Only clear the categories that actually registered — keep the failed one
+      // (with its inline error) and any not-yet-attempted ones so the user can fix
+      // and retry without re-entering everything. Refresh to reflect partial saves.
+      if (succeeded.size > 0) {
+        setSelection(prev => prev.filter(catId => !succeeded.has(catId)));
+        setPartners(prev => {
+          const next = { ...prev };
+          succeeded.forEach(catId => delete next[catId]);
+          return next;
+        });
+        setPartnerErrors(prev => {
+          const next = { ...prev };
+          succeeded.forEach(catId => delete next[catId]);
+          return next;
+        });
+        await fetchRegistrations();
+      }
     } catch (err) {
       console.error('Save failed:', err);
-      alert('An error occurred while saving. Please try again.');
+      showToast('An error occurred while saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -634,7 +730,7 @@ export default function Dashboard() {
 
   // Profile-first gate: if alias/name/phone not saved, show setup form
   // Only show form AFTER we've explicitly confirmed the lookup result is "missing"
-  if (userLookupState === 'missing' || isEditingProfile) {
+  if (userLookupState === 'missing' || (userLookupState === 'found' && !isOnboarded) || isEditingProfile) {
     return (
       <DashboardShell
         className="min-h-screen relative"
@@ -647,129 +743,33 @@ export default function Dashboard() {
       >
         <main className="container mx-auto py-16 px-4 max-w-md">
           <div className="bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : `Welcome to ${seasonLabel}!`}</h1>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Complete your profile'}</h1>
             <p className="text-slate-600 text-sm mb-6">
-              {isEditingProfile 
-                ? 'Update your details below. Note that your Microsoft Alias cannot be changed.' 
-                : 'Please fill in your details to get started. If your partner has already registered you, enter the same alias they used and we\'ll link your account.'}
+              {isEditingProfile
+                ? 'Your name, alias, and email come from your Microsoft account and can\u2019t be changed here. Update your phone number and t-shirt size below.'
+                : 'Your name and alias are set from your Microsoft account. Just add a phone number and t-shirt size to get started.'}
             </p>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g., Jane Doe"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Microsoft Alias <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g., janedoe (from your Teams profile)"
-                  value={alias}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    // Only allow lowercase alphanumeric
-                    const cleaned = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    if (raw !== cleaned) {
-                      setAliasWarning(true);
-                      setTimeout(() => setAliasWarning(false), 4000);
-                    }
-                    setAlias(cleaned);
-                  }}
-                  disabled={isEditingProfile} 
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none sm:text-sm text-slate-900 placeholder-slate-400 ${
-                    isEditingProfile ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : aliasWarning ? 'bg-white border-red-400 focus:ring-red-500 focus:border-red-500' : 'bg-white border-slate-300 focus:ring-blue-500 focus:border-blue-500'
-                  }`}
-                />
-                {!isEditingProfile && aliasWarning && (
-                  <p className="mt-1 text-xs text-red-500 font-medium">Only letters and numbers allowed. Use the short alias from your Teams profile (e.g., janedoe).</p>
-                )}
-                {!isEditingProfile && !aliasWarning && (
-                  <p className="mt-1 text-xs text-slate-400">Please use your correct alias, it will be used to link your doubles registrations as well. Use the short alias from your Teams profile, not your full email prefix. No @microsoft.com needed (e.g., <span className="font-medium text-slate-500">janedoe</span> not <span className="text-slate-400">janedoe@microsoft.com or jane.doe</span>).</p>
-                )}
-                {!isEditingProfile && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setAliasGuideOpen(prev => !prev)}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                    >
-                      <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${aliasGuideOpen ? 'rotate-180' : ''}`} />
-                      {aliasGuideOpen ? 'Hide guide' : 'Not sure which alias to use?'}
-                    </button>
-
-                    {aliasGuideOpen && (
-                      <div className="mt-2 p-3 bg-slate-800 rounded-lg text-white text-xs space-y-3">
-                        <p className="text-slate-300 text-[11px]">Open <span className="font-semibold text-white">Microsoft Teams</span> &rarr; Click any person&rsquo;s profile &rarr; Go to <span className="font-semibold text-white">Contact</span> tab &rarr; Look for &ldquo;Alias&rdquo;</p>
-
-                        {/* Mini Teams Contact Mockup */}
-                        <div className="bg-slate-900 rounded-md p-3 border border-slate-700">
-                          <div className="flex items-center gap-2.5 mb-2.5">
-                            <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white text-xs font-bold shrink-0">JD</div>
-                            <div>
-                              <p className="font-semibold text-sm text-white">Jane Doe</p>
-                              <p className="text-[10px] text-slate-400">Software Engineer II &bull; ENGINEERING</p>
-                            </div>
-                          </div>
-                          <div className="border-t border-slate-700 pt-2">
-                            <p className="text-[10px] text-slate-400 mb-1.5 font-semibold">Contact information</p>
-                            <div className="grid grid-cols-3 gap-2 text-[10px]">
-                              <div className="min-w-0">
-                                <p className="text-slate-500">Email</p>
-                                <p className="text-blue-400 break-all">Jane.Doe@microsoft.com</p>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-slate-500">Chat</p>
-                                <p className="text-blue-400 break-all">janedoe@microsoft.com</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500">Work location</p>
-                                <p className="text-slate-300">HYD - Campus</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-[10px] mt-2">
-                              <div>
-                                <p className="text-slate-500">Company</p>
-                                <p className="text-slate-300">MIRPL-HYD</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500">Job title</p>
-                                <p className="text-slate-300">Software Engineer II</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500">Department</p>
-                                <p className="text-slate-300">ENGINEERING...</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-[10px] mt-2">
-                              <div>
-                                <p className="text-slate-500">Business address</p>
-                                <p className="text-slate-300">Hyderabad</p>
-                              </div>
-                              <div className="bg-amber-500/20 border border-amber-500/50 rounded px-1.5 py-1">
-                                <p className="text-slate-500">Alias</p>
-                                <p className="text-amber-300 font-bold">janedoe</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500">Cost center</p>
-                                <p className="text-slate-300">XXXXXXX</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-blue-900/40 border border-blue-500/30 rounded p-2 text-[11px] text-blue-200">
-                          <span className="font-semibold">Tip:</span> Your email might be <span className="text-blue-300">Jane.Doe@microsoft.com</span> but your alias could be <span className="text-amber-300 font-bold">janedoe</span>. Always use the alias shown in the Contact tab.
-                        </div>
-                      </div>
-                    )}
+              <div className="rounded-md border border-slate-200 bg-slate-100 p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs font-medium text-slate-500">From your Microsoft account</span>
+                </div>
+                <dl className="space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Name</dt>
+                    <dd className="text-slate-600 font-medium text-right break-all">{savedName || session?.user?.name || '—'}</dd>
                   </div>
-                )}
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Alias</dt>
+                    <dd className="text-slate-600 font-medium text-right break-all">{savedAlias || String(session?.user?.email || '').trim().toLowerCase().replace(/@.*$/, '') || '—'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Email</dt>
+                    <dd className="text-slate-600 font-medium text-right break-all">{session?.user?.email || '—'}</dd>
+                  </div>
+                </dl>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Phone Number <span className="text-gray-400 font-normal pl-1">(Optional)</span></label>
@@ -783,7 +783,7 @@ export default function Dashboard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">T-Shirt Size <span className="text-gray-400 font-normal pl-1">(Optional)</span></label>
+                <label className="block text-sm font-medium text-slate-700">T-Shirt Size <span className="text-red-500 pl-1">*</span></label>
                 <select
                   value={tShirtSize}
                   onChange={(e) => setTShirtSize(e.target.value)}
@@ -801,7 +801,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={handleSaveProfile}
-                  disabled={linkingAlias || !playerName.trim() || !alias.trim()}
+                  disabled={linkingAlias || !tShirtSize.trim()}
                   className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {linkingAlias ? (
@@ -814,9 +814,7 @@ export default function Dashboard() {
                 {isEditingProfile && (
                   <button
                     onClick={() => {
-                       // Reset form to saved values and exit edit mode
-                       setPlayerName(savedName || '');
-                       setAlias(savedAlias || '');
+                       // Reset editable fields to saved values and exit edit mode
                        setPhoneNumber(savedPhone || '');
                        setTShirtSize(savedTShirtSize || '');
                        setIsEditingProfile(false);
@@ -830,6 +828,17 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
+        <ToastStack toasts={toasts} onDismiss={dismissToast} />
+        <ConfirmModal
+          open={!!confirmDialog}
+          title={confirmDialog?.title || ''}
+          lines={confirmDialog?.lines || []}
+          confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+          tone={confirmDialog?.tone || 'primary'}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={() => setConfirmDialog(null)}
+        />
       </DashboardShell>
     );
   }
@@ -864,8 +873,6 @@ export default function Dashboard() {
               {registrationOpen && (
                 <button
                   onClick={() => {
-                    setPlayerName(savedName || '');
-                    setAlias(savedAlias || '');
                     setPhoneNumber(savedPhone || '');
                     setTShirtSize(savedTShirtSize || '');
                     setIsEditingProfile(true);
@@ -1130,8 +1137,15 @@ export default function Dashboard() {
             <div className="relative z-10">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-semibold text-slate-800">My Registrations</h2>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 shadow-sm ring-1 ring-blue-100">
+                  <Trophy className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold leading-tight text-slate-800">My Registrations</h2>
+                  <p className="text-xs font-medium text-slate-500">Pick your categories and lock in your spots</p>
+                </div>
+                <span className={`ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-500' : 'bg-blue-500'}`} aria-hidden="true" />
                   {totalCount} / {maxSelections} Slots Used
                 </span>
               </div>
@@ -1139,16 +1153,16 @@ export default function Dashboard() {
                 <button
                   onClick={handleSave}
                   disabled={!isSelectionValid || saving || !registrationOpen}
-                  className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-all text-sm ${
+                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-bold shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
                     isSelectionValid && !saving && registrationOpen
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow'
+                      : 'cursor-not-allowed bg-slate-200 text-slate-400'
                   }`}
                 >
                   {saving ? (
                     <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
                   ) : (
-                    `Save Changes (${selection.length})`
+                    <><CheckCircle className="h-4 w-4" /> Save Changes ({selection.length})</>
                   )}
                 </button>
               )}
@@ -1195,10 +1209,16 @@ export default function Dashboard() {
                     partnerAlias={isCommitted ? committedReg?.partnerId || '' : partners[category.id]?.alias || ''}
                     partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
                     partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
+                    partnerSelected={partners[category.id]?.selected || false}
+                    partnerError={partnerErrors[category.id]}
+                    isAdmin={isAdmin}
                     onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
                     onAliasChange={(val) => handlePartnerChange(category.id, 'alias', val)}
                     onPhoneChange={(val) => handlePartnerChange(category.id, 'phone', val)}
                     onTShirtSizeChange={(val) => handlePartnerChange(category.id, 'tShirtSize', val)}
+                    onPartnerSelect={(p) => handlePartnerSelect(category.id, p)}
+                    onPartnerClear={() => handlePartnerClear(category.id)}
+                    onAdminManualModeChange={(manual) => handleAdminManualMode(category.id, manual)}
                     disabled={isDisabled}
                     onSelect={handleSelect}
                     onDeselect={handleDeselect}
@@ -1334,6 +1354,17 @@ export default function Dashboard() {
           </section>
         )}
       </main>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmModal
+        open={!!confirmDialog}
+        title={confirmDialog?.title || ''}
+        lines={confirmDialog?.lines || []}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        tone={confirmDialog?.tone || 'primary'}
+        loading={confirmBusy}
+        onConfirm={runConfirm}
+        onClose={() => setConfirmDialog(null)}
+      />
     </DashboardShell>
   );
 }

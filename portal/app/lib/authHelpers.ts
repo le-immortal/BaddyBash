@@ -34,8 +34,8 @@ export async function getSessionUserId(): Promise<string | null> {
     const container = getUsersContainer();
     const { resources } = await container.items
       .query<UserDocument>({
-        query: "SELECT c.id FROM c WHERE c.email = @email",
-        parameters: [{ name: "@email", value: session.user.email }],
+        query: "SELECT c.id FROM c WHERE LOWER(c.email) = @email",
+        parameters: [{ name: "@email", value: session.user.email.trim().toLowerCase() }],
       })
       .fetchAll();
     return resources[0]?.id ?? null;
@@ -56,17 +56,30 @@ export async function requireOwnerOrAdmin(targetUserId: string) {
   // Admins bypass ownership check
   if (session.user.isAdmin) return { authorized: true as const, session };
 
-  // Resolve the logged-in user's internal ID from their email
+  const cleanTarget = String(targetUserId).trim().toLowerCase();
+
+  // A user always owns the record whose id equals their own alias (the email
+  // local-part). This authorizes first-time users who have NOT yet been
+  // provisioned into Cosmos (provisioning is skipped for dev/GitHub logins and
+  // is best-effort in prod), and it is robust to email-casing differences —
+  // without it, the onboarding self-PATCH/POST would 403 before the dashboard's
+  // 404->POST create fallback could ever run.
+  const sessionAlias = session.user.email.trim().toLowerCase().replace(/@.*$/, '');
+  if (sessionAlias && cleanTarget === sessionAlias) {
+    return { authorized: true as const, session };
+  }
+
+  // Legacy fallback: users whose stored alias differs from their email local-part
+  // are resolved via a case-insensitive email lookup.
   try {
     const container = getUsersContainer();
     const { resources } = await container.items
       .query<UserDocument>({
-        query: "SELECT c.id FROM c WHERE c.email = @email",
-        parameters: [{ name: "@email", value: session.user.email }],
+        query: "SELECT c.id FROM c WHERE LOWER(c.email) = @email",
+        parameters: [{ name: "@email", value: session.user.email.trim().toLowerCase() }],
       })
       .fetchAll();
 
-    const cleanTarget = targetUserId.trim().toLowerCase();
     if (resources[0]?.id === cleanTarget) {
       return { authorized: true as const, session };
     }

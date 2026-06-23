@@ -5,6 +5,7 @@ import { GET, POST } from "@/app/api/partner-posts/route";
 import { getPartnerPostsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import { makePartnerPostId, type PartnerPostDocument, type UserDocument } from "@/app/lib/models";
 import { getActiveSeason, getSeasonSettings } from "@/app/lib/settings";
+import { getPlayerAllCategoriesTournamentHistory } from "@/app/lib/playerHistory";
 import { auth } from "@/auth";
 
 import { createFetchAllResult, createMockContainer, createNextRequest, getQueryParameterValue } from "../helpers/testUtils";
@@ -28,6 +29,14 @@ vi.mock("@/app/lib/cosmosClient", async () => {
     ...actual,
     getPartnerPostsContainer: vi.fn(),
     getUsersContainer: vi.fn(),
+  };
+});
+
+vi.mock("@/app/lib/playerHistory", async () => {
+  const actual = await vi.importActual<typeof import("@/app/lib/playerHistory")>("@/app/lib/playerHistory");
+  return {
+    ...actual,
+    getPlayerAllCategoriesTournamentHistory: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -117,6 +126,7 @@ describe("partner board posts", () => {
       Promise.resolve({ resource: document })
     );
     partnerPostsContainer.pointDelete.mockResolvedValue({});
+    vi.mocked(getPlayerAllCategoriesTournamentHistory).mockResolvedValue([]);
   });
 
   it.each([
@@ -310,6 +320,7 @@ describe("partner board posts", () => {
           status: "open",
           createdAt: "2027-06-01T00:00:00.000Z",
           isOwner: true,
+          history: [],
         },
         {
           id: "bob_XD_2027",
@@ -320,6 +331,7 @@ describe("partner board posts", () => {
           status: "open",
           createdAt: "2027-06-02T00:00:00.000Z",
           isOwner: false,
+          history: [],
         },
       ],
     });
@@ -337,6 +349,44 @@ describe("partner board posts", () => {
       seasonId: "2027",
       posts: [],
     });
+  });
+
+  it("GET folds each poster's tournament history into the list so the client needs no extra per-post call", async () => {
+    vi.mocked(getPlayerAllCategoriesTournamentHistory).mockImplementation(async (userId: string) =>
+      userId === "alice"
+        ? [{ seasonId: "2026", category: "MD", stage: "Champion" }]
+        : []
+    );
+
+    partnerPostsContainer.query.mockReturnValue(
+      createFetchAllResult([alicePost, bobPost])
+    );
+
+    const response = await GET(createNextRequest("http://localhost/api/partner-posts"));
+
+    expect(response.status).toBe(200);
+    // One history resolution per post — no N+1 fan-out from the client.
+    expect(getPlayerAllCategoriesTournamentHistory).toHaveBeenCalledTimes(2);
+    expect(getPlayerAllCategoriesTournamentHistory).toHaveBeenCalledWith("alice");
+    expect(getPlayerAllCategoriesTournamentHistory).toHaveBeenCalledWith("bob");
+
+    const body = await response.json();
+    expect(body.posts[0]).toMatchObject({
+      id: "alice_MD_2027",
+      history: [{ seasonId: "2026", category: "MD", stage: "Champion" }],
+    });
+    expect(body.posts[1]).toMatchObject({ id: "bob_XD_2027", history: [] });
+  });
+
+  it("GET still returns the post (with empty history) when a history lookup fails", async () => {
+    vi.mocked(getPlayerAllCategoriesTournamentHistory).mockRejectedValue(new Error("matches unavailable"));
+    partnerPostsContainer.query.mockReturnValue(createFetchAllResult([alicePost]));
+
+    const response = await GET(createNextRequest("http://localhost/api/partner-posts"));
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.posts[0]).toMatchObject({ id: "alice_MD_2027", history: [] });
   });
 
   it("returns 403 when a non-owner non-admin patches another user's post", async () => {

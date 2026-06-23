@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import { Loader2, Mail, MessageCircle, Plus, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -21,6 +22,7 @@ interface PartnerPost {
   status: PartnerPostStatus;
   createdAt: string;
   isOwner: boolean;
+  history: PartnerPostHistoryItem[];
 }
 
 interface PartnerPostsResponse {
@@ -32,11 +34,6 @@ interface PartnerPostHistoryItem {
   seasonId: string;
   category: PartnerCategory;
   stage: string;
-}
-
-interface PartnerPostHistoryResponse {
-  category: PartnerCategory;
-  history: PartnerPostHistoryItem[];
 }
 
 const categories: PartnerCategory[] = ['MD', 'WD', 'XD'];
@@ -118,36 +115,11 @@ async function readApiError(res: Response) {
   }
 }
 
-function PostHistory({ postId }: { postId: string }) {
-  const [history, setHistory] = useState<PartnerPostHistoryItem[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchWithTimeout(`/api/partner-posts/${encodeURIComponent(postId)}/history`)
-      .then(async (res) => {
-        if (!res.ok) return [];
-        const data = await res.json() as PartnerPostHistoryResponse;
-        return data.history;
-      })
-      .then((items) => {
-        if (!cancelled) setHistory(items);
-      })
-      .catch(() => {
-        if (!cancelled) setHistory([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [postId]);
-
+function PostHistory({ history }: { history: PartnerPostHistoryItem[] }) {
   return (
     <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
       <p className="font-semibold uppercase tracking-wide text-slate-500">Tournament history</p>
-      {history === null ? (
-        <p className="mt-1 text-slate-500">Loading history…</p>
-      ) : history.length === 0 ? (
+      {history.length === 0 ? (
         <p className="mt-1 text-slate-500">No past tournaments</p>
       ) : (
         <ul className="mt-1.5 space-y-1">
@@ -226,7 +198,7 @@ function PartnerPostCard({
             </p>
           </div>
 
-          <PostHistory postId={post.id} />
+          <PostHistory history={post.history} />
 
           {post.isOwner ? (
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
@@ -418,6 +390,7 @@ function CreatePostModal({
 
 export default function PartnerBoardPage() {
   const { status: sessionStatus } = useSession();
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('All');
   const [showMine, setShowMine] = useState(false);
   const [posts, setPosts] = useState<PartnerPost[]>([]);
@@ -427,6 +400,23 @@ export default function PartnerBoardPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionPostId, setActionPostId] = useState<string | null>(null);
+
+  // When the API reports the signed-in user has no profile yet (404 "User
+  // profile not found"), send them to the dashboard to complete onboarding
+  // rather than showing a dead-end error on the Teammate Finder.
+  const redirectIfNoProfile = useCallback(async (res: Response): Promise<boolean> => {
+    if (res.status !== 404) return false;
+    try {
+      const body = await res.clone().json() as { error?: string };
+      if (body.error === 'User profile not found') {
+        router.push('/dashboard');
+        return true;
+      }
+    } catch {
+      // Not JSON / unreadable — fall through to normal error handling.
+    }
+    return false;
+  }, [router]);
 
   const fetchPosts = useCallback(async () => {
     if (sessionStatus !== 'authenticated') return;
@@ -441,6 +431,7 @@ export default function PartnerBoardPage() {
 
       const failed = responses.find(res => !res.ok);
       if (failed) {
+        if (await redirectIfNoProfile(failed)) return;
         throw new Error(await readApiError(failed));
       }
 
@@ -456,7 +447,7 @@ export default function PartnerBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionStatus, showMine]);
+  }, [sessionStatus, showMine, redirectIfNoProfile]);
 
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
@@ -510,6 +501,7 @@ export default function PartnerBoardPage() {
       });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         const message = await readApiError(res);
         if (res.status === 409) {
           setModalError(message);
@@ -539,6 +531,7 @@ export default function PartnerBoardPage() {
       });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         throw new Error(await readApiError(res));
       }
 
@@ -557,6 +550,7 @@ export default function PartnerBoardPage() {
       const res = await fetchWithTimeout(`/api/partner-posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' });
 
       if (!res.ok) {
+        if (await redirectIfNoProfile(res)) return;
         throw new Error(await readApiError(res));
       }
 

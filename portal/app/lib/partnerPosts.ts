@@ -1,5 +1,6 @@
 import { getPartnerPostsContainer, getUsersContainer } from "@/app/lib/cosmosClient";
 import { makeSeasonCategory } from "@/app/lib/tournamentData";
+import type { PlayerTournamentHistoryEntry } from "@/app/lib/playerHistory";
 import type {
   Category,
   PartnerPostDocument,
@@ -21,6 +22,7 @@ export interface PartnerPostResponse {
   status: PartnerPostStatus;
   createdAt: string;
   isOwner: boolean;
+  history: PlayerTournamentHistoryEntry[];
 }
 
 export function isPartnerPostCategory(value: unknown): value is Category {
@@ -37,7 +39,8 @@ export function isPartnerPostStatus(value: unknown): value is PartnerPostStatus 
 
 export function toPartnerPostResponse(
   post: PartnerPostDocument,
-  requesterUserId: string
+  requesterUserId: string,
+  history: PlayerTournamentHistoryEntry[] = []
 ): PartnerPostResponse {
   return {
     id: post.id,
@@ -49,6 +52,7 @@ export function toPartnerPostResponse(
     status: post.status,
     createdAt: post.createdAt,
     isOwner: post.userId === requesterUserId,
+    history,
   };
 }
 

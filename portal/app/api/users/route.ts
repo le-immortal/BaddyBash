@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     if (emailParam) {
       // Ownership check: users can only look up their own profile (admins can look up anyone)
       // For email lookup, check if the requested email matches the session email
-      if (!session.user.isAdmin && session.user.email !== emailParam.trim().toLowerCase()) {
+      if (!session.user.isAdmin && String(session.user.email).trim().toLowerCase() !== emailParam.trim().toLowerCase()) {
         return NextResponse.json({ error: "Forbidden: you can only view your own profile" }, { status: 403 });
       }
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
       const cleanEmail = String(emailParam).trim().toLowerCase();
       const { resources } = await container.items
         .query<UserDocument>({
-          query: "SELECT * FROM c WHERE c.email = @email",
+          query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
           parameters: [{ name: "@email", value: cleanEmail }],
         })
         .fetchAll();
@@ -139,6 +139,21 @@ export async function POST(request: NextRequest) {
     const cleanId = String(id).trim().toLowerCase().replace(/@.*$/, '');
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanAlias = body.alias ? String(body.alias).trim().toLowerCase().replace(/@.*$/, '') : undefined;
+
+    // Authorization: a non-admin may only create/update their OWN record — the
+    // id (alias) and email must both match the logged-in user. Admins bypass.
+    // This both closes an upsert-anyone gap and lets a first-time user create
+    // their own doc during onboarding (the PATCH 404 -> POST fallback path).
+    if (!session.user.isAdmin) {
+      const sessionEmail = String(session.user.email || '').trim().toLowerCase();
+      const sessionAlias = sessionEmail.replace(/@.*$/, '');
+      if (!sessionAlias || cleanId !== sessionAlias || (cleanEmail && cleanEmail !== sessionEmail)) {
+        return NextResponse.json(
+          { error: "Forbidden: you can only modify your own profile" },
+          { status: 403 }
+        );
+      }
+    }
 
     // Check if user already exists — preserve saved fields
     let existing: UserDocument | undefined;
@@ -258,13 +273,16 @@ export async function PATCH(request: NextRequest) {
     // Strip isAdmin from updates — only settable via direct DB access
     delete cleanUpdates.isAdmin;
 
-    // If registration is closed, restrict profile updates — but allow initial linking
+    // If registration is closed, restrict identity changes — but allow initial
+    // linking and personal logistics. Phone number and t-shirt size are personal
+    // logistics (not bracket-affecting), and t-shirt size is the required one-time
+    // onboarding signal, so they must remain saveable regardless of the
+    // registration window — otherwise a user could never complete onboarding (or
+    // would be re-prompted forever) during a registration freeze.
     const settings = await getGlobalSettings();
     const isLinking = !existing.email && cleanUpdates.email; // first-time claim of a pre-created stub
     if (!settings.registrationOpen && !isLinking) {
       delete cleanUpdates.name;
-      delete cleanUpdates.phoneNumber;
-      delete cleanUpdates.tShirtSize;
     }
 
     const updated: UserDocument = {

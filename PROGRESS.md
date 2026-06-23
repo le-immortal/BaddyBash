@@ -1,6 +1,6 @@
 # Baddy Bash Portal — Progress Tracker
 
-Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Teammate Finder (partner board) feature — PR #25. Cross-referenced against [PRD.md](PRD.md).
+Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Duplicate-Account Prevention feature (partner must exist) + profile-form login-autofill rework (read-only identity, required-t-shirt onboarding) — Phase 8. Cross-referenced against [PRD.md](PRD.md).
 
 **Tech Stack:** Next.js 16 · React 19 · TypeScript · Tailwind v4 · Azure Cosmos DB (Serverless) · NextAuth v5 (Auth.js) · ExcelJS
 **Deployed at:** `https://baddybashapp-ccckduhtephwgsbr.southindia-01.azurewebsites.net`
@@ -41,8 +41,8 @@ Generated from codebase analysis on 2026-04-08. Updated 2026-06-23 after the Tea
 | `/api/setup` | POST | Admin | Initialize Cosmos DB containers, including `settings`, `registrations_v2`, `matches_v2` |
 
 ### Player Dashboard (`app/dashboard/page.tsx`)
-- [x] Profile-first gate (name, alias, phone, t-shirt size)
-- [x] Alias locked after first save; name/phone/t-shirt editable
+- [x] One-time onboarding gate: identity (name, alias, email) auto-filled read-only from login (Entra); only **t-shirt size (required)** + phone (optional) collected
+- [x] Onboarding completion signaled by presence of a saved t-shirt size — no separate flag; users with a size are never re-prompted
 - [x] Category selection cards (MS, WS, MD, WD, XD)
 - [x] Max-2 categories enforced (client + server)
 - [x] Gender constraints (MS disables WS, etc.)
@@ -349,6 +349,65 @@ A season-scoped "looking for a doubles partner" board with a **Teammate Finder**
 - [ ] Document the tournament-history disclosure in board help text (Rai A1)
 - [ ] `/api/players/[userId]/tournament-history` allows alias enumeration — consider rate-limiting / restricting to active posters (Stark A2 / Rai A3); remove if unused by UI
 - [ ] ETag/optimistic concurrency on PATCH (Stark A1); avatar CSS URL hardening (Stark A4)
+
+---
+
+## Phase 8: Duplicate-Account Prevention (Partner Must Exist) ✅ Complete
+
+Eliminates the duplicate/ghost-account class of bug: doubles registration previously took a **free-text partner alias** and auto-created a placeholder user (`email: ''`) + a confirmed registration. A typo'd alias produced an orphan ghost, and the real partner later signed in → a **second account**. Fix: you can only pick a doubles partner who has already signed in to the site at least once.
+
+### Provision-on-login (`auth.ts`)
+- [x] `provisionUser(email, name)` idempotently upserts a `UserDocument` in the `signIn` callback (after the `@microsoft.com` gate), keyed by `id = alias = email local-part`
+- [x] On an existing doc, refreshes **only** `email`/`updatedAt` — **never** clobbers `name`/`phoneNumber`/`tShirtSize`/`alias`/`isAdmin` (preserves completed profiles; auto-claims prior `email:''` placeholders)
+- [x] Best-effort: Cosmos failures (incl. the 409 concurrent-first-login race) are swallowed so login never breaks
+- [x] Identity (`name`) sourced from the Entra display name at provision time — `name` is always populated, no per-field "is the profile complete?" heuristic needed
+
+### Registration guard (`app/api/registrations/route.ts`)
+- [x] `isClaimedUser()` predicate = `email` non-empty `&& endsWith('@microsoft.com')` (placeholders have `email === ''`)
+- [x] Doubles POST returns **400 `PARTNER_NOT_FOUND`** when the partner isn't claimed **and** the requester isn't an admin — *before* any partner write
+- [x] Placeholder creation now **gated behind `isAdmin`** — admin manual-override for unsigned partners is retained; non-admins can never create a ghost
+
+### Partner search (`app/api/users/search/route.ts`, NEW)
+- [x] `GET /api/users/search?q=&limit=8` — any signed-in session; `q` < 2 chars → empty; claimed-only; `STARTSWITH(alias)` OR case-insensitive `CONTAINS(name)`; excludes requester; parameterized; capped (≤10), fixed `OFFSET 0` (no walk-the-directory pagination)
+- [x] Privacy-minimal response `{ results: [{ alias, name }] }` — selects only alias + name (Entra display name), so **no email/phone ever leaves Cosmos**
+
+### Picker UI (`app/components/PartnerPicker.tsx` NEW + `RegistrationCard.tsx` / `dashboard/page.tsx`)
+- [x] Accessible typeahead combobox (`role="combobox"`/`listbox`/`option`, keyboard nav, `aria-live` status) replacing the free-text alias input
+- [x] Selected → "✓ Verified member" chip with auto-filled read-only name (`name` comes from the Entra display name set at provision-on-login)
+- [x] **No-match** = amber "ask your partner to sign in once first" block + Copy-invite (hard stop for regular users)
+- [x] Admin-only collapsed "⚙ Add an unregistered partner manually" override (reuses legacy free-text form)
+- [x] Submit confirmation names each partner being locked; obsolete "which alias?" Teams guide retired on the normal path
+- [x] Debounced search effect depends only on `[query]` (React render-loop guardrail honored)
+
+### Profile-form login-autofill rework (`dashboard/page.tsx`, `api/users/route.ts`, `auth.ts`, `lib/models.ts`)
+- [x] Name/alias/email are **read-only, auto-filled from the login session** (Entra) — users never type identity fields; eliminates alias/name drift and typo'd ghosts at the source
+- [x] One-time onboarding prompt collects **only t-shirt size (required) + phone (optional)**; Save is disabled until a t-shirt size is chosen
+- [x] Onboarding "done" signal = presence of a saved `tShirtSize` (a natural tournament must-have) — **no `onboardedAt`/`claimedAt`/`profileComplete` flags**; all three removed end-to-end
+- [x] `PATCH /api/users` never accepts name/alias/email changes from the dashboard path; 404 → `POST` fallback rebuilds the doc from session-sourced identity, preserving `createdAt`
+- [x] Registration-freeze fix: phone + t-shirt size stay saveable when registration is closed (personal logistics, not bracket data) so onboarding can always complete; only identity (`name`) changes are locked
+- [x] Render-loop guardrail honored: onboarding gate (`isOnboarded = !!savedTShirtSize`) is render-derived, not an effect; the login lookup effect depends only on `[sessionStatus, sessionEmail]`
+- [x] **Ownership fix**: a user always owns the record whose `id` equals their own alias (email local-part), so `requireOwnerOrAdmin` + the registration POST/DELETE checks authorize self **without** requiring a pre-existing Cosmos doc — first-time users (provisioning is skipped for dev/GitHub logins, best-effort in prod) and mixed-case Entra emails no longer hit a spurious 403 before the dashboard's 404→POST create fallback. All email lookups are now case-insensitive (`LOWER(c.email)`); `POST /api/users` is hardened so non-admins can only upsert their own record
+
+### Tests / Review
+- [x] **74 Vitest tests passing** (+9: `__tests__/api/users-search.test.ts`, `__tests__/api/registration-partner-guard.test.ts`; +2: `__tests__/api/users-onboarding.test.ts` — PATCH preserves identity while updating phone/t-shirt, POST preserves `createdAt`)
+- [x] **Stark ✅ APPROVE** (traced POST end-to-end: impossible for a non-admin to create a ghost; provisionUser never clobbers profiles; search injection-safe; no React loops)
+- [x] **Rai 🟢 GREEN** (no PII beyond already-org-visible alias/name; enumeration well-bounded; copy non-judgmental)
+
+### Out of scope (separate follow-up)
+- [ ] Merge/cleanup of **existing** ghost accounts already in the DB (admin tool to reassign a ghost's registrations to the real user, keyed on the `isClaimed` predicate)
+### UI polish — native dialogs → modal/toast (`dashboard/page.tsx`, `components/Toast.tsx` NEW, `components/ConfirmModal.tsx` NEW)
+- [x] Replaced all blocking native `alert()`/`confirm()` in the player dashboard with the in-app pattern already used by the admin dashboard
+- [x] `useToasts()` hook + `<ToastStack>` (NEW `components/Toast.tsx`) — error toasts persist until dismissed, success toasts auto-dismiss (4s); replaces 5 `alert()` calls (withdraw failure, t-shirt-required, profile-save failure, per-category register failure, generic save failure)
+- [x] `<ConfirmModal>` (NEW `components/ConfirmModal.tsx`) — accessible dialog (focus-trap, Esc/backdrop close, focus restore) replacing the 2 `confirm()` calls (withdraw confirm, lock-in-partners confirm); the partner list renders as styled rows instead of a `\n`-joined string
+- [x] `handleWithdraw`/`handleSave` split into a `request*` opener (sets `confirmDialog`) + a `perform*` executor run on confirm; a shared `runConfirm` drives the modal's busy state
+- [x] Reusable components are shared so future pages can drop the native dialogs too; gates green (tsc 0, 77 tests, lint clean), dashboard route serves 200 with no runtime errors
+
+### Teammate Finder N+1 fix — fold history into the list call (`api/partner-posts/route.ts`, `lib/partnerPosts.ts`, `partner-board/page.tsx`)
+- [x] Each partner-post card rendered its own `<PostHistory>` that fired a separate `GET /api/partner-posts/{id}/history` on mount → **N+1** (4 visible posts = 4 history calls on top of the list call)
+- [x] `GET /api/partner-posts` now resolves each poster's all-categories tournament history server-side (parallel `Promise.all`, per-post `.catch`→`[]`) and attaches it as `post.history` in the **single** list response; per-season match reads stay memoized in `getSeasonCategoryMatchesCached`, so resolving many posters does the shared reads once
+- [x] `PartnerPostResponse.history` added (privacy-safe — only `{seasonId, category, stage}`, never `userId`); `toPartnerPostResponse` takes an optional `history` (default `[]`)
+- [x] Frontend `PostHistory` is now presentational (takes `history` prop, no `useEffect`/fetch/loading state); the standalone `[id]/history` endpoint is retained (still tested) but no longer called by the board
+- [x] +2 tests (79 total): list folds each poster's history with exactly one resolution per post; a failed history lookup still returns the post with `history: []`
 
 ---
 

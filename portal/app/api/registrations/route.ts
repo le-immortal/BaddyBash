@@ -14,6 +14,15 @@ import {
 const MAX_CATEGORIES = 2;
 
 /**
+ * A "claimed" / real user is one who has signed in at least once: their `email`
+ * is a non-empty string ending in `@microsoft.com`. Placeholder partner stubs
+ * (created by admins) have `email === ''` and are NOT claimed.
+ */
+function isClaimedUser(user: UserDocument | undefined): boolean {
+  return !!user && typeof user.email === "string" && user.email.endsWith("@microsoft.com");
+}
+
+/**
  * GET /api/registrations?userId=xxx
  * Returns all registrations for a user.
  * Requires authentication.
@@ -124,17 +133,26 @@ export async function POST(request: NextRequest) {
     const cleanUserId = String(userId).trim().toLowerCase().replace(/@.*$/, '');
     
     // Admins can register on behalf of anyone (if needed for support)
-    if (!session.user.isAdmin) { 
-        const usersContainer = getUsersContainer();
-        const { resources: [userDoc] } = await usersContainer.items
-          .query<UserDocument>({
-            query: "SELECT * FROM c WHERE c.email = @email",
-            parameters: [{ name: "@email", value: email }]
-          })
-          .fetchAll();
+    if (!session.user.isAdmin) {
+        // A user always owns the registration whose userId equals their own alias
+        // (email local-part). Short-circuit on that so first-time users who are
+        // not yet provisioned into Cosmos (and mixed-case emails) aren't blocked.
+        const sessionAlias = String(email || '').trim().toLowerCase().replace(/@.*$/, '');
+        let ownsTarget = !!sessionAlias && cleanUserId === sessionAlias;
+
+        if (!ownsTarget) {
+            const usersContainer = getUsersContainer();
+            const { resources: [userDoc] } = await usersContainer.items
+              .query<UserDocument>({
+                query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
+                parameters: [{ name: "@email", value: String(email || '').trim().toLowerCase() }]
+              })
+              .fetchAll();
+            ownsTarget = !!userDoc && userDoc.id === cleanUserId;
+        }
 
         // If the logged-in user's ID (alias) doesn't match the requested userId, block it.
-        if (!userDoc || userDoc.id !== cleanUserId) {
+        if (!ownsTarget) {
             return NextResponse.json(
               { error: "Unauthorized: You can only register for yourself." },
               { status: 403 }
@@ -172,6 +190,31 @@ export async function POST(request: NextRequest) {
     }
 
     const container = getTournamentRegistrationsContainer();
+
+    // Partner-exists guard: a non-admin may only pick a doubles partner who has
+    // already signed in at least once (a "claimed" user). This blocks typo'd
+    // aliases from spawning duplicate/ghost accounts. Admins keep the manual
+    // placeholder-override path below.
+    let existingPartner: UserDocument | undefined;
+    if (isDoubles(category) && cleanPartnerId) {
+      const usersContainer = getUsersContainer();
+      try {
+        const { resource } = await usersContainer.item(cleanPartnerId, cleanPartnerId).read<UserDocument>();
+        existingPartner = resource;
+      } catch {
+        // Partner user doesn't exist yet
+      }
+
+      if (!isClaimedUser(existingPartner) && !session.user.isAdmin) {
+        return NextResponse.json(
+          {
+            error: "PARTNER_NOT_FOUND",
+            message: "Ask your partner to sign in to BaddyBash once before you can pick them.",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     // Server-side Max-2 check: count existing active registrations (scoped to season)
     const { resources: existing } = await container.items
@@ -243,21 +286,11 @@ export async function POST(request: NextRequest) {
     // 1. Resolve Partner Details Logic
     let finalPartnerName = partnerName ? partnerName.trim() : undefined;
     let finalPartnerPhone = partnerPhone ? partnerPhone.trim() : undefined;
-    let existingPartner: UserDocument | undefined;
 
-    if (isDoubles(category) && cleanPartnerId) {
-      const usersContainer = getUsersContainer();
-      try {
-        const { resource } = await usersContainer.item(cleanPartnerId, cleanPartnerId).read<UserDocument>();
-        existingPartner = resource;
-        if (existingPartner) {
-           // B's existing details take precedence over A's input
-           finalPartnerName = existingPartner.name;
-           finalPartnerPhone = existingPartner.phoneNumber;
-        }
-      } catch {
-        // Partner user doesn't exist yet - we'll create them below
-      }
+    if (isDoubles(category) && cleanPartnerId && existingPartner) {
+      // B's existing details take precedence over A's input
+      finalPartnerName = existingPartner.name;
+      finalPartnerPhone = existingPartner.phoneNumber;
     }
 
     // 2. Create MAIN Registration
@@ -281,21 +314,24 @@ export async function POST(request: NextRequest) {
     if (isDoubles(category) && cleanPartnerId) {
       const usersContainer = getUsersContainer();
 
-      // Create user for partner if they don't exist (using A's input as fallback)
+      // Create user for partner if they don't exist (admin manual-override only —
+      // non-admins are guaranteed a claimed partner by the guard above).
       if (!existingPartner) {
-        const partnerUser: UserDocument = {
-          id: cleanPartnerId,
-          name: finalPartnerName || cleanPartnerId,
-          email: '', // Placeholder, will be filled when B logs in
-          alias: cleanPartnerId,
-          phoneNumber: finalPartnerPhone || '',
-          tShirtSize: partnerTShirtSize || undefined,
-          isAdmin: false,
-          createdAt: now,
-          updatedAt: now,
-        };
-        // Use upsert just in case of race condition
-        await usersContainer.items.upsert(partnerUser);
+        if (session.user.isAdmin) {
+          const partnerUser: UserDocument = {
+            id: cleanPartnerId,
+            name: finalPartnerName || cleanPartnerId,
+            email: '', // Placeholder, will be filled when B logs in
+            alias: cleanPartnerId,
+            phoneNumber: finalPartnerPhone || '',
+            tShirtSize: partnerTShirtSize || undefined,
+            isAdmin: false,
+            createdAt: now,
+            updatedAt: now,
+          };
+          // Use upsert just in case of race condition
+          await usersContainer.items.upsert(partnerUser);
+        }
       } else {
         // Partner exists. If they don't have a T-Shirt size yet, use the one provided by A.
         if (!existingPartner.tShirtSize && partnerTShirtSize) {
@@ -384,17 +420,24 @@ export async function DELETE(request: NextRequest) {
     
     // Admins can delete on behalf of anyone
     if (!session.user.isAdmin) {
-      const usersContainer = getUsersContainer();
       try {
-        const { resources: [userDoc] } = await usersContainer.items
-          .query<UserDocument>({
-            query: "SELECT * FROM c WHERE c.email = @email",
-            parameters: [{ name: "@email", value: email }]
-          })
-          .fetchAll();
+        // Self-ownership short-circuit (handles not-yet-provisioned + mixed-case emails).
+        const sessionAlias = String(email || '').trim().toLowerCase().replace(/@.*$/, '');
+        let ownsTarget = !!sessionAlias && cleanUserId === sessionAlias;
+
+        if (!ownsTarget) {
+          const usersContainer = getUsersContainer();
+          const { resources: [userDoc] } = await usersContainer.items
+            .query<UserDocument>({
+              query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
+              parameters: [{ name: "@email", value: String(email || '').trim().toLowerCase() }]
+            })
+            .fetchAll();
+          ownsTarget = !!userDoc && userDoc.id === cleanUserId;
+        }
 
         // If the logged-in user's ID (alias) doesn't match the target userId, block it.
-        if (!userDoc || userDoc.id !== cleanUserId) {
+        if (!ownsTarget) {
             return NextResponse.json(
               { error: "Unauthorized: You can only cancel your own registrations." },
               { status: 403 }
