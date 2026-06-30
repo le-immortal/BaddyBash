@@ -1131,103 +1131,117 @@ export default function Dashboard() {
           </div>
 
         <section className="mb-8">
-          <div className="relative overflow-hidden p-6 rounded-xl shadow-sm border border-slate-200">
-            <Image src="/badminton-bg.jpg" alt="" fill className="object-cover" />
-            <div className="absolute inset-0 bg-white/50" />
+          <div className="relative overflow-hidden rounded-[2rem] border border-emerald-900/20 bg-gradient-to-br from-emerald-950 via-teal-900 to-sky-900 p-4 shadow-2xl sm:p-6">
+            <div className="pointer-events-none absolute inset-3 rounded-[1.5rem] border-2 border-white/25" aria-hidden="true" />
+            <div className="pointer-events-none absolute inset-x-6 top-1/2 h-0.5 bg-white/35" aria-hidden="true" />
+            <div className="pointer-events-none absolute inset-y-6 left-1/2 w-0.5 bg-white/30" aria-hidden="true" />
+            <svg
+              className="pointer-events-none absolute left-1/2 top-0 h-full w-16 -translate-x-1/2 text-white/30"
+              viewBox="0 0 64 420"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <line x1="32" y1="0" x2="32" y2="420" stroke="currentColor" strokeWidth="4" strokeDasharray="10 10" />
+              {Array.from({ length: 12 }).map((_, index) => (
+                <line key={index} x1="14" y1={20 + index * 34} x2="50" y2={20 + index * 34} stroke="currentColor" strokeWidth="1.5" />
+              ))}
+            </svg>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.2),transparent_35%)]" aria-hidden="true" />
+
             <div className="relative z-10">
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 shadow-sm ring-1 ring-blue-100">
-                  <Trophy className="h-5 w-5" aria-hidden="true" />
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm ring-1 ring-white/25">
+                    <Trophy className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black leading-tight text-white">Claim your lanes</h2>
+                    <p className="text-sm font-medium text-emerald-50/80">Choose up to two tournament courtside spots</p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-black shadow-sm ring-1 ring-white/30 ${isMaxReached ? 'bg-orange-200 text-orange-950' : 'bg-white text-emerald-950'}`}>
+                    <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-600' : 'bg-emerald-500'}`} aria-hidden="true" />
+                    {totalCount} / {maxSelections} Slots Used
+                  </span>
                 </div>
-                <div>
-                  <h2 className="text-xl font-semibold leading-tight text-slate-800">My Registrations</h2>
-                  <p className="text-xs font-medium text-slate-500">Pick your categories and lock in your spots</p>
-                </div>
-                <span className={`ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                  <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-500' : 'bg-blue-500'}`} aria-hidden="true" />
-                  {totalCount} / {maxSelections} Slots Used
-                </span>
+                {selection.length > 0 && (
+                  <button
+                    onClick={handleSave}
+                    disabled={!isSelectionValid || saving || !registrationOpen}
+                    className={`inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black shadow-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950 ${
+                      isSelectionValid && !saving && registrationOpen
+                        ? 'bg-white text-emerald-950 hover:bg-emerald-50'
+                        : 'cursor-not-allowed bg-slate-700 text-slate-300'
+                    }`}
+                  >
+                    {saving ? (
+                      <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
+                    ) : (
+                      <><CheckCircle className="h-4 w-4" /> Save Changes ({selection.length})</>
+                    )}
+                  </button>
+                )}
               </div>
-              {selection.length > 0 && (
-                <button
-                  onClick={handleSave}
-                  disabled={!isSelectionValid || saving || !registrationOpen}
-                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-bold shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
-                    isSelectionValid && !saving && registrationOpen
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow'
-                      : 'cursor-not-allowed bg-slate-200 text-slate-400'
-                  }`}
-                >
-                  {saving ? (
-                    <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving...</span>
-                  ) : (
-                    <><CheckCircle className="h-4 w-4" /> Save Changes ({selection.length})</>
-                  )}
-                </button>
+
+              {isMaxReached && (
+                <div className="mb-5 flex items-center rounded-2xl border border-orange-200/70 bg-orange-100 p-3 text-sm font-semibold text-orange-900">
+                  <AlertCircle className="mr-3 h-5 w-5 flex-shrink-0" />
+                  You have reached the maximum number of registrations per player.
+                </div>
               )}
-            </div>
 
-            {isMaxReached && (
-              <div className="flex items-center p-3 mb-6 bg-orange-50 text-orange-800 rounded-lg text-sm border border-orange-200">
-                <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0" />
-                You have reached the maximum number of registrations per player.
-              </div>
-            )}
-
-            {!registrationOpen && (
-              <div className="flex items-center p-3 mb-6 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
-                <Lock className="w-5 h-5 mr-3 flex-shrink-0" />
-                <div>
-                  <span className="font-bold">Registrations are closed.</span>
+              {!registrationOpen && (
+                <div className="mb-5 flex items-center rounded-2xl border border-red-200/70 bg-red-100 p-3 text-sm text-red-900">
+                  <Lock className="mr-3 h-5 w-5 flex-shrink-0" />
+                  <div>
+                    <span className="font-bold">Registrations are closed.</span>
+                  </div>
                 </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+                {CATEGORIES.map(category => {
+                  const isCommitted = committedCategories.includes(category.id);
+                  const committedReg = committedRegistrations.find(r => r.category === category.id);
+                  const isSelected = selection.includes(category.id);
+                  let status: 'committed' | 'selected' | 'available' = 'available';
+                  if (isCommitted) status = 'committed';
+                  else if (isSelected) status = 'selected';
+
+                  let isDisabled = status === 'available' && isMaxReached;
+                  if (!registrationOpen && status === 'available') isDisabled = true;
+                  if (status === 'available') {
+                    if ((category.id === 'MS' || category.id === 'MD') && hasWomenSelection) isDisabled = true;
+                    if ((category.id === 'WS' || category.id === 'WD') && hasMenSelection) isDisabled = true;
+                  }
+
+                  return (
+                    <RegistrationCard
+                      key={category.id}
+                      category={category}
+                      status={status}
+                      partnerName={isCommitted ? committedReg?.partnerName || '' : partners[category.id]?.name || ''}
+                      partnerAlias={isCommitted ? committedReg?.partnerId || '' : partners[category.id]?.alias || ''}
+                      partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
+                      partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
+                      partnerSelected={partners[category.id]?.selected || false}
+                      partnerError={partnerErrors[category.id]}
+                      isAdmin={isAdmin}
+                      onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
+                      onAliasChange={(val) => handlePartnerChange(category.id, 'alias', val)}
+                      onPhoneChange={(val) => handlePartnerChange(category.id, 'phone', val)}
+                      onTShirtSizeChange={(val) => handlePartnerChange(category.id, 'tShirtSize', val)}
+                      onPartnerSelect={(p) => handlePartnerSelect(category.id, p)}
+                      onPartnerClear={() => handlePartnerClear(category.id)}
+                      onAdminManualModeChange={(manual) => handleAdminManualMode(category.id, manual)}
+                      disabled={isDisabled}
+                      onSelect={handleSelect}
+                      onDeselect={handleDeselect}
+                      canWithdraw={registrationOpen}
+                      onWithdraw={handleWithdraw}
+                    />
+                  );
+                })}
               </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {CATEGORIES.map(category => {
-                const isCommitted = committedCategories.includes(category.id);
-                const committedReg = committedRegistrations.find(r => r.category === category.id);
-                const isSelected = selection.includes(category.id);
-                let status: 'committed' | 'selected' | 'available' = 'available';
-                if (isCommitted) status = 'committed';
-                else if (isSelected) status = 'selected';
-
-                let isDisabled = status === 'available' && isMaxReached;
-                if (!registrationOpen && status === 'available') isDisabled = true;
-                if (status === 'available') {
-                  if ((category.id === 'MS' || category.id === 'MD') && hasWomenSelection) isDisabled = true;
-                  if ((category.id === 'WS' || category.id === 'WD') && hasMenSelection) isDisabled = true;
-                }
-
-                return (
-                  <RegistrationCard
-                    key={category.id}
-                    category={category}
-                    status={status}
-                    partnerName={isCommitted ? committedReg?.partnerName || '' : partners[category.id]?.name || ''}
-                    partnerAlias={isCommitted ? committedReg?.partnerId || '' : partners[category.id]?.alias || ''}
-                    partnerPhone={isCommitted ? committedReg?.partnerPhone || '' : partners[category.id]?.phone || ''}
-                    partnerTShirtSize={isCommitted ? '' : partners[category.id]?.tShirtSize || ''}
-                    partnerSelected={partners[category.id]?.selected || false}
-                    partnerError={partnerErrors[category.id]}
-                    isAdmin={isAdmin}
-                    onNameChange={(val) => handlePartnerChange(category.id, 'name', val)}
-                    onAliasChange={(val) => handlePartnerChange(category.id, 'alias', val)}
-                    onPhoneChange={(val) => handlePartnerChange(category.id, 'phone', val)}
-                    onTShirtSizeChange={(val) => handlePartnerChange(category.id, 'tShirtSize', val)}
-                    onPartnerSelect={(p) => handlePartnerSelect(category.id, p)}
-                    onPartnerClear={() => handlePartnerClear(category.id)}
-                    onAdminManualModeChange={(manual) => handleAdminManualMode(category.id, manual)}
-                    disabled={isDisabled}
-                    onSelect={handleSelect}
-                    onDeselect={handleDeselect}
-                    canWithdraw={registrationOpen}
-                    onWithdraw={handleWithdraw}
-                  />
-                );
-              })}
-            </div>
             </div>
           </div>
         </section>
