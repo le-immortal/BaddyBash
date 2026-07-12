@@ -49,36 +49,36 @@ export function BracketGrid({
   return (
     <>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm text-slate-400 flex flex-wrap items-center gap-3">
+        <div className="text-sm text-court-400 flex flex-wrap items-center gap-3">
           <span>{stats.real} matches</span>
-          {stats.byes > 0 && <span className="text-slate-500">({stats.byes} byes)</span>}
-          <span className="text-slate-600">•</span>
+          {stats.byes > 0 && <span className="text-court-500">({stats.byes} byes)</span>}
+          <span className="text-court-600">•</span>
           <span>{totalRounds} rounds</span>
-          <span className="text-slate-600">•</span>
-          <span className="text-amber-400/80 text-xs">📋 Times displayed are <span className="font-semibold">reporting times</span></span>
+          <span className="text-court-600">•</span>
+          <span className="text-amber-300/80 text-xs">📋 Times displayed are <span className="font-semibold">reporting times</span></span>
         </div>
         {sortedRounds.length > VISIBLE_ROUNDS && (
           <div className="flex items-center gap-2">
             <button onClick={() => onRoundOffsetChange(o => Math.max(0, o - 1))} disabled={!canLeft}
-              className="p-1.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+              className="p-1.5 rounded bg-white/5 border border-white/10 text-court-400 hover:text-court-100 disabled:opacity-30 disabled:cursor-not-allowed">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-court-500">
               {roundOffset + 1}–{Math.min(roundOffset + VISIBLE_ROUNDS, sortedRounds.length)} of {sortedRounds.length}
             </span>
             <button onClick={() => onRoundOffsetChange(o => Math.min(sortedRounds.length - VISIBLE_ROUNDS, o + 1))} disabled={!canRight}
-              className="p-1.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+              className="p-1.5 rounded bg-white/5 border border-white/10 text-court-400 hover:text-court-100 disabled:opacity-30 disabled:cursor-not-allowed">
               <ChevronRight className="w-4 h-4" />
             </button>
             <button onClick={() => onRoundOffsetChange(Math.max(0, sortedRounds.length - VISIBLE_ROUNDS))}
-              className="text-xs text-slate-500 hover:text-blue-400 ml-1">Final →</button>
+              className="text-xs text-court-500 hover:text-volt-400 ml-1">Final →</button>
           </div>
         )}
       </div>
 
-      <div ref={bracketRef} className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-auto"
+      <div ref={bracketRef} className="bg-court-900/40 rounded-xl border border-white/10 overflow-auto backdrop-blur-sm"
            style={{ maxHeight: 'calc(100vh - 100px)' }}>
-        <div className="flex sticky top-0 z-10 border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-sm">
+        <div className="flex sticky top-0 z-10 border-b border-white/5 bg-court-950/90 backdrop-blur-sm">
           {visibleRounds.map(([roundNum, roundMatches], colIdx) => {
             const isLast = colIdx === visibleRounds.length - 1;
             const byesR = roundMatches.filter(m => m.status === 'bye').length;
@@ -86,8 +86,8 @@ export function BracketGrid({
             return (
               <Fragment key={roundNum}>
                 <div style={{ width: CARD_W }} className="shrink-0 py-2 text-center">
-                  <div className="text-xs font-bold text-slate-300 uppercase">{getRoundName(roundNum, totalRounds)}</div>
-                  <div className="text-[10px] text-slate-500">
+                  <div className="font-display text-sm tracking-widest text-volt-400/90 uppercase">{getRoundName(roundNum, totalRounds)}</div>
+                  <div className="text-[10px] text-court-500">
                     {realR} match{realR !== 1 ? 'es' : ''}
                     {byesR > 0 && <span> · {byesR} bye{byesR !== 1 ? 's' : ''}</span>}
                   </div>

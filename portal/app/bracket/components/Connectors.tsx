@@ -15,7 +15,7 @@ export function Connectors({ colIdx, matchCount }: { colIdx: number; matchCount:
         const midY  = (2 * i + 1)   * bh;
         const midX  = CONN_W / 2;
         return (
-          <g key={i} strokeWidth={1.5} fill="none" stroke="#475569">
+          <g key={i} strokeWidth={1.5} fill="none" stroke="#364d3f">
             <line x1={0}    y1={topY}  x2={midX}  y2={topY}  />
             <line x1={0}    y1={botY}  x2={midX}  y2={botY}  />
             <line x1={midX} y1={topY}  x2={midX}  y2={botY}  />

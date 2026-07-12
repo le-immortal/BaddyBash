@@ -148,30 +148,30 @@ export default function PartnerPicker({
   if (selected) {
     return (
       <div>
-        <label className="text-xs font-medium text-slate-500 uppercase">Partner</label>
-        <div className="mt-1 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+        <label className="text-xs font-medium text-court-400 uppercase">Partner</label>
+        <div className="mt-1 flex items-center gap-2 rounded-lg border border-volt-400/30 bg-volt-400/10 px-2.5 py-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-volt-400 text-xs font-bold text-court-950">
             {initialsOf(selected.name || selected.alias)}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1 truncate text-sm font-semibold text-slate-800">
+            <p className="flex items-center gap-1 truncate text-sm font-semibold text-court-100">
               {selected.name || selected.alias}
             </p>
-            <p className="flex items-center gap-1 truncate text-xs text-slate-500">
-              <Check className="h-3 w-3 text-green-600" strokeWidth={3} /> Verified member · @{selected.alias}
+            <p className="flex items-center gap-1 truncate text-xs text-court-400">
+              <Check className="h-3 w-3 text-volt-400" strokeWidth={3} /> Verified member · @{selected.alias}
             </p>
           </div>
           <button
             type="button"
             onClick={handleClear}
             aria-label="Remove selected partner"
-            className="shrink-0 rounded-full p-1 text-slate-400 transition-colors hover:bg-white hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+            className="shrink-0 rounded-full p-1 text-court-400 transition-colors hover:bg-white/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-volt-400/40"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
         {submitError && (
-          <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">{submitError}</p>
+          <p role="alert" className="mt-1 text-[11px] font-medium text-red-300">{submitError}</p>
         )}
       </div>
     );
@@ -190,11 +190,11 @@ export default function PartnerPicker({
 
   return (
     <div>
-      <label htmlFor={`${baseId}-input`} className="text-xs font-medium text-slate-500 uppercase">
+      <label htmlFor={`${baseId}-input`} className="text-xs font-medium text-court-400 uppercase">
         Partner
       </label>
       <div className="relative mt-1">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-court-500" aria-hidden="true" />
         <input
           id={`${baseId}-input`}
           ref={inputRef}
@@ -206,7 +206,7 @@ export default function PartnerPicker({
           aria-activedescendant={showListbox && highlight >= 0 ? optionId(highlight) : undefined}
           autoComplete="off"
           placeholder="Search members by name or alias"
-          className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-8 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-lg border border-white/10 bg-court-900 py-1.5 pl-8 pr-8 text-sm text-court-100 placeholder-court-500 transition-colors focus:border-volt-400 focus:outline-none focus:ring-1 focus:ring-volt-400"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -222,7 +222,7 @@ export default function PartnerPicker({
           onKeyDown={handleKeyDown}
         />
         {loading && (
-          <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-500" aria-hidden="true" />
+          <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-volt-400" aria-hidden="true" />
         )}
 
         {showListbox && (
@@ -230,16 +230,16 @@ export default function PartnerPicker({
             id={listboxId}
             role="listbox"
             aria-label="Matching members"
-            className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+            className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-white/10 bg-court-850 py-1 shadow-xl shadow-black/40"
           >
             {loading && (
               <>
                 {[0, 1, 2].map((i) => (
                   <li key={i} className="flex items-center gap-2 px-2.5 py-2" aria-hidden="true">
-                    <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-slate-200" />
+                    <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-white/10" />
                     <div className="flex-1 space-y-1">
-                      <div className="h-2.5 w-1/2 animate-pulse rounded bg-slate-200" />
-                      <div className="h-2 w-1/3 animate-pulse rounded bg-slate-100" />
+                      <div className="h-2.5 w-1/2 animate-pulse rounded bg-white/10" />
+                      <div className="h-2 w-1/3 animate-pulse rounded bg-white/5" />
                     </div>
                   </li>
                 ))}
@@ -257,22 +257,22 @@ export default function PartnerPicker({
                 onClick={() => handleSelect(r)}
                 className={clsx(
                   'flex cursor-pointer items-center gap-2 px-2.5 py-2',
-                  i === highlight ? 'bg-blue-50' : 'bg-white',
+                  i === highlight ? 'bg-volt-400/10' : 'bg-transparent',
                 )}
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-court-200">
                   {initialsOf(r.name || r.alias)}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-800">{r.name || r.alias}</p>
-                  <p className="truncate text-xs text-slate-500">@{r.alias}</p>
+                  <p className="truncate text-sm font-semibold text-court-100">{r.name || r.alias}</p>
+                  <p className="truncate text-xs text-court-400">@{r.alias}</p>
                 </div>
               </li>
             ))}
 
             {showNoMatch && (
               <li className="px-2.5 py-2" role="presentation">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-2.5 text-xs text-amber-200">
                   <p className="flex items-start gap-1.5 font-medium">
                     <UserSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
@@ -283,7 +283,7 @@ export default function PartnerPicker({
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={copyInvite}
-                    className="mt-2 inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                    className="mt-2 inline-flex items-center gap-1 rounded border border-amber-400/40 bg-transparent px-2 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                   >
                     {inviteCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                     {inviteCopied ? 'Invite copied' : 'Copy invite'}
@@ -296,11 +296,11 @@ export default function PartnerPicker({
       </div>
 
       {q.length > 0 && q.length < MIN_CHARS && (
-        <p className="mt-1 text-[10px] text-slate-400">Type at least {MIN_CHARS} characters to search.</p>
+        <p className="mt-1 text-[10px] text-court-500">Type at least {MIN_CHARS} characters to search.</p>
       )}
 
       {submitError && (
-        <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">{submitError}</p>
+        <p role="alert" className="mt-1 text-[11px] font-medium text-red-300">{submitError}</p>
       )}
 
       {/* Screen-reader live status for result counts and states. */}

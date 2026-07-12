@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/*  COURTSIDE design system — night-match broadcast theme              */
+/*  court-* : green-tinted ink neutrals (the court at night)           */
+/*  volt-*  : electric shuttle lime (court lines / speed)              */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-bebas), "Arial Narrow", ui-sans-serif, sans-serif;
+
+  --color-court-950: #060a08;
+  --color-court-900: #0a100d;
+  --color-court-850: #0e1712;
+  --color-court-800: #142019;
+  --color-court-700: #22352a;
+  --color-court-600: #364d3f;
+  --color-court-500: #53695c;
+  --color-court-400: #7c9186;
+  --color-court-300: #a4b6ac;
+  --color-court-200: #cad6cf;
+  --color-court-100: #e7ede9;
+
+  --color-volt-700: #6d8a0f;
+  --color-volt-600: #87ab13;
+  --color-volt-500: #a5cf1a;
+  --color-volt-400: #c4ec2e;
+  --color-volt-300: #d8f75e;
+  --color-volt-200: #e9fb9b;
+  --color-volt-100: #f5fdd0;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: var(--color-court-950);
+  --foreground: var(--color-court-100);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-court-950);
+  color: var(--color-court-100);
+  font-family: var(--font-sans);
+  /* Ambient volt glow + faint court-line grid */
+  background-image:
+    radial-gradient(1100px 560px at 82% -12%, rgb(196 236 46 / 0.06), transparent 62%),
+    radial-gradient(900px 520px at -12% 108%, rgb(196 236 46 / 0.04), transparent 60%),
+    linear-gradient(to right, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+  background-size: auto, auto, 76px 76px, 76px 76px;
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--color-volt-400);
+  color: var(--color-court-950);
+}
+
+@layer components {
+  /* Uppercase micro-label with a volt tick — section eyebrow */
+  .kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-volt-400);
+  }
+  .kicker::before {
+    content: "";
+    width: 1.25rem;
+    height: 2px;
+    flex: none;
+    background: var(--color-volt-400);
+  }
+
+  /* Frosted panel — the default card surface */
+  .panel {
+    background: rgb(255 255 255 / 0.03);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 1rem;
+    backdrop-filter: blur(10px);
+  }
+
+  /* Chamfered (ticket) corner — pairs with solid fills */
+  .notch {
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  }
+  .notch-lg {
+    clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 0 100%);
+  }
+
+  /* Dotted "net" divider */
+  .net-divider {
+    height: 1px;
+    background-image: linear-gradient(to right, rgb(255 255 255 / 0.22) 30%, transparent 30%);
+    background-size: 9px 1px;
+    background-repeat: repeat-x;
+  }
+
+  /* Outlined display type for hero headlines */
+  .text-outline {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--color-court-100);
+  }
+  .text-outline-volt {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--color-volt-400);
+  }
+}
+
+/* Slim scrollbars for bracket / overflow panes */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-court-600) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-court-600);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }

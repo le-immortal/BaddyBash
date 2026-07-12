@@ -116,7 +116,7 @@ function BracketPageContent() {
     return (
       <BracketShell seasonLabel={seasonLabel}>
         <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-volt-400" />
         </div>
       </BracketShell>
     );
@@ -152,12 +152,12 @@ function BracketPageContent() {
         {advanceMode && <AdvanceModeBanner />}
 
         {!bracketsVisible && !isAdmin ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-700 bg-slate-900/60 py-24 px-6 text-center">
-            <div className="bg-slate-800 p-6 rounded-full mb-6 ring-4 ring-slate-800/50">
-              <Lock className="w-12 h-12 text-blue-500" />
+          <div className="panel flex flex-col items-center justify-center py-24 px-6 text-center">
+            <div className="bg-white/5 p-6 rounded-full mb-6 ring-4 ring-white/5">
+              <Lock className="w-12 h-12 text-volt-400" />
             </div>
-            <h2 className="text-3xl font-bold mb-3 text-white">Fixtures Coming Soon</h2>
-            <p className="text-slate-400 max-w-2xl text-lg leading-relaxed">
+            <h2 className="font-display text-4xl tracking-wide mb-3 text-court-100">Fixtures Coming Soon</h2>
+            <p className="text-court-400 max-w-2xl text-lg leading-relaxed">
               The tournament fixtures for {selectedSeasonEntry?.label || `Season ${selectedSeason}`} are still being finalized.
               {showSeasonSelector ? ' You can switch seasons above to browse published historical draws.' : ' Please check back later for the official schedule.'}
             </p>
@@ -178,13 +178,13 @@ function BracketPageContent() {
 
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <span className="ml-3 text-slate-400">Loading fixtures...</span>
+                <Loader2 className="w-8 h-8 animate-spin text-volt-400" />
+                <span className="ml-3 text-court-400">Loading fixtures...</span>
               </div>
             ) : matches.length === 0 ? (
-              <div className="bg-slate-800/50 p-10 rounded-xl border border-slate-700 text-center">
-                <p className="text-slate-400 text-lg">No fixtures generated yet.</p>
-                <p className="text-slate-500 text-sm mt-2">Fixtures will appear here once the admin publishes the draw.</p>
+              <div className="panel p-10 text-center">
+                <p className="text-court-300 text-lg">No fixtures generated yet.</p>
+                <p className="text-court-500 text-sm mt-2">Fixtures will appear here once the admin publishes the draw.</p>
               </div>
             ) : (
               <BracketGrid
@@ -211,14 +211,14 @@ function BracketPageContent() {
         )}
 
         {advanceMode && pendingAdvances.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 border border-slate-600 rounded-xl px-5 py-3 shadow-2xl shadow-black/50">
-            <span className="text-sm text-slate-300">
-              <span className="text-white font-bold">{pendingAdvances.size}</span> change{pendingAdvances.size !== 1 ? 's' : ''} pending
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-court-850 border border-white/15 rounded-xl px-5 py-3 shadow-2xl shadow-black/50">
+            <span className="text-sm text-court-300">
+              <span className="text-court-100 font-bold">{pendingAdvances.size}</span> change{pendingAdvances.size !== 1 ? 's' : ''} pending
             </span>
             <button
               onClick={handleCancelAdvance}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-court-400 hover:text-court-100 transition-colors"
             >
               <Undo2 className="w-3.5 h-3.5" />
               Discard
@@ -226,7 +226,7 @@ function BracketPageContent() {
             <button
               onClick={handleSaveAdvances}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+              className="notch flex items-center gap-1.5 px-4 py-1.5 bg-volt-400 hover:bg-volt-300 text-court-950 text-sm font-bold transition-colors disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {saving ? 'Saving...' : 'Save All'}

@@ -35,10 +35,11 @@ export function BracketPageHeader({
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
       <div>
-        <h1 className="text-3xl font-bold">Tournament Fixtures</h1>
+        <p className="kicker mb-1.5">Tournament Draw</p>
+        <h1 className="font-display text-5xl tracking-wide text-court-100">Fixtures</h1>
         {selectedSeasonEntry && (
-          <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
-            <span className={`inline-block w-2 h-2 rounded-full ${selectedSeason === activeSeason ? 'bg-green-400' : 'bg-slate-500'}`} />
+          <p className="text-sm text-court-400 mt-1 flex items-center gap-1.5">
+            <span className={`inline-block w-2 h-2 rounded-full ${selectedSeason === activeSeason ? 'bg-volt-400' : 'bg-court-500'}`} />
             {selectedSeasonEntry.label}
             {selectedSeason === activeSeason ? ' — Live' : ''}
           </p>
@@ -46,17 +47,17 @@ export function BracketPageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {showSeasonSelector && (
-          <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200">
-            <span className="text-slate-400">Season</span>
+          <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-court-200">
+            <span className="text-court-400">Season</span>
             <select
               value={selectedSeason}
               onChange={(e) => onSeasonChange(e.target.value)}
-              className="bg-transparent text-slate-100 font-medium outline-none"
+              className="bg-transparent text-court-100 font-medium outline-none"
               title="Select season"
               aria-label="Select season"
             >
               {seasonOptions.map((season) => (
-                <option key={season.id} value={season.id} className="bg-slate-900">
+                <option key={season.id} value={season.id} className="bg-court-900">
                   {season.label}
                 </option>
               ))}
@@ -68,8 +69,8 @@ export function BracketPageHeader({
             onClick={onToggleAdvance}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
               advanceMode
-                ? 'bg-amber-600 text-white hover:bg-amber-700'
-                : 'bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'
+                ? 'bg-amber-500 text-court-950 hover:bg-amber-400'
+                : 'bg-white/5 border border-white/10 text-court-300 hover:bg-white/10 hover:text-court-100'
             }`}
             title={advanceMode ? 'Exit Advance Mode' : 'Enter Advance Mode'}
           >
@@ -77,7 +78,7 @@ export function BracketPageHeader({
             {advanceMode ? 'Exit Advance' : 'Advance Mode'}
           </button>
         )}
-        <button onClick={onRefresh} className="text-slate-400 hover:text-white p-2" title="Refresh">
+        <button onClick={onRefresh} className="text-court-400 hover:text-court-100 p-2" title="Refresh">
           <RefreshCw className="w-5 h-5" />
         </button>
       </div>
@@ -87,8 +88,8 @@ export function BracketPageHeader({
 
 export function ArchivedSeasonBanner() {
   return (
-    <div className="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
-      <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+    <div className="mb-4 bg-amber-400/10 border border-amber-400/25 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
+      <Lock className="w-4 h-4 text-amber-300 shrink-0" />
       <span className="text-amber-200">This season is archived. Fixtures are read-only.</span>
     </div>
   );
@@ -96,8 +97,8 @@ export function ArchivedSeasonBanner() {
 
 export function AdvanceModeBanner() {
   return (
-    <div className="mb-4 bg-amber-900/30 border border-amber-700/50 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
-      <Swords className="w-4 h-4 text-amber-400 shrink-0" />
+    <div className="mb-4 bg-amber-400/10 border border-amber-400/25 rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm">
+      <Swords className="w-4 h-4 text-amber-300 shrink-0" />
       <span className="text-amber-200">Click on a player name to mark them as the winner. Select multiple matches, then save all at once.</span>
     </div>
   );
