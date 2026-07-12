@@ -42,7 +42,7 @@ const fetchTimeoutMs = 8000;
 
 function PartnerBoardShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <div className="min-h-screen text-court-100">
       <Navbar />
       {children}
     </div>
@@ -80,11 +80,11 @@ function relativePostedTime(value: string) {
 function categoryBadgeClass(category: PartnerCategory) {
   switch (category) {
     case 'MD':
-      return 'bg-blue-500/15 text-blue-200 border-blue-400/30';
+      return 'bg-indigo-400/15 text-indigo-200 border-indigo-400/30';
     case 'WD':
-      return 'bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-400/30';
+      return 'bg-fuchsia-400/15 text-fuchsia-200 border-fuchsia-400/30';
     case 'XD':
-      return 'bg-amber-500/15 text-amber-200 border-amber-400/30';
+      return 'bg-teal-400/15 text-teal-200 border-teal-400/30';
   }
 }
 
@@ -117,10 +117,10 @@ async function readApiError(res: Response) {
 
 function PostHistory({ history }: { history: PartnerPostHistoryItem[] }) {
   return (
-    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
-      <p className="font-semibold uppercase tracking-wide text-slate-500">Tournament history</p>
+    <div className="mt-4 rounded-lg border border-white/5 bg-court-950/50 px-3 py-2 text-xs text-court-400">
+      <p className="font-semibold uppercase tracking-wide text-court-500">Tournament history</p>
       {history.length === 0 ? (
-        <p className="mt-1 text-slate-500">No past tournaments</p>
+        <p className="mt-1 text-court-500">No past tournaments</p>
       ) : (
         <ul className="mt-1.5 space-y-1">
           {history.map(item => (
@@ -151,14 +151,14 @@ function PartnerPostCard({
   return (
     <article
       className={clsx(
-        'border rounded-xl p-4 shadow-sm transition-all bg-slate-900/80 border-slate-700',
-        post.isOwner && 'ring-2 ring-blue-500/70 border-blue-400/60',
-        isClosed && 'opacity-70 bg-slate-900/50'
+        'border rounded-xl p-4 transition-all bg-court-900/70 border-white/10 backdrop-blur',
+        post.isOwner && 'ring-2 ring-volt-400/60 border-volt-400/40',
+        isClosed && 'opacity-70 bg-court-900/40'
       )}
     >
       <div className="flex items-start gap-3">
         <div
-          className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-white shrink-0 bg-cover bg-center"
+          className="w-12 h-12 rounded-full bg-court-800 border border-white/10 flex items-center justify-center text-sm font-bold text-court-100 shrink-0 bg-cover bg-center"
           style={post.avatar ? { backgroundImage: `url(${post.avatar})` } : undefined}
           aria-label={`${post.displayName} avatar`}
         >
@@ -168,40 +168,40 @@ function PartnerPostCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="font-semibold text-lg text-white truncate">{post.displayName}</h2>
+              <h2 className="font-display text-xl tracking-wide text-court-100 truncate">{post.displayName}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={clsx('text-xs font-semibold px-2.5 py-1 rounded-full border', categoryBadgeClass(post.category))}>
                   {post.category}
                 </span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/5 text-court-200 border border-white/10">
                   {formatSkillLevel(post.skillLevel)}
                 </span>
                 {isClosed && (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-400/30">
                     Partner found
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs text-slate-300 shrink-0 pt-1">
-              <span className={clsx('h-2.5 w-2.5 rounded-full', isClosed ? 'bg-emerald-400' : 'bg-blue-400')} />
+            <div className="flex items-center gap-1.5 text-xs text-court-300 shrink-0 pt-1">
+              <span className={clsx('h-2.5 w-2.5 rounded-full', isClosed ? 'bg-emerald-400' : 'bg-volt-400')} />
               <span>{isClosed ? 'Partner found' : 'Open'}</span>
             </div>
           </div>
 
-          <div className="mt-4 flex items-start gap-2 text-sm text-slate-300 bg-slate-950/40 rounded-lg border border-slate-800 p-3">
-            <MessageCircle className="w-4 h-4 mt-0.5 text-blue-300 shrink-0" />
+          <div className="mt-4 flex items-start gap-2 text-sm text-court-300 bg-court-950/50 rounded-lg border border-white/5 p-3">
+            <MessageCircle className="w-4 h-4 mt-0.5 text-volt-400 shrink-0" />
             <p className="break-words">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Teams alias</span>
-              <span className="ml-2 font-semibold text-blue-200">@{post.alias}</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-court-500">Teams alias</span>
+              <span className="ml-2 font-semibold text-volt-300">@{post.alias}</span>
             </p>
           </div>
 
           <PostHistory history={post.history} />
 
           {post.isOwner ? (
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
               {isClosed ? (
                 <span className="text-xs font-medium text-emerald-300">This post is marked as found.</span>
               ) : (
@@ -209,7 +209,7 @@ function PartnerPostCard({
                   type="button"
                   onClick={() => onMarkFound(post)}
                   disabled={busy}
-                  className="text-xs font-semibold text-blue-300 hover:text-blue-200 disabled:opacity-50"
+                  className="text-xs font-semibold text-volt-400 hover:text-volt-300 disabled:opacity-50"
                 >
                   Mark as found
                 </button>
@@ -219,13 +219,13 @@ function PartnerPostCard({
                 onClick={() => onDelete(post)}
                 disabled={busy}
                 aria-label={`Delete ${post.category} partner post`}
-                className="p-2 rounded-lg text-red-300 hover:text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                className="p-2 rounded-lg text-red-300 hover:text-red-200 hover:bg-red-400/10 disabled:opacity-50"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <div className="mt-4 flex items-center gap-2 text-xs text-slate-400 border-t border-slate-800 pt-3">
+            <div className="mt-4 flex items-center gap-2 text-xs text-court-400 border-t border-white/5 pt-3">
               <Mail className="w-3.5 h-3.5" />
               <span>Posted {relativePostedTime(post.createdAt)}</span>
             </div>
@@ -274,24 +274,24 @@ function CreatePostModal({
   }, [submitting, onClose]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4 py-6" role="presentation">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-court-950/85 backdrop-blur-sm px-4 py-6" role="presentation">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-partner-post-title"
-        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-white/10 bg-court-850 text-court-100 shadow-2xl shadow-black/50"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-white/5 px-5 py-4">
           <div>
-            <h2 id="create-partner-post-title" className="text-xl font-bold text-white">Post that I&apos;m looking</h2>
-            <p className="mt-1 text-sm text-slate-400">Choose your doubles category and skill level.</p>
+            <h2 id="create-partner-post-title" className="font-display text-2xl tracking-wide text-court-100">Post that I&apos;m looking</h2>
+            <p className="mt-1 text-sm text-court-400">Choose your doubles category and skill level.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             aria-label="Close create partner post modal"
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50"
+            className="p-2 rounded-lg text-court-400 hover:text-court-100 hover:bg-white/5 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -306,7 +306,7 @@ function CreatePostModal({
           }}
         >
           <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Category</legend>
+            <legend className="text-xs font-semibold uppercase tracking-wide text-court-400 mb-2">Category</legend>
             <div className="flex flex-wrap gap-2">
               {categories.map((item) => {
                 const alreadyPosted = unavailableCategories.has(item);
@@ -322,9 +322,9 @@ function CreatePostModal({
                     className={clsx(
                       'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
                       alreadyPosted && 'cursor-not-allowed opacity-45',
-                      !alreadyPosted && category === item && 'border-blue-500 bg-blue-600 text-white',
-                      !alreadyPosted && category !== item && 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500',
-                      alreadyPosted && 'border-slate-700 bg-slate-800 text-slate-500'
+                      !alreadyPosted && category === item && 'border-volt-400 bg-volt-400 text-court-950',
+                      !alreadyPosted && category !== item && 'border-white/10 bg-white/5 text-court-300 hover:border-white/25',
+                      alreadyPosted && 'border-white/10 bg-white/5 text-court-500'
                     )}
                   >
                     <span>{item}</span>
@@ -339,7 +339,7 @@ function CreatePostModal({
           </fieldset>
 
           <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Skill level</legend>
+            <legend className="text-xs font-semibold uppercase tracking-wide text-court-400 mb-2">Skill level</legend>
             <div className="flex flex-wrap gap-2">
               {skillLevels.map(item => (
                 <button
@@ -349,7 +349,7 @@ function CreatePostModal({
                   onClick={() => setSkillLevel(item)}
                   className={clsx(
                     'px-4 py-2 rounded-full text-sm font-semibold border transition-colors',
-                    skillLevel === item ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                    skillLevel === item ? 'bg-volt-400 border-volt-400 text-court-950' : 'bg-white/5 border-white/10 text-court-300 hover:border-white/25'
                   )}
                 >
                   {formatSkillLevel(item)}
@@ -359,24 +359,24 @@ function CreatePostModal({
           </fieldset>
 
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200" role="alert">
+            <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200" role="alert">
               {error}
             </div>
           )}
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end border-t border-slate-800 pt-4">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end border-t border-white/5 pt-4">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-court-200 hover:bg-white/5 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={postDisabled}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              className="notch inline-flex items-center justify-center gap-2 bg-volt-400 px-4 py-2 text-sm font-bold text-court-950 hover:bg-volt-300 disabled:opacity-50"
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               Post
@@ -566,7 +566,7 @@ export default function PartnerBoardPage() {
     return (
       <PartnerBoardShell>
         <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-volt-400" />
         </div>
       </PartnerBoardShell>
     );
@@ -585,26 +585,26 @@ export default function PartnerBoardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">Teammate Finder</p>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">Teammate Finder</h1>
-            <p className="mt-3 max-w-2xl text-slate-300">Find a doubles partner for MD, WD, or XD and post your own search.</p>
+            <p className="kicker">Doubles Draft</p>
+            <h1 className="mt-2 font-display text-6xl tracking-wide text-court-100">Teammate Finder</h1>
+            <p className="mt-3 max-w-2xl text-court-300">Find a doubles partner for MD, WD, or XD and post your own search.</p>
           </div>
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-500"
+            className="notch inline-flex items-center justify-center gap-2 bg-volt-400 px-5 py-3 text-sm font-bold text-court-950 transition-colors hover:bg-volt-300"
           >
             <Plus className="w-4 h-4" />
             Post
           </button>
         </div>
 
-        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm">
+        <section className="panel mb-6 p-4">
           <div className="flex flex-col gap-4">
             <div
               role="group"
               aria-label="View mode"
-              className="inline-flex w-fit rounded-lg border border-slate-700 bg-slate-900 p-1"
+              className="inline-flex w-fit rounded-lg border border-white/10 bg-court-950/60 p-1"
             >
               {([
                 { label: 'Browse', mine: false },
@@ -620,8 +620,8 @@ export default function PartnerBoardPage() {
                     className={clsx(
                       'rounded-md border px-4 py-2 text-sm font-semibold transition-colors',
                       active
-                        ? 'border-blue-500 bg-blue-600 text-white'
-                        : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white'
+                        ? 'border-volt-400 bg-volt-400 text-court-950'
+                        : 'border-transparent bg-transparent text-court-300 hover:text-court-100'
                     )}
                   >
                     {option.label}
@@ -631,7 +631,7 @@ export default function PartnerBoardPage() {
             </div>
             <div className="flex min-h-[2.75rem] flex-wrap items-center gap-2">
               {showMine ? (
-                <p className="text-sm text-slate-400" aria-live="polite">
+                <p className="text-sm text-court-400" aria-live="polite">
                   Showing your posts · open &amp; closed
                 </p>
               ) : (
@@ -644,7 +644,7 @@ export default function PartnerBoardPage() {
                       onClick={() => setSelectedCategory(item)}
                       className={clsx(
                         'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-                        selectedCategory === item ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
+                        selectedCategory === item ? 'border-volt-400 bg-volt-400 text-court-950' : 'border-white/10 bg-white/5 text-court-300 hover:border-white/25'
                       )}
                     >
                       {item}
@@ -657,37 +657,37 @@ export default function PartnerBoardPage() {
         </section>
 
         {pageError && !loading && posts.length > 0 && (
-          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200" role="alert">
+          <div className="mb-6 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200" role="alert">
             {pageError}
           </div>
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-24 text-slate-300">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <div className="flex items-center justify-center gap-3 py-24 text-court-300">
+            <Loader2 className="w-6 h-6 animate-spin text-volt-400" />
             <span>Loading partner posts…</span>
           </div>
         ) : pageError && posts.length === 0 ? (
           <ErrorScreen bare title="Could not load partner posts" message={pageError} />
         ) : visiblePosts.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-20 text-center shadow-sm">
-            <UserRound className="mx-auto mb-4 h-12 w-12 text-slate-500" />
+          <div className="panel px-6 py-20 text-center">
+            <UserRound className="mx-auto mb-4 h-12 w-12 text-court-500" />
             {showMine ? (
               <>
-                <h2 className="text-2xl font-bold text-white">You haven&apos;t posted yet</h2>
-                <p className="mt-2 text-sm text-slate-400">Create a post for MD, WD, or XD.</p>
+                <h2 className="font-display text-3xl tracking-wide text-court-100">You haven&apos;t posted yet</h2>
+                <p className="mt-2 text-sm text-court-400">Create a post for MD, WD, or XD.</p>
               </>
             ) : (
               <>
-                <h2 className="text-2xl font-bold text-white">No one&apos;s looking yet — be the first to post.</h2>
-                <p className="mt-2 text-sm text-slate-400">Create a quick partner post for MD, WD, or XD.</p>
+                <h2 className="font-display text-3xl tracking-wide text-court-100">No one&apos;s looking yet — be the first to post.</h2>
+                <p className="mt-2 text-sm text-court-400">Create a quick partner post for MD, WD, or XD.</p>
               </>
             )}
             <button
               type="button"
               onClick={openCreateModal}
               disabled={postButtonDisabled}
-              className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="notch mt-6 inline-flex items-center justify-center gap-2 bg-volt-400 px-5 py-3 text-sm font-bold text-court-950 transition-colors hover:bg-volt-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
               Post

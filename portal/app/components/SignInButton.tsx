@@ -7,9 +7,10 @@ export function SignInButton() {
   return (
     <button
       onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
-      className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-full font-bold text-lg transition-all flex items-center gap-2 text-white"
+      className="notch group inline-flex items-center gap-2 bg-volt-400 px-8 py-4 font-display text-xl tracking-widest text-court-950 transition-colors hover:bg-volt-300"
     >
-      Register Now <ArrowRight className="w-5 h-5" />
+      Register Now
+      <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
     </button>
   );
 }
@@ -18,9 +19,9 @@ export function LoginLink() {
   return (
     <button
       onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
-      className="text-sm font-medium hover:underline text-white"
+      className="text-xs font-semibold uppercase tracking-[0.18em] text-court-300 transition-colors hover:text-volt-400"
     >
-      Already Registered? Login
+      Already registered? Login
     </button>
   );
 }

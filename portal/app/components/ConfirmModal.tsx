@@ -93,12 +93,12 @@ export default function ConfirmModal({
   if (!open) return null;
 
   const confirmClasses = tone === 'danger'
-    ? 'bg-red-600 hover:bg-red-700'
-    : 'bg-blue-600 hover:bg-blue-700';
+    ? 'bg-red-500 text-white hover:bg-red-400'
+    : 'notch bg-volt-400 text-court-950 hover:bg-volt-300';
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-court-950/80 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !loading) onClose();
       }}
@@ -109,15 +109,15 @@ export default function ConfirmModal({
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
         tabIndex={-1}
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-court-850 text-court-100 shadow-2xl shadow-black/50"
       >
-        <div className="border-b border-slate-100 px-6 py-5">
-          <h2 id="confirm-modal-title" className="text-lg font-bold text-slate-900">
+        <div className="border-b border-white/5 px-6 py-5">
+          <h2 id="confirm-modal-title" className="font-display text-2xl tracking-wide text-court-100">
             {title}
           </h2>
-          <div className="mt-2 space-y-1 text-sm leading-6 text-slate-600">
+          <div className="mt-2 space-y-1 text-sm leading-6 text-court-300">
             {lines.map((line, index) => (
-              <p key={index} className={line.startsWith(' ') || /→/.test(line) ? 'font-medium text-slate-800' : ''}>
+              <p key={index} className={line.startsWith(' ') || /→/.test(line) ? 'font-medium text-court-100' : ''}>
                 {line}
               </p>
             ))}
@@ -128,7 +128,7 @@ export default function ConfirmModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-court-300 transition hover:bg-white/5 disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -136,7 +136,7 @@ export default function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-60 ${confirmClasses}`}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-60 ${confirmClasses}`}
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {confirmLabel}

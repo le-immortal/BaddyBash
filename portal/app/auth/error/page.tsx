@@ -23,23 +23,23 @@ function ErrorContent() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+    <div className="min-h-screen flex items-center justify-center text-court-100">
       <div className="text-center max-w-md px-6">
         <ShieldAlert className="w-16 h-16 text-red-400 mx-auto mb-6" />
-        <h1 className="text-3xl font-bold mb-4">Access Denied</h1>
+        <h1 className="font-display text-4xl tracking-wide mb-4">Access Denied</h1>
         {error === 'AccessDenied' ? (
-          <p className="text-slate-300 mb-8">
+          <p className="text-court-300 mb-8">
             Only users with a <strong>@microsoft.com</strong> email on their GitHub account can access {portalTitle}.
             Please make sure your Microsoft email is set as your primary (or public) email on GitHub.
           </p>
         ) : (
-          <p className="text-slate-300 mb-8">
+          <p className="text-court-300 mb-8">
             An error occurred during sign in. Please try again.
           </p>
         )}
         <Link
           href="/"
-          className="inline-block bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-semibold transition"
+          className="notch inline-block bg-volt-400 hover:bg-volt-300 px-6 py-3 font-bold text-court-950 transition-colors"
         >
           Back to Home
         </Link>
@@ -51,7 +51,7 @@ function ErrorContent() {
 export default function AuthError() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div className="min-h-screen flex items-center justify-center text-court-100">
         <p>Loading...</p>
       </div>
     }>

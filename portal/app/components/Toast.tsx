@@ -61,8 +61,8 @@ export function ToastStack({
     <div className="pointer-events-none fixed bottom-4 right-4 z-[80] flex w-full max-w-sm flex-col gap-3">
       {toasts.map((toast) => {
         const toneClasses = toast.tone === 'success'
-          ? 'border-emerald-500/40 bg-emerald-950/95 text-emerald-50'
-          : 'border-red-500/40 bg-red-950/95 text-red-50';
+          ? 'border-volt-400/40 bg-court-850/95 text-volt-100'
+          : 'border-red-400/40 bg-court-850/95 text-red-100';
 
         return (
           <div
@@ -72,9 +72,9 @@ export function ToastStack({
             aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
           >
             {toast.tone === 'success' ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-volt-400" />
             ) : (
-              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             )}
             <p className="flex-1 text-sm leading-6">{toast.message}</p>
             <button

@@ -10,12 +10,11 @@ import { AlertCircle, Loader2, Lock, Edit2, CalendarDays, History, ChevronDown, 
 import ErrorScreen from '../components/ErrorScreen';
 import { useToasts, ToastStack } from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
-import Image from 'next/image';
 import { getSeasonLabel, getSeasonLabelFromConfig } from '../lib/seasonLabels';
 
 function DashboardShell({
   children,
-  className = 'min-h-screen bg-slate-50',
+  className = 'min-h-screen',
   background,
   seasonLabel,
 }: {
@@ -699,7 +698,7 @@ export default function Dashboard() {
   if (sessionStatus === 'unauthenticated') {
     return (
       <DashboardShell>
-        <div className="flex items-center justify-center py-32 text-slate-600">
+        <div className="flex items-center justify-center py-32 text-court-300">
           Please sign in to access your dashboard.
         </div>
       </DashboardShell>
@@ -713,8 +712,8 @@ export default function Dashboard() {
     return (
       <DashboardShell>
         <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-slate-600">Loading dashboard...</span>
+          <Loader2 className="w-8 h-8 animate-spin text-volt-400" />
+          <span className="ml-3 text-court-300">Loading dashboard...</span>
         </div>
       </DashboardShell>
     );
@@ -732,62 +731,55 @@ export default function Dashboard() {
   // Only show form AFTER we've explicitly confirmed the lookup result is "missing"
   if (userLookupState === 'missing' || (userLookupState === 'found' && !isOnboarded) || isEditingProfile) {
     return (
-      <DashboardShell
-        className="min-h-screen relative"
-        background={(
-          <div className="fixed inset-0 -z-10">
-            <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-            <div className="absolute inset-0 bg-black/40" />
-          </div>
-        )}
-      >
+      <DashboardShell className="min-h-screen relative">
         <main className="container mx-auto py-16 px-4 max-w-md">
-          <div className="bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">{isEditingProfile ? 'Edit Profile' : 'Complete your profile'}</h1>
-            <p className="text-slate-600 text-sm mb-6">
+          <div className="panel p-8">
+            <p className="kicker mb-3">Player Profile</p>
+            <h1 className="font-display text-3xl tracking-wide text-court-100 mb-2">{isEditingProfile ? 'Edit Profile' : 'Complete your profile'}</h1>
+            <p className="text-court-300 text-sm mb-6">
               {isEditingProfile
                 ? 'Your name, alias, and email come from your Microsoft account and can\u2019t be changed here. Update your phone number and t-shirt size below.'
                 : 'Your name and alias are set from your Microsoft account. Just add a phone number and t-shirt size to get started.'}
             </p>
 
             <div className="space-y-4">
-              <div className="rounded-md border border-slate-200 bg-slate-100 p-3">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs font-medium text-slate-500">From your Microsoft account</span>
+                  <Lock className="w-3.5 h-3.5 text-court-400" />
+                  <span className="text-xs font-medium text-court-400">From your Microsoft account</span>
                 </div>
                 <dl className="space-y-1.5 text-sm">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Name</dt>
-                    <dd className="text-slate-600 font-medium text-right break-all">{savedName || session?.user?.name || '—'}</dd>
+                    <dt className="text-court-400">Name</dt>
+                    <dd className="text-court-200 font-medium text-right break-all">{savedName || session?.user?.name || '—'}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Alias</dt>
-                    <dd className="text-slate-600 font-medium text-right break-all">{savedAlias || String(session?.user?.email || '').trim().toLowerCase().replace(/@.*$/, '') || '—'}</dd>
+                    <dt className="text-court-400">Alias</dt>
+                    <dd className="text-court-200 font-medium text-right break-all">{savedAlias || String(session?.user?.email || '').trim().toLowerCase().replace(/@.*$/, '') || '—'}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Email</dt>
-                    <dd className="text-slate-600 font-medium text-right break-all">{session?.user?.email || '—'}</dd>
+                    <dt className="text-court-400">Email</dt>
+                    <dd className="text-court-200 font-medium text-right break-all">{session?.user?.email || '—'}</dd>
                   </div>
                 </dl>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Phone Number <span className="text-gray-400 font-normal pl-1">(Optional)</span></label>
+                <label className="block text-sm font-medium text-court-200">Phone Number <span className="text-court-500 font-normal pl-1">(Optional)</span></label>
                 <input
                   type="tel"
                   placeholder="e.g., 9876543210"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
                   maxLength={10}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white placeholder-slate-400"
+                  className="mt-1 block w-full rounded-lg border border-white/10 bg-court-900 px-3 py-2 text-sm text-court-100 placeholder-court-500 focus:border-volt-400 focus:outline-none focus:ring-1 focus:ring-volt-400"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">T-Shirt Size <span className="text-red-500 pl-1">*</span></label>
+                <label className="block text-sm font-medium text-court-200">T-Shirt Size <span className="text-red-400 pl-1">*</span></label>
                 <select
                   value={tShirtSize}
                   onChange={(e) => setTShirtSize(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 bg-white"
+                  className="mt-1 block w-full rounded-lg border border-white/10 bg-court-900 px-3 py-2 text-sm text-court-100 focus:border-volt-400 focus:outline-none focus:ring-1 focus:ring-volt-400"
                 >
                   <option value="">Select Size</option>
                   <option value="XS">XS</option>
@@ -802,7 +794,7 @@ export default function Dashboard() {
                 <button
                   onClick={handleSaveProfile}
                   disabled={linkingAlias || !tShirtSize.trim()}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="notch w-full bg-volt-400 text-court-950 py-2.5 font-bold hover:bg-volt-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                 >
                   {linkingAlias ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
@@ -819,7 +811,7 @@ export default function Dashboard() {
                        setTShirtSize(savedTShirtSize || '');
                        setIsEditingProfile(false);
                     }}
-                    className="w-full bg-white text-slate-600 border border-slate-300 py-2.5 rounded-lg font-semibold hover:bg-slate-50 flex items-center justify-center"
+                    className="w-full rounded-lg border border-white/15 bg-transparent text-court-200 py-2.5 font-semibold hover:bg-white/5 flex items-center justify-center transition-colors"
                   >
                     Cancel
                   </button>
@@ -844,32 +836,22 @@ export default function Dashboard() {
   }
 
   return (
-    <DashboardShell
-      seasonLabel={seasonLabel}
-      className="min-h-screen relative"
-      background={(
-        <div className="fixed inset-0 -z-10">
-          <Image src="/badminton-1.jpg" alt="" fill className="object-cover" priority />
-          <div className="absolute inset-0 bg-slate-50/75" />
-        </div>
-      )}
-    >
+    <DashboardShell seasonLabel={seasonLabel} className="min-h-screen relative">
       <main className="container mx-auto py-8 px-4">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Player Dashboard</h1>
-            <p className="text-slate-600 mt-2">Manage your tournament entries. Max {maxSelections} categories allowed.</p>
+            <p className="kicker mb-2">Player Dashboard</p>
+            <h1 className="font-display text-5xl tracking-wide text-court-100">{savedName}</h1>
+            <p className="text-court-300 mt-2">Manage your tournament entries. Max {maxSelections} categories allowed.</p>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-sm text-slate-600">
-              <span className="font-medium text-slate-800">{savedName}</span>
-              <span className="hidden md:inline text-slate-300">·</span>
-              <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full font-medium">
-                <span className="w-2 h-2 rounded-full bg-green-500" /> {savedAlias}
+            <div className="mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-sm text-court-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-volt-400/30 bg-volt-400/10 px-3 py-1 font-medium text-volt-300">
+                <span className="w-2 h-2 rounded-full bg-volt-400" /> {savedAlias}
               </span>
-              <span className="hidden md:inline text-slate-300">·</span>
-              <span className="text-slate-600">{savedPhone}</span>
-              <span className="hidden md:inline text-slate-300">·</span>
-              <span className="text-slate-600">Size: {savedTShirtSize || '-'}</span>
+              <span className="hidden md:inline text-court-600">·</span>
+              <span>{savedPhone}</span>
+              <span className="hidden md:inline text-court-600">·</span>
+              <span>Size: {savedTShirtSize || '-'}</span>
               {registrationOpen && (
                 <button
                   onClick={() => {
@@ -877,7 +859,7 @@ export default function Dashboard() {
                     setTShirtSize(savedTShirtSize || '');
                     setIsEditingProfile(true);
                   }}
-                  className="ml-2 text-slate-400 hover:text-blue-600 transition-colors"
+                  className="ml-2 text-court-400 hover:text-volt-400 transition-colors"
                   title="Edit Profile"
                 >
                   <Edit2 className="w-4 h-4" />
@@ -891,79 +873,79 @@ export default function Dashboard() {
         {(bracketsVisible || isAdmin) && (
           <>
             {/* Instructions to Players — collapsible */}
-            <div className="mb-6 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400 rounded-r-lg">
+            <div className="mb-6 px-4 py-3 bg-amber-400/10 border-l-4 border-amber-400/60 rounded-r-lg">
               <button
                 onClick={() => setNotesExpanded(prev => !prev)}
                 className="w-full flex items-center gap-2 text-left group"
               >
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="text-sm font-semibold text-amber-800">Instructions to Players</span>
-                <span className="text-xs text-amber-600 hidden sm:inline">— Please read before your match</span>
-                <span className={`text-xs text-amber-600 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
-                <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-sm font-semibold text-amber-200">Instructions to Players</span>
+                <span className="text-xs text-amber-400 hidden sm:inline">— Please read before your match</span>
+                <span className={`text-xs text-amber-400 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
+                <ChevronDown className={`w-4 h-4 text-amber-400 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
               </button>
 
               {notesExpanded && (
                 <div className="mt-3 pl-6">
-                  <ul className="space-y-1.5 text-sm text-slate-700 leading-relaxed">
+                  <ul className="space-y-1.5 text-sm text-court-200 leading-relaxed">
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Your scheduled matches and reporting times are listed below. You can also visit the{' '}
-                        <a href="/fixtures" className="text-blue-600 hover:underline font-medium">Fixtures page</a>{' '}
+                        <a href="/fixtures" className="text-volt-400 hover:underline font-medium">Fixtures page</a>{' '}
                         to view the full tournament draw across all rounds.
                       </span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span><span className="font-semibold">Format:</span> Knockout. Singles of 30 points (no deuce) until pre-quarters. From Quarters onwards, best of 3 games of 21 points (deuce until 30).</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Every player must participate in initial rounds on <span className="font-semibold">21st/22nd March as per their schedule.</span></span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Please <span className="font-semibold">report as per your assigned time slot.</span> A walkover will be given to the opponent if you fail to report on time.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>We&apos;re coordinating <span className="font-semibold">1000+ players</span> — please stick strictly to your timelines and assigned slots.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Report on time → Complete registration → Collect your T-Shirt → Be ready for your game.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span><span className="font-semibold">Please bring:</span> your own racquets, non-marking sports shoes (bare foot is allowed), and your ID card.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Snacks &amp; refreshments will be provided at the venue.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Please <span className="font-semibold">do not arrive too early or linger after your games.</span> The Academy has strict instructions to limit crowd size at any given time.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span><span className="font-semibold">Parking:</span> The Academy has limited parking. Please use MS Campus parking — do not park on roads or at the Academy.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>T-Shirts are only for <span className="font-semibold">participating players</span>, not for registration companions.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span><span className="font-semibold">Umpire&apos;s decision is final.</span> Please do not argue — the umpiring team are your colleagues volunteering their time.</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="text-amber-500 font-bold shrink-0">•</span>
+                      <span className="text-amber-400 font-bold shrink-0">•</span>
                       <span>Please do not use outside spaces or empty courts for practice.</span>
                     </li>
                   </ul>
-                  <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
-                    <p>For any queries or discrepancies, reach out to <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
+                  <div className="mt-3 pt-3 border-t border-amber-400/20 text-xs text-court-400">
+                    <p>For any queries or discrepancies, reach out to <a href="mailto:baddybash@microsoft.com" className="text-volt-400 hover:underline font-medium">baddybash@microsoft.com</a></p>
                   </div>
                 </div>
               )}
@@ -971,29 +953,27 @@ export default function Dashboard() {
 
             {/* Upcoming / Live Matches */}
             <section className="mb-8">
-              <div className="relative p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: "url('/badminton-2.jpg')" }} />
-                <div className="absolute inset-0 bg-white/60" />
+              <div className="panel relative p-6 overflow-hidden">
                 <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-4">
-                  <CalendarDays className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-xl font-semibold text-slate-800">Your Matches</h2>
+                  <CalendarDays className="w-5 h-5 text-volt-400" />
+                  <h2 className="font-display text-2xl tracking-wide text-court-100">Your Matches</h2>
                   {upcomingMatches.length > 0 && (
-                    <span className="ml-auto text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <span className="ml-auto text-xs font-medium text-volt-300 bg-volt-400/10 px-2 py-0.5 rounded-full">
                       {upcomingMatches.length} upcoming
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
+                <p className="text-xs text-amber-200 bg-amber-400/10 border border-amber-400/25 rounded-md px-3 py-2 mb-3">
                   <span className="font-semibold">📋 Notice:</span> Times displayed are your <span className="font-semibold">scheduled reporting times</span> — please arrive at the court on your listed time. Matches will get started 15 mins after the reporting time.
                 </p>
 
                 {matchesLoading ? (
-                  <div className="flex items-center justify-center py-8 text-slate-400">
+                  <div className="flex items-center justify-center py-8 text-court-400">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading matches...
                   </div>
                 ) : upcomingMatches.length === 0 ? (
-                  <p className="text-center text-slate-500 py-6">
+                  <p className="text-center text-court-400 py-6">
                     {userMatches.length === 0
                       ? 'No matches found yet. The draw may not have been generated.'
                       : 'All your matches are completed! Check your history below.'}
@@ -1017,23 +997,21 @@ export default function Dashboard() {
             {/* Match History */}
             {!matchesLoading && (
               <section className="mb-8">
-                <div className="relative p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: "url('/badminton-2.jpg')" }} />
-                  <div className="absolute inset-0 bg-white/60" />
+                <div className="panel relative p-6 overflow-hidden">
                   <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-4">
-                    <History className="w-5 h-5 text-slate-500" />
-                    <h2 className="text-xl font-semibold text-slate-800">Match History</h2>
+                    <History className="w-5 h-5 text-court-400" />
+                    <h2 className="font-display text-2xl tracking-wide text-court-100">Match History</h2>
                     {completedMatches.length > 0 && (
-                      <span className="ml-auto text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                      <span className="ml-auto text-xs font-medium text-court-300 bg-white/5 px-2 py-0.5 rounded-full">
                         {completedMatches.length} played
                       </span>
                     )}
                   </div>
                   {completedMatches.length === 0 ? (
-                    <p className="text-center text-slate-400 py-6">No completed matches yet. Your results will appear here.</p>
+                    <p className="text-center text-court-400 py-6">No completed matches yet. Your results will appear here.</p>
                   ) : (
-                    <div className="divide-y divide-slate-100/60">
+                    <div className="divide-y divide-white/5">
                       {completedMatches.map(match => {
                         const isP1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
                         const opponent = isP1 ? match.player2Name : match.player1Name;
@@ -1045,16 +1023,16 @@ export default function Dashboard() {
                         return (
                           <div key={match.id} className="flex items-center gap-3 py-2.5 px-1 text-sm">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
-                              { MS: 'bg-blue-100 text-blue-700', WS: 'bg-pink-100 text-pink-700', MD: 'bg-indigo-100 text-indigo-700', WD: 'bg-purple-100 text-purple-700', XD: 'bg-teal-100 text-teal-700' }[match.category] || 'bg-slate-100 text-slate-700'
+                              { MS: 'bg-sky-400/15 text-sky-300', WS: 'bg-pink-400/15 text-pink-300', MD: 'bg-indigo-400/15 text-indigo-300', WD: 'bg-purple-400/15 text-purple-300', XD: 'bg-teal-400/15 text-teal-300' }[match.category] || 'bg-white/10 text-court-200'
                             }`}>
                               {match.category}
                             </span>
-                            <span className="text-slate-600 text-xs font-semibold w-10 shrink-0">{roundLabel}</span>
-                            <span className="text-slate-700 truncate flex-1">
+                            <span className="text-court-300 text-xs font-semibold w-10 shrink-0">{roundLabel}</span>
+                            <span className="text-court-200 truncate flex-1">
                               vs <span className="font-medium">{opponent || 'TBD'}</span>
-                              {opponentAlias && <span className="text-xs text-slate-400 ml-1">({opponentAlias.includes('|') ? opponentAlias.split('|').map(a => `@${a}`).join(' & ') : `@${opponentAlias}`})</span>}
+                              {opponentAlias && <span className="text-xs text-court-500 ml-1">({opponentAlias.includes('|') ? opponentAlias.split('|').map(a => `@${a}`).join(' & ') : `@${opponentAlias}`})</span>}
                             </span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${won ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${won ? 'bg-emerald-400/15 text-emerald-300' : 'bg-red-400/15 text-red-300'}`}>
                               {won ? 'W' : 'L'}
                             </span>
                           </div>
@@ -1070,60 +1048,60 @@ export default function Dashboard() {
         )}
 
         {/* Tournament Info — ambient banner, collapsible */}
-        <div className="mb-6 px-4 py-3 bg-amber-50/70 border-l-4 border-amber-400 rounded-r-lg">
+        <div className="mb-6 px-4 py-3 bg-amber-400/10 border-l-4 border-amber-400/60 rounded-r-lg">
             <button
               onClick={() => setNotesExpanded(prev => !prev)}
               className="w-full flex items-center gap-2 text-left group"
             >
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="text-sm font-semibold text-amber-800">Note to Players</span>
-              <span className="text-xs text-amber-600 hidden sm:inline">— Dates, venue, rules & more</span>
-              <span className={`text-xs text-amber-600 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
-              <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-sm font-semibold text-amber-200">Note to Players</span>
+              <span className="text-xs text-amber-400 hidden sm:inline">— Dates, venue, rules & more</span>
+              <span className={`text-xs text-amber-400 ml-auto mr-1 ${notesExpanded ? 'hidden' : ''}`}>View details</span>
+              <ChevronDown className={`w-4 h-4 text-amber-400 transition-transform duration-200 ${notesExpanded ? 'rotate-180' : ''}`} />
             </button>
 
             {notesExpanded && (
               <div className="mt-3 pl-6">
-                <ul className="space-y-1.5 text-sm text-slate-700 leading-relaxed">
+                <ul className="space-y-1.5 text-sm text-court-200 leading-relaxed">
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
-                    <span><span className="font-semibold">Start Dates:</span> <span className="bg-amber-200/80 text-amber-900 font-semibold px-1 rounded">Mar 21st–22nd (initial rounds for all categories)</span>. Dates for remaining rounds will be communicated later.</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
+                    <span><span className="font-semibold">Start Dates:</span> <span className="bg-amber-400/20 text-amber-200 font-semibold px-1 rounded">Mar 21st–22nd (initial rounds for all categories)</span>. Dates for remaining rounds will be communicated later.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span><span className="font-semibold">Venue:</span> Gopichand Badminton Academy (Kotak Courts)</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span><span className="font-semibold">FTEs Only</span></span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span>Max <span className="font-semibold">2 categories</span> per player.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span><span className="font-semibold">Registration closes on 12th March, 2026.</span></span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span><span className="font-semibold">Doubles:</span> It&apos;s the player&apos;s responsibility to find their partner. The organizing team cannot accommodate requests to find a partner.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span><span className="font-semibold">Non-marking shoes</span> are mandatory.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span>Only game shuttles will be provided. Racquets, shoes, etc. are the player&apos;s responsibility.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-amber-500 font-bold shrink-0">•</span>
+                    <span className="text-amber-400 font-bold shrink-0">•</span>
                     <span>Snacks will be provided at the venue.</span>
                   </li>
                 </ul>
-                <div className="mt-3 pt-3 border-t border-amber-200/60 text-xs text-slate-500">
-                  <p>For any queries, please reach out to the Baddy Bash organizing team — <a href="mailto:baddybash@microsoft.com" className="text-blue-600 hover:underline font-medium">baddybash@microsoft.com</a></p>
+                <div className="mt-3 pt-3 border-t border-amber-400/20 text-xs text-court-400">
+                  <p>For any queries, please reach out to the Baddy Bash organizing team — <a href="mailto:baddybash@microsoft.com" className="text-volt-400 hover:underline font-medium">baddybash@microsoft.com</a></p>
                   <p className="mt-0.5">If anyone is interested to join the Baddy Bash organizing team, please reach us at the above mentioned alias.</p>
                 </div>
               </div>
@@ -1131,21 +1109,19 @@ export default function Dashboard() {
           </div>
 
         <section className="mb-8">
-          <div className="relative overflow-hidden p-6 rounded-xl shadow-sm border border-slate-200">
-            <Image src="/badminton-bg.jpg" alt="" fill className="object-cover" />
-            <div className="absolute inset-0 bg-white/50" />
+          <div className="panel relative overflow-hidden p-6">
             <div className="relative z-10">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 shadow-sm ring-1 ring-blue-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-volt-400/10 text-volt-400 ring-1 ring-volt-400/30">
                   <Trophy className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold leading-tight text-slate-800">My Registrations</h2>
-                  <p className="text-xs font-medium text-slate-500">Pick your categories and lock in your spots</p>
+                  <h2 className="font-display text-2xl leading-tight tracking-wide text-court-100">My Registrations</h2>
+                  <p className="text-xs font-medium text-court-400">Pick your categories and lock in your spots</p>
                 </div>
-                <span className={`ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isMaxReached ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                  <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-500' : 'bg-blue-500'}`} aria-hidden="true" />
+                <span className={`ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isMaxReached ? 'bg-orange-400/15 text-orange-300' : 'bg-volt-400/10 text-volt-300'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isMaxReached ? 'bg-orange-400' : 'bg-volt-400'}`} aria-hidden="true" />
                   {totalCount} / {maxSelections} Slots Used
                 </span>
               </div>
@@ -1153,10 +1129,10 @@ export default function Dashboard() {
                 <button
                   onClick={handleSave}
                   disabled={!isSelectionValid || saving || !registrationOpen}
-                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-bold shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
+                  className={`notch inline-flex items-center gap-2 px-5 py-2 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-volt-300 ${
                     isSelectionValid && !saving && registrationOpen
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:shadow'
-                      : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                      ? 'bg-volt-400 text-court-950 hover:bg-volt-300'
+                      : 'cursor-not-allowed bg-white/10 text-court-500'
                   }`}
                 >
                   {saving ? (
@@ -1169,14 +1145,14 @@ export default function Dashboard() {
             </div>
 
             {isMaxReached && (
-              <div className="flex items-center p-3 mb-6 bg-orange-50 text-orange-800 rounded-lg text-sm border border-orange-200">
+              <div className="flex items-center p-3 mb-6 bg-orange-400/10 text-orange-200 rounded-lg text-sm border border-orange-400/25">
                 <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0" />
                 You have reached the maximum number of registrations per player.
               </div>
             )}
 
             {!registrationOpen && (
-              <div className="flex items-center p-3 mb-6 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
+              <div className="flex items-center p-3 mb-6 bg-red-400/10 text-red-200 rounded-lg text-sm border border-red-400/25">
                 <Lock className="w-5 h-5 mr-3 flex-shrink-0" />
                 <div>
                   <span className="font-bold">Registrations are closed.</span>
@@ -1234,66 +1210,66 @@ export default function Dashboard() {
 
         {hasArchivedSeasons && (
           <section className="mb-10">
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="panel overflow-hidden">
               <button
                 type="button"
                 onClick={() => setPastSeasonsOpen((previous) => !previous)}
-                className="flex w-full items-center gap-3 px-6 py-4 text-left hover:bg-slate-50"
+                className="flex w-full items-center gap-3 px-6 py-4 text-left hover:bg-white/5"
                 aria-expanded={pastSeasonsOpen}
                 aria-controls="past-seasons-panel"
               >
-                <History className="w-5 h-5 text-slate-500" />
+                <History className="w-5 h-5 text-court-400" />
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-semibold text-slate-800">Past Seasons</h2>
-                  <p className="text-sm text-slate-500">Archived registrations and results are available in read-only mode.</p>
+                  <h2 className="font-display text-xl tracking-wide text-court-100">Past Seasons</h2>
+                  <p className="text-sm text-court-400">Archived registrations and results are available in read-only mode.</p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-court-300">
                   {historyLoading ? 'Loading…' : `${historicalSeasons.length} season${historicalSeasons.length === 1 ? '' : 's'}`}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${pastSeasonsOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-court-400 transition-transform ${pastSeasonsOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {pastSeasonsOpen && (
-                <div id="past-seasons-panel" className="border-t border-slate-100 bg-slate-50/60 px-6 py-5">
+                <div id="past-seasons-panel" className="border-t border-white/5 bg-court-950/40 px-6 py-5">
                   {historyLoading ? (
-                    <div className="flex items-center justify-center py-8 text-slate-500">
+                    <div className="flex items-center justify-center py-8 text-court-400">
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Loading archived seasons...
                     </div>
                   ) : historicalSeasons.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-slate-500">No archived registrations found for your account yet.</p>
+                    <p className="py-6 text-center text-sm text-court-400">No archived registrations found for your account yet.</p>
                   ) : (
                     <div className="space-y-4">
                       {historicalSeasons.map((history) => {
                         const completedHistoryMatches = history.matches.filter((match) => match.status === 'completed' || match.status === 'bye');
 
                         return (
-                          <article key={history.season.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <article key={history.season.id} className="rounded-xl border border-white/10 bg-court-900/60 p-5">
                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="text-lg font-semibold text-slate-800">{getSeasonLabel(history.season)}</h3>
-                                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Read only</span>
+                                  <h3 className="font-display text-xl tracking-wide text-court-100">{getSeasonLabel(history.season)}</h3>
+                                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-court-300">Read only</span>
                                 </div>
-                                <p className="mt-1 text-sm text-slate-500">
+                                <p className="mt-1 text-sm text-court-400">
                                   {history.registrations.length} registration{history.registrations.length === 1 ? '' : 's'} saved for this archived season.
                                 </p>
                               </div>
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-court-300">
                                 {completedHistoryMatches.length} result{completedHistoryMatches.length === 1 ? '' : 's'}
                               </span>
                             </div>
 
                             <div className="mt-4 space-y-4">
-                              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                                  <h4 className="text-sm font-semibold text-slate-700">Registrations</h4>
+                                  <h4 className="text-sm font-semibold text-court-200">Registrations</h4>
                                   {history.registrations.map((registration) => {
                                     const categoryName = CATEGORIES.find((category) => category.id === registration.category)?.name || registration.category;
                                     const partnerText = registration.partnerName ? ` · ${registration.partnerName}` : '';
 
                                     return (
-                                      <span key={registration.id} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                                      <span key={registration.id} className="rounded-full border border-volt-400/25 bg-volt-400/10 px-3 py-1 text-xs font-medium text-volt-300">
                                         {categoryName}{partnerText}
                                       </span>
                                     );
@@ -1301,14 +1277,14 @@ export default function Dashboard() {
                                 </div>
                               </div>
 
-                              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                                <h4 className="text-sm font-semibold text-slate-700">Match Results</h4>
+                              <div className="rounded-lg border border-white/10 bg-court-900/40 p-4">
+                                <h4 className="text-sm font-semibold text-court-200">Match Results</h4>
                                 {!history.resultsAvailable ? (
-                                  <p className="mt-3 text-sm text-slate-500">Results are not published for this archived season.</p>
+                                  <p className="mt-3 text-sm text-court-400">Results are not published for this archived season.</p>
                                 ) : completedHistoryMatches.length === 0 ? (
-                                  <p className="mt-3 text-sm text-slate-500">No completed archived matches were found for your account.</p>
+                                  <p className="mt-3 text-sm text-court-400">No completed archived matches were found for your account.</p>
                                 ) : (
-                                  <div className="mt-3 divide-y divide-slate-100">
+                                  <div className="mt-3 divide-y divide-white/5">
                                     {completedHistoryMatches.map((match) => {
                                       const isPlayer1 = match.player1Id === userId || (match.player1Id?.split('|').includes(userId) ?? false);
                                       const opponent = isPlayer1 ? match.player2Name : match.player1Name;
@@ -1320,20 +1296,20 @@ export default function Dashboard() {
                                       return (
                                         <div key={match.id} className="flex items-center gap-3 py-2.5 text-sm">
                                           <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                                            { MS: 'bg-blue-100 text-blue-700', WS: 'bg-pink-100 text-pink-700', MD: 'bg-indigo-100 text-indigo-700', WD: 'bg-purple-100 text-purple-700', XD: 'bg-teal-100 text-teal-700' }[match.category] || 'bg-slate-100 text-slate-700'
+                                            { MS: 'bg-sky-400/15 text-sky-300', WS: 'bg-pink-400/15 text-pink-300', MD: 'bg-indigo-400/15 text-indigo-300', WD: 'bg-purple-400/15 text-purple-300', XD: 'bg-teal-400/15 text-teal-300' }[match.category] || 'bg-white/10 text-court-200'
                                           }`}>
                                             {match.category}
                                           </span>
-                                          <span className="w-10 shrink-0 text-xs font-semibold text-slate-500">{roundLabel}</span>
-                                          <span className="min-w-0 flex-1 truncate text-slate-700">
+                                          <span className="w-10 shrink-0 text-xs font-semibold text-court-400">{roundLabel}</span>
+                                          <span className="min-w-0 flex-1 truncate text-court-200">
                                             vs <span className="font-medium">{opponent || 'TBD'}</span>
                                             {opponentAlias && (
-                                              <span className="ml-1 text-xs text-slate-400">
+                                              <span className="ml-1 text-xs text-court-500">
                                                 ({opponentAlias.includes('|') ? opponentAlias.split('|').map((alias) => `@${alias}`).join(' & ') : `@${opponentAlias}`})
                                               </span>
                                             )}
                                           </span>
-                                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${won ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${won ? 'bg-emerald-400/15 text-emerald-300' : 'bg-red-400/15 text-red-300'}`}>
                                             {won ? 'W' : 'L'}
                                           </span>
                                         </div>
